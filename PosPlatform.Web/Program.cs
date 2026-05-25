@@ -31,6 +31,7 @@ builder.Services.TryAddScoped<IPasswordHasher<ApplicationUser>, PasswordHasher<A
 builder.Services.AddScoped<UserManagementService>();
 builder.Services.AddScoped<UserAccessService>();
 builder.Services.AddScoped<BusinessSettingsService>();
+builder.Services.AddScoped<CashierShiftService>();
 
 var app = builder.Build();
 

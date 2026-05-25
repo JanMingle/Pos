@@ -48,6 +48,14 @@
             </NavLink>
         }
 
+        @if (_canCashierShift)
+        {
+            <NavLink href="/cashier-shift" class="pos-nav-link">
+                <span class="pos-nav-icon"><i class="bi bi-cash-coin"></i></span>
+                <span class="pos-nav-text">Cashier Shift</span>
+            </NavLink>
+        }
+
         @if (_canBranches)
         {
             <NavLink href="/branches" class="pos-nav-link">
@@ -108,6 +116,7 @@
     private bool _canUsers;
     private bool _canReports;
     private bool _canSettings;
+    private bool _canCashierShift;
 
     protected override async Task OnInitializedAsync()
     {
@@ -120,5 +129,6 @@
         _canUsers = await UserAccessService.CanAccessAsync("users");
         _canReports = await UserAccessService.CanAccessAsync("reports");
         _canSettings = await UserAccessService.CanAccessAsync("settings");
+        _canCashierShift = await UserAccessService.CanAccessAsync("cashier-shift");
     }
 }

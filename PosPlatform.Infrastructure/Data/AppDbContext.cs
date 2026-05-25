@@ -33,6 +33,8 @@ namespace PosPlatform.Infrastructure.Data
         public DbSet<StockMovement> StockMovements => Set<StockMovement>();
         public DbSet<BusinessSettings> BusinessSettings => Set<BusinessSettings>();
 
+        public DbSet<CashierShift> CashierShifts => Set<CashierShift>();
+
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -415,6 +417,51 @@ namespace PosPlatform.Infrastructure.Data
                       .WithMany()
                       .HasForeignKey(x => x.TenantId)
                       .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            builder.Entity<CashierShift>(entity =>
+            {
+                entity.ToTable("CashierShifts");
+
+                entity.Property(x => x.CashierName)
+                      .HasMaxLength(150)
+                      .IsRequired();
+
+                entity.Property(x => x.OpeningCash).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.ClosingCash).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.CashSales).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.CardSales).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.EftSales).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.TotalSales).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.ExpectedCash).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.CashDifference).HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.Status)
+                      .HasMaxLength(30)
+                      .IsRequired();
+
+                entity.Property(x => x.OpeningNotes)
+                      .HasMaxLength(300);
+
+                entity.Property(x => x.ClosingNotes)
+                      .HasMaxLength(300);
+
+                entity.HasIndex(x => new { x.TenantId, x.CashierUserId, x.Status });
+
+                entity.HasOne(x => x.Tenant)
+                      .WithMany()
+                      .HasForeignKey(x => x.TenantId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Branch)
+                      .WithMany()
+                      .HasForeignKey(x => x.BranchId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.CashierUser)
+                      .WithMany()
+                      .HasForeignKey(x => x.CashierUserId)
+                      .OnDelete(DeleteBehavior.Restrict);
             });
         }
     }
