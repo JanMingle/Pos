@@ -1,0 +1,932 @@
+﻿@page "/dashboard"
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@inject AuthenticationStateProvider AuthStateProvider
+@layout MainLayout
+@using PosPlatform.Web.Components.Layout
+
+<PageTitle>Dashboard</PageTitle>
+
+@if (_user is null)
+{
+    <div class="opsdash-loading">
+        <div class="opsdash-loading-dot"></div>
+        <div>
+            <strong>Loading dashboard</strong>
+            <span>Preparing your business workspace...</span>
+        </div>
+    </div>
+}
+else
+{
+    <section class="opsdash-page">
+        <div class="opsdash-header">
+            <div>
+                <div class="opsdash-kicker">
+                    <i class="bi bi-speedometer2"></i>
+                    Business overview
+                </div>
+
+                <h1>Welcome back, @DisplayName</h1>
+                <p>
+                    Track sales, products, stock activity and workspace setup from your POS control center.
+                </p>
+            </div>
+
+            <div class="opsdash-header-actions">
+                <a href="/sales" class="opsdash-primary-btn">
+                    <i class="bi bi-cart-check"></i>
+                    Start Sale
+                </a>
+
+                <a href="/products" class="opsdash-secondary-btn">
+                    <i class="bi bi-box-seam"></i>
+                    Products
+                </a>
+            </div>
+        </div>
+
+        <div class="opsdash-overview-grid">
+            <div class="opsdash-metric-card dark">
+                <div class="opsdash-metric-top">
+                    <span>Total Orders</span>
+                    <i class="bi bi-receipt"></i>
+                </div>
+                <strong>0</strong>
+                <small>Today’s transactions</small>
+            </div>
+
+            <div class="opsdash-metric-card blue">
+                <div class="opsdash-metric-top">
+                    <span>Revenue</span>
+                    <i class="bi bi-cash-stack"></i>
+                </div>
+                <strong>R 0</strong>
+                <small>Current sales value</small>
+            </div>
+
+            <div class="opsdash-metric-card green">
+                <div class="opsdash-metric-top">
+                    <span>Stock Items</span>
+                    <i class="bi bi-boxes"></i>
+                </div>
+                <strong>0</strong>
+                <small>Products in catalog</small>
+            </div>
+
+            <div class="opsdash-metric-card violet">
+                <div class="opsdash-metric-top">
+                    <span>Users</span>
+                    <i class="bi bi-people"></i>
+                </div>
+                <strong>1</strong>
+                <small>Active workspace users</small>
+            </div>
+        </div>
+
+        <div class="opsdash-grid">
+            <div class="opsdash-panel opsdash-panel-large">
+                <div class="opsdash-panel-header">
+                    <div>
+                        <h2>Sales Performance</h2>
+                        <p>Monthly performance snapshot</p>
+                    </div>
+
+                    <div class="opsdash-period-pill">
+                        <i class="bi bi-calendar3"></i>
+                        This year
+                    </div>
+                </div>
+
+                <div class="opsdash-chart-area">
+                    <div class="opsdash-chart-lines">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+
+                    <div class="opsdash-bars">
+                        <div class="opsdash-bar-item">
+                            <div class="opsdash-bar" style="height: 44%"></div>
+                            <small>Jan</small>
+                        </div>
+
+                        <div class="opsdash-bar-item">
+                            <div class="opsdash-bar" style="height: 58%"></div>
+                            <small>Feb</small>
+                        </div>
+
+                        <div class="opsdash-bar-item">
+                            <div class="opsdash-bar" style="height: 38%"></div>
+                            <small>Mar</small>
+                        </div>
+
+                        <div class="opsdash-bar-item">
+                            <div class="opsdash-bar" style="height: 72%"></div>
+                            <small>Apr</small>
+                        </div>
+
+                        <div class="opsdash-bar-item">
+                            <div class="opsdash-bar" style="height: 64%"></div>
+                            <small>May</small>
+                        </div>
+
+                        <div class="opsdash-bar-item">
+                            <div class="opsdash-bar" style="height: 84%"></div>
+                            <small>Jun</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="opsdash-insight-row">
+                    <div>
+                        <span>Best performing period</span>
+                        <strong>June</strong>
+                    </div>
+
+                    <div>
+                        <span>Average activity</span>
+                        <strong>Medium</strong>
+                    </div>
+
+                    <div>
+                        <span>Sales status</span>
+                        <strong class="positive">Ready</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="opsdash-panel">
+                <div class="opsdash-panel-header">
+                    <div>
+                        <h2>Workspace</h2>
+                        <p>Account and system details</p>
+                    </div>
+                </div>
+
+                <div class="opsdash-profile-card">
+                    <div class="opsdash-profile-avatar">@UserInitial</div>
+
+                    <div>
+                        <strong>@DisplayName</strong>
+                        <span>@_user.FindFirstValue(ClaimTypes.Email)</span>
+                    </div>
+                </div>
+
+                <div class="opsdash-summary-list">
+                    <div class="opsdash-summary-item">
+                        <span>Tenant ID</span>
+                        <strong>@GetClaim("tenant_id")</strong>
+                    </div>
+
+                    <div class="opsdash-summary-item">
+                        <span>Branch ID</span>
+                        <strong>@GetClaim("branch_id")</strong>
+                    </div>
+
+                    <div class="opsdash-summary-item">
+                        <span>Plan</span>
+                        <strong>Lite POS</strong>
+                    </div>
+
+                    <div class="opsdash-summary-item">
+                        <span>Role</span>
+                        <strong>Owner</strong>
+                    </div>
+
+                    <div class="opsdash-summary-item">
+                        <span>Status</span>
+                        <strong class="opsdash-status">Active</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="opsdash-bottom-grid">
+            <div class="opsdash-panel">
+                <div class="opsdash-panel-header">
+                    <div>
+                        <h2>Quick Actions</h2>
+                        <p>Common shortcuts for daily operations</p>
+                    </div>
+                </div>
+
+                <div class="opsdash-actions-grid">
+                    <a href="/products" class="opsdash-action-card">
+                        <div class="opsdash-action-icon blue">
+                            <i class="bi bi-box-seam"></i>
+                        </div>
+
+                        <div>
+                            <strong>Manage Products</strong>
+                            <span>Add products, update pricing and organize your catalog.</span>
+                        </div>
+
+                        <i class="bi bi-arrow-right-short"></i>
+                    </a>
+
+                    <a href="/sales" class="opsdash-action-card">
+                        <div class="opsdash-action-icon green">
+                            <i class="bi bi-cart-check"></i>
+                        </div>
+
+                        <div>
+                            <strong>Start Selling</strong>
+                            <span>Open the sales screen and process transactions.</span>
+                        </div>
+
+                        <i class="bi bi-arrow-right-short"></i>
+                    </a>
+
+                    <a href="/stock" class="opsdash-action-card">
+                        <div class="opsdash-action-icon amber">
+                            <i class="bi bi-graph-up-arrow"></i>
+                        </div>
+
+                        <div>
+                            <strong>Stock Management</strong>
+                            <span>Track movements, quantities and reorder needs.</span>
+                        </div>
+
+                        <i class="bi bi-arrow-right-short"></i>
+                    </a>
+
+                    <a href="/users" class="opsdash-action-card">
+                        <div class="opsdash-action-icon violet">
+                            <i class="bi bi-people"></i>
+                        </div>
+
+                        <div>
+                            <strong>User Management</strong>
+                            <span>Create users, manage access and assign roles.</span>
+                        </div>
+
+                        <i class="bi bi-arrow-right-short"></i>
+                    </a>
+                </div>
+            </div>
+
+            <div class="opsdash-panel">
+                <div class="opsdash-panel-header">
+                    <div>
+                        <h2>Setup Progress</h2>
+                        <p>Keep your workspace ready for operations</p>
+                    </div>
+                </div>
+
+                <div class="opsdash-progress-list">
+                    <div class="opsdash-progress-item">
+                        <div>
+                            <strong>Products configured</strong>
+                            <span>Catalog setup</span>
+                        </div>
+                        <div class="opsdash-progress-track">
+                            <span style="width: 45%"></span>
+                        </div>
+                    </div>
+
+                    <div class="opsdash-progress-item">
+                        <div>
+                            <strong>Branch ready</strong>
+                            <span>Main branch linked</span>
+                        </div>
+                        <div class="opsdash-progress-track green">
+                            <span style="width: 65%"></span>
+                        </div>
+                    </div>
+
+                    <div class="opsdash-progress-item">
+                        <div>
+                            <strong>Users configured</strong>
+                            <span>Team access</span>
+                        </div>
+                        <div class="opsdash-progress-track amber">
+                            <span style="width: 35%"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+}
+
+<style>
+    .opsdash-page {
+        animation: opsdashIn .22s ease both;
+    }
+
+    .opsdash-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 18px;
+        margin-bottom: 18px;
+    }
+
+    .opsdash-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 750;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+    }
+
+    .opsdash-header h1 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 1.5rem;
+        font-weight: 680;
+        letter-spacing: -.03em;
+    }
+
+    .opsdash-header p {
+        margin: 6px 0 0;
+        color: #64748b;
+        font-size: .9rem;
+        line-height: 1.5;
+    }
+
+    .opsdash-header-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .opsdash-primary-btn,
+    .opsdash-secondary-btn {
+        min-height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        border-radius: 11px;
+        font-size: .8rem;
+        font-weight: 650;
+        text-decoration: none;
+        transition: all .18s ease;
+        white-space: nowrap;
+    }
+
+    .opsdash-primary-btn {
+        color: #ffffff;
+        background: #111827;
+        box-shadow: 0 12px 24px rgba(15, 23, 42, .14);
+    }
+
+    .opsdash-secondary-btn {
+        color: #2563eb;
+        background: #eef5ff;
+        border: 1px solid #dbeafe;
+    }
+
+        .opsdash-primary-btn:hover,
+        .opsdash-secondary-btn:hover {
+            transform: translateY(-1px);
+        }
+
+    .opsdash-overview-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 16px;
+    }
+
+    .opsdash-metric-card {
+        min-height: 116px;
+        padding: 16px;
+        border-radius: 20px;
+        position: relative;
+        overflow: hidden;
+        color: #ffffff;
+        box-shadow: 0 16px 34px rgba(15, 23, 42, .11);
+    }
+
+        .opsdash-metric-card::after {
+            content: "";
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            right: -45px;
+            top: -45px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.14);
+        }
+
+        .opsdash-metric-card.dark {
+            background: linear-gradient(135deg, #111827, #334155);
+        }
+
+        .opsdash-metric-card.blue {
+            background: linear-gradient(135deg, #2563eb, #38bdf8);
+        }
+
+        .opsdash-metric-card.green {
+            background: linear-gradient(135deg, #16a34a, #34d399);
+        }
+
+        .opsdash-metric-card.violet {
+            background: linear-gradient(135deg, #7c3aed, #a78bfa);
+        }
+
+    .opsdash-metric-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        position: relative;
+        z-index: 1;
+    }
+
+        .opsdash-metric-top span {
+            font-size: .78rem;
+            font-weight: 700;
+        }
+
+        .opsdash-metric-top i {
+            opacity: .9;
+        }
+
+    .opsdash-metric-card strong {
+        display: block;
+        margin-top: 16px;
+        font-size: 1.55rem;
+        font-weight: 720;
+        letter-spacing: -.03em;
+        position: relative;
+        z-index: 1;
+    }
+
+    .opsdash-metric-card small {
+        display: block;
+        margin-top: 4px;
+        color: rgba(255,255,255,.78);
+        font-size: .74rem;
+        position: relative;
+        z-index: 1;
+    }
+
+    .opsdash-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.45fr) minmax(320px, .75fr);
+        gap: 16px;
+        align-items: start;
+        margin-bottom: 16px;
+    }
+
+    .opsdash-bottom-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr);
+        gap: 16px;
+        align-items: start;
+    }
+
+    .opsdash-panel {
+        border-radius: 20px;
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 16px 34px rgba(15, 23, 42, .055);
+        overflow: hidden;
+    }
+
+    .opsdash-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 17px 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .opsdash-panel-header h2 {
+            margin: 0;
+            color: #0f172a;
+            font-size: .92rem;
+            font-weight: 720;
+        }
+
+        .opsdash-panel-header p {
+            margin: 4px 0 0;
+            color: #94a3b8;
+            font-size: .76rem;
+        }
+
+    .opsdash-period-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        color: #2563eb;
+        background: #eef5ff;
+        font-size: .74rem;
+        font-weight: 700;
+    }
+
+    .opsdash-chart-area {
+        position: relative;
+        min-height: 260px;
+        padding: 22px 18px 16px;
+    }
+
+    .opsdash-chart-lines {
+        position: absolute;
+        inset: 22px 18px 52px;
+        display: grid;
+        grid-template-rows: repeat(4, 1fr);
+    }
+
+        .opsdash-chart-lines span {
+            border-top: 1px solid #edf2f7;
+        }
+
+    .opsdash-bars {
+        position: relative;
+        z-index: 1;
+        min-height: 210px;
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 14px;
+        align-items: end;
+    }
+
+    .opsdash-bar-item {
+        height: 210px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 9px;
+    }
+
+    .opsdash-bar {
+        width: 34px;
+        border-radius: 999px 999px 8px 8px;
+        background: linear-gradient(180deg, #2563eb, #38bdf8);
+        box-shadow: 0 10px 20px rgba(37, 99, 235, .16);
+    }
+
+    .opsdash-bar-item small {
+        color: #64748b;
+        font-size: .72rem;
+        font-weight: 650;
+    }
+
+    .opsdash-insight-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        border-top: 1px solid #edf2f7;
+    }
+
+        .opsdash-insight-row div {
+            padding: 14px 16px;
+            border-right: 1px solid #edf2f7;
+        }
+
+            .opsdash-insight-row div:last-child {
+                border-right: 0;
+            }
+
+        .opsdash-insight-row span {
+            display: block;
+            color: #94a3b8;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .opsdash-insight-row strong {
+            display: block;
+            margin-top: 3px;
+            color: #0f172a;
+            font-size: .88rem;
+            font-weight: 720;
+        }
+
+        .opsdash-insight-row .positive {
+            color: #16a34a;
+        }
+
+    .opsdash-profile-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 18px;
+        padding: 14px;
+        border-radius: 18px;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+    }
+
+    .opsdash-profile-avatar {
+        width: 46px;
+        height: 46px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #2563eb;
+        background: #eef5ff;
+        font-size: .95rem;
+        font-weight: 750;
+    }
+
+    .opsdash-profile-card strong {
+        display: block;
+        color: #0f172a;
+        font-size: .9rem;
+        font-weight: 720;
+    }
+
+    .opsdash-profile-card span {
+        display: block;
+        margin-top: 3px;
+        color: #64748b;
+        font-size: .76rem;
+        word-break: break-word;
+    }
+
+    .opsdash-summary-list {
+        padding: 0 18px 18px;
+    }
+
+    .opsdash-summary-item {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 12px 0;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .opsdash-summary-item:last-child {
+            border-bottom: 0;
+        }
+
+        .opsdash-summary-item span {
+            color: #64748b;
+            font-size: .8rem;
+        }
+
+        .opsdash-summary-item strong {
+            color: #0f172a;
+            font-size: .8rem;
+            font-weight: 700;
+            text-align: right;
+            word-break: break-word;
+        }
+
+    .opsdash-status {
+        color: #16a34a !important;
+    }
+
+    .opsdash-actions-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        padding: 18px;
+    }
+
+    .opsdash-action-card {
+        display: grid;
+        grid-template-columns: 42px minmax(0, 1fr) 22px;
+        align-items: center;
+        gap: 12px;
+        padding: 14px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+        text-decoration: none;
+        color: inherit;
+        transition: all .18s ease;
+    }
+
+        .opsdash-action-card:hover {
+            background: #ffffff;
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(15,23,42,.07);
+        }
+
+    .opsdash-action-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+        .opsdash-action-icon.blue {
+            color: #2563eb;
+            background: #eff6ff;
+        }
+
+        .opsdash-action-icon.green {
+            color: #16a34a;
+            background: #ecfdf5;
+        }
+
+        .opsdash-action-icon.amber {
+            color: #d97706;
+            background: #fffbeb;
+        }
+
+        .opsdash-action-icon.violet {
+            color: #7c3aed;
+            background: #f5f3ff;
+        }
+
+    .opsdash-action-card strong {
+        display: block;
+        color: #0f172a;
+        font-size: .84rem;
+        font-weight: 720;
+    }
+
+    .opsdash-action-card span {
+        display: block;
+        margin-top: 3px;
+        color: #64748b;
+        font-size: .74rem;
+        line-height: 1.35;
+    }
+
+    .opsdash-action-card > i {
+        color: #cbd5e1;
+        font-size: 1.15rem;
+    }
+
+    .opsdash-progress-list {
+        padding: 18px;
+        display: grid;
+        gap: 16px;
+    }
+
+    .opsdash-progress-item strong {
+        display: block;
+        color: #0f172a;
+        font-size: .84rem;
+        font-weight: 720;
+    }
+
+    .opsdash-progress-item span {
+        display: block;
+        margin-top: 3px;
+        color: #64748b;
+        font-size: .74rem;
+    }
+
+    .opsdash-progress-track {
+        height: 8px;
+        margin-top: 10px;
+        border-radius: 999px;
+        background: #eef2f7;
+        overflow: hidden;
+    }
+
+        .opsdash-progress-track span {
+            display: block;
+            height: 100%;
+            border-radius: inherit;
+            background: #2563eb;
+        }
+
+        .opsdash-progress-track.green span {
+            background: #16a34a;
+        }
+
+        .opsdash-progress-track.amber span {
+            background: #f59e0b;
+        }
+
+    .opsdash-loading {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 20px;
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 14px 30px rgba(15, 23, 42, .06);
+    }
+
+    .opsdash-loading-dot {
+        width: 13px;
+        height: 13px;
+        border-radius: 999px;
+        background: #2563eb;
+        box-shadow: 0 0 0 8px rgba(37, 99, 235, .12);
+    }
+
+    .opsdash-loading strong,
+    .opsdash-loading span {
+        display: block;
+    }
+
+    .opsdash-loading strong {
+        color: #0f172a;
+        font-size: .9rem;
+    }
+
+    .opsdash-loading span {
+        color: #64748b;
+        font-size: .78rem;
+        margin-top: 2px;
+    }
+
+    @@keyframes opsdashIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width: 1199px) {
+        .opsdash-overview-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .opsdash-grid,
+        .opsdash-bottom-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .opsdash-header {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .opsdash-header-actions {
+            width: 100%;
+        }
+
+        .opsdash-primary-btn,
+        .opsdash-secondary-btn {
+            flex: 1;
+        }
+
+        .opsdash-overview-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .opsdash-actions-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .opsdash-insight-row {
+            grid-template-columns: 1fr;
+        }
+
+            .opsdash-insight-row div {
+                border-right: 0;
+                border-bottom: 1px solid #edf2f7;
+            }
+
+                .opsdash-insight-row div:last-child {
+                    border-bottom: 0;
+                }
+
+        .opsdash-bars {
+            min-width: 520px;
+        }
+
+        .opsdash-chart-area {
+            overflow-x: auto;
+        }
+    }
+</style>
+
+@code {
+    private ClaimsPrincipal? _user;
+
+    private string DisplayName =>
+        _user?.Identity?.Name
+        ?? _user?.FindFirstValue(ClaimTypes.Email)
+        ?? "User";
+
+    private string UserInitial =>
+        string.IsNullOrWhiteSpace(DisplayName)
+            ? "P"
+            : DisplayName.Trim()[0].ToString().ToUpper();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _user = authState.User;
+    }
+
+    private string GetClaim(string type) => _user?.FindFirst(type)?.Value ?? "-";
+}

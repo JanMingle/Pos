@@ -1,0 +1,124 @@
+﻿@using PosPlatform.Web.Services
+@inject UserAccessService UserAccessService
+
+<aside class="pos-sidebar">
+    <div class="pos-sidebar-brand">
+        <div class="pos-brand-logo">P</div>
+
+        <div class="pos-brand-text">
+            <div class="pos-brand-title">POS Platform</div>
+            <div class="pos-brand-subtitle">@_roleName</div>
+        </div>
+    </div>
+
+    <div class="pos-nav-section">Dashboard</div>
+
+    <nav class="pos-sidebar-nav">
+        <NavLink href="/dashboard" class="pos-nav-link" Match="NavLinkMatch.All">
+            <span class="pos-nav-icon"><i class="bi bi-grid-1x2"></i></span>
+            <span class="pos-nav-text">Dashboard</span>
+        </NavLink>
+
+        @if (_canProducts || _canStock || _canSales || _canBranches)
+        {
+            <div class="pos-nav-section">Operations</div>
+        }
+
+        @if (_canProducts)
+        {
+            <NavLink href="/products" class="pos-nav-link">
+                <span class="pos-nav-icon"><i class="bi bi-box-seam"></i></span>
+                <span class="pos-nav-text">Products</span>
+            </NavLink>
+        }
+
+        @if (_canStock)
+        {
+            <NavLink href="/stock" class="pos-nav-link">
+                <span class="pos-nav-icon"><i class="bi bi-graph-up-arrow"></i></span>
+                <span class="pos-nav-text">Stock</span>
+            </NavLink>
+        }
+
+        @if (_canSales)
+        {
+            <NavLink href="/sales" class="pos-nav-link">
+                <span class="pos-nav-icon"><i class="bi bi-cart-check"></i></span>
+                <span class="pos-nav-text">Sales</span>
+            </NavLink>
+        }
+
+        @if (_canBranches)
+        {
+            <NavLink href="/branches" class="pos-nav-link">
+                <span class="pos-nav-icon"><i class="bi bi-shop"></i></span>
+                <span class="pos-nav-text">Branches</span>
+            </NavLink>
+        }
+
+        @if (_canUsers || _canReports || _canSettings)
+        {
+            <div class="pos-nav-section">Management</div>
+        }
+
+        @if (_canUsers)
+        {
+            <NavLink href="/users" class="pos-nav-link">
+                <span class="pos-nav-icon"><i class="bi bi-people"></i></span>
+                <span class="pos-nav-text">Users</span>
+            </NavLink>
+        }
+
+        @if (_canReports)
+        {
+            <NavLink href="/reports" class="pos-nav-link">
+                <span class="pos-nav-icon"><i class="bi bi-bar-chart"></i></span>
+                <span class="pos-nav-text">Reports</span>
+            </NavLink>
+        }
+
+        @if (_canSettings)
+        {
+            <NavLink href="/settings" class="pos-nav-link">
+                <span class="pos-nav-icon"><i class="bi bi-gear"></i></span>
+                <span class="pos-nav-text">Settings</span>
+            </NavLink>
+        }
+    </nav>
+
+    <div class="pos-sidebar-card">
+        <div class="pos-sidebar-card-icon">
+            <i class="bi bi-shield-check"></i>
+        </div>
+
+        <div class="pos-sidebar-card-text">
+            <strong>@_roleName</strong>
+            <span>Access enabled</span>
+        </div>
+    </div>
+</aside>
+
+@code {
+    private string _roleName = "Loading...";
+
+    private bool _canProducts;
+    private bool _canStock;
+    private bool _canSales;
+    private bool _canBranches;
+    private bool _canUsers;
+    private bool _canReports;
+    private bool _canSettings;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _roleName = await UserAccessService.GetCurrentRoleAsync();
+
+        _canProducts = await UserAccessService.CanAccessAsync("products");
+        _canStock = await UserAccessService.CanAccessAsync("stock");
+        _canSales = await UserAccessService.CanAccessAsync("sales");
+        _canBranches = await UserAccessService.CanAccessAsync("branches");
+        _canUsers = await UserAccessService.CanAccessAsync("users");
+        _canReports = await UserAccessService.CanAccessAsync("reports");
+        _canSettings = await UserAccessService.CanAccessAsync("settings");
+    }
+}

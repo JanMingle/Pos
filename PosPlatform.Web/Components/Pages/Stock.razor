@@ -1,0 +1,1147 @@
+﻿@page "/stock"
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@layout MainLayout
+@attribute [Authorize]
+@using PosPlatform.Web.Components.Layout
+@using PosPlatform.Web.Models.Stock
+@using PosPlatform.Web.Models.Settings
+@using PosPlatform.Web.Services
+@inject StockService StockService
+@inject BusinessSettingsService BusinessSettingsService
+@inject UserAccessService UserAccessService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Stock</PageTitle>
+
+<section class="stock-page">
+    <div class="stock-header">
+        <div>
+            <div class="stock-kicker">
+                <i class="bi bi-boxes"></i>
+                Inventory control
+            </div>
+            <h1>Stock Management</h1>
+            <p>Monitor stock-tracked items only. Services and digital products are excluded from stock control.</p>
+        </div>
+
+        @if (StockEnabled)
+        {
+            <button type="button" class="stock-primary-btn" @onclick="OpenAdjustment">
+                <i class="bi bi-plus-lg"></i>
+                Adjust Stock
+            </button>
+        }
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="stock-alert @(_isSuccess ? "success" : "danger")">
+            <i class="bi @(_isSuccess ? "bi-check-circle" : "bi-exclamation-triangle")"></i>
+            <span>@_message</span>
+            <button type="button" @onclick="ClearMessage">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    }
+
+    <div class="stock-settings-strip">
+        <div>
+            <span>Business</span>
+            <strong>@_settings.BusinessName</strong>
+        </div>
+
+        <div>
+            <span>Business Type</span>
+            <strong>@_settings.BusinessType</strong>
+        </div>
+
+        <div>
+            <span>Currency</span>
+            <strong>@_settings.CurrencyCode · @_settings.CurrencySymbol</strong>
+        </div>
+
+        <div>
+            <span>Stock Tracking</span>
+            <strong>@(StockEnabled ? "Enabled" : "Disabled")</strong>
+        </div>
+    </div>
+
+    @if (!StockEnabled)
+    {
+        <div class="stock-settings-warning">
+            <div>
+                <strong>Stock tracking is disabled</strong>
+                <span>Enable stock tracking in Business Settings if this business needs inventory control.</span>
+            </div>
+
+            <a href="/settings" class="stock-settings-link">
+                Open Settings
+            </a>
+        </div>
+    }
+    else
+    {
+        <div class="stock-summary-grid">
+            <div class="stock-summary-card">
+                <span>Stock Items</span>
+                <strong>@_summary.TotalStockItems</strong>
+            </div>
+
+            <div class="stock-summary-card blue">
+                <span>Total Units</span>
+                <strong>@_summary.TotalUnits.ToString("0.##")</strong>
+            </div>
+
+            <div class="stock-summary-card amber">
+                <span>Low Stock</span>
+                <strong>@_summary.LowStockItems</strong>
+            </div>
+
+            <div class="stock-summary-card red">
+                <span>Out of Stock</span>
+                <strong>@_summary.OutOfStockItems</strong>
+            </div>
+
+            <div class="stock-summary-card green">
+                <span>Stock Value</span>
+                <strong>@Money(_summary.TotalStockValue)</strong>
+            </div>
+        </div>
+
+        <div class="stock-control-panel">
+            <div class="stock-search">
+                <i class="bi bi-search"></i>
+                <input @bind="_searchTerm"
+                       @bind:event="oninput"
+                       placeholder="Search stock item, SKU, barcode or type" />
+            </div>
+
+            <select class="stock-filter" @bind="_statusFilter">
+                <option value="all">All stock</option>
+                <option value="healthy">Healthy stock</option>
+                <option value="low">Low stock</option>
+                <option value="out">Out of stock</option>
+                <option value="active">Active items</option>
+                <option value="inactive">Inactive items</option>
+            </select>
+
+            <button type="button" class="stock-secondary-btn" @onclick="LoadStockAsync">
+                <i class="bi bi-filter"></i>
+                Apply
+            </button>
+
+            <button type="button" class="stock-ghost-btn" @onclick="ResetFiltersAsync">
+                <i class="bi bi-arrow-counterclockwise"></i>
+                Reset
+            </button>
+        </div>
+
+        <div class="stock-grid">
+            <div class="stock-panel">
+                <div class="stock-panel-header">
+                    <div>
+                        <h2>Current Stock</h2>
+                        <p>@_products.Count stock-tracked item@(_products.Count == 1 ? "" : "s") showing.</p>
+                    </div>
+                </div>
+
+                @if (_loadingStock)
+                {
+                    <div class="stock-empty">
+                        <strong>Loading stock...</strong>
+                        <span>Please wait while we fetch inventory records.</span>
+                    </div>
+                }
+                else if (_products.Count == 0)
+                {
+                    <div class="stock-empty">
+                        <strong>No stock-tracked items found</strong>
+                        <span>Only items with Track Stock enabled appear here.</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="stock-table-wrap">
+                        <table class="stock-table">
+                            <thead>
+                                <tr>
+                                    <th>Item</th>
+                                    <th>Type</th>
+                                    <th>Category</th>
+                                    <th>Available</th>
+                                    <th>Reorder</th>
+                                    <th>Value</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Action</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var item in _products)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="stock-product-cell">
+                                                <div class="stock-avatar">@GetInitials(item.ProductName)</div>
+                                                <div>
+                                                    <strong>@item.ProductName</strong>
+                                                    <span>@item.SKU</span>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        <td>
+                                            <span class="stock-type-pill @GetTypeClass(item.ProductType)">
+                                                @item.ProductType
+                                            </span>
+
+                                            @if (item.AgeRestricted)
+                                            {
+                                                <span class="stock-age-pill">Age</span>
+                                            }
+                                        </td>
+
+                                        <td>@item.CategoryName</td>
+                                        <td>@item.QuantityInStock.ToString("0.##") @GetUnitLabel(item.UnitOfMeasure)</td>
+                                        <td>@item.ReorderLevel.ToString("0.##") @GetUnitLabel(item.UnitOfMeasure)</td>
+                                        <td>@Money(item.StockValue)</td>
+
+                                        <td>
+                                            @if (item.IsOutOfStock)
+                                            {
+                                                <span class="stock-pill danger">Out</span>
+                                            }
+                                            else if (item.IsLowStock)
+                                            {
+                                                <span class="stock-pill warning">Low</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="stock-pill success">Healthy</span>
+                                            }
+                                        </td>
+
+                                        <td class="text-end">
+                                            <button type="button" class="stock-mini-btn" @onclick="() => OpenAdjustment(item.ProductId)">
+                                                Adjust
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+
+            <div class="stock-panel">
+                <div class="stock-panel-header">
+                    <div>
+                        <h2>Manual Adjustment</h2>
+                        <p>Only stock-tracked items can be adjusted here.</p>
+                    </div>
+                </div>
+
+                <EditForm Model="_adjustment" OnValidSubmit="SaveAdjustmentAsync">
+                    <DataAnnotationsValidator />
+
+                    <div class="stock-adjustment-form">
+                        <div>
+                            <label>Stock Item</label>
+                            <InputSelect class="stock-input" @bind-Value="_adjustment.ProductId">
+                                <option value="0">Select stock item</option>
+                                @foreach (var product in _products)
+                                {
+                                    <option value="@product.ProductId">
+                                        @product.ProductName (@product.SKU) - @product.QuantityInStock.ToString("0.##") @GetUnitLabel(product.UnitOfMeasure)
+                                    </option>
+                                }
+                            </InputSelect>
+                        </div>
+
+                        <div>
+                            <label>Adjustment Type</label>
+                            <InputSelect class="stock-input" @bind-Value="_adjustment.AdjustmentType">
+                                <option value="Stock In">Stock In</option>
+                                <option value="Stock Out">Stock Out</option>
+                                <option value="Correction">Correction</option>
+                            </InputSelect>
+                        </div>
+
+                        @if (_adjustment.AdjustmentType == "Correction")
+                        {
+                            <div>
+                                <label>New Quantity</label>
+                                <InputNumber class="stock-input" @bind-Value="_adjustment.NewQuantity" />
+                            </div>
+                        }
+                        else
+                        {
+                            <div>
+                                <label>Quantity</label>
+                                <InputNumber class="stock-input" @bind-Value="_adjustment.Quantity" />
+                            </div>
+                        }
+
+                        <div>
+                            <label>Notes</label>
+                            <InputTextArea class="stock-input stock-textarea"
+                                           @bind-Value="_adjustment.Notes"
+                                           placeholder="Example: Supplier delivery, damaged item, manual correction..." />
+                        </div>
+
+                        <ValidationSummary class="stock-validation" />
+
+                        <button type="submit" class="stock-primary-btn" disabled="@_savingAdjustment">
+                            <i class="bi bi-check2-circle"></i>
+                            @(_savingAdjustment ? "Saving..." : "Save Adjustment")
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    }
+
+    <div class="stock-panel stock-history-panel">
+        <div class="stock-panel-header stock-history-header">
+            <div>
+                <h2>Stock Movement History</h2>
+                <p>Sales deductions and manual stock adjustments.</p>
+            </div>
+
+            <div class="stock-date-filters">
+                <input type="date" @bind="_fromDate" />
+                <input type="date" @bind="_toDate" />
+
+                <button type="button" class="stock-secondary-btn" @onclick="LoadMovementsAsync">
+                    Filter
+                </button>
+            </div>
+        </div>
+
+        @if (_loadingMovements)
+        {
+            <div class="stock-empty">
+                <strong>Loading movements...</strong>
+                <span>Please wait.</span>
+            </div>
+        }
+        else if (_movements.Count == 0)
+        {
+            <div class="stock-empty">
+                <strong>No movements found</strong>
+                <span>Stock changes will appear here after sales or manual adjustments.</span>
+            </div>
+        }
+        else
+        {
+            <div class="stock-table-wrap">
+                <table class="stock-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Item</th>
+                            <th>Type</th>
+                            <th>Movement</th>
+                            <th>Qty</th>
+                            <th>Before</th>
+                            <th>After</th>
+                            <th>Reference</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var movement in _movements)
+                        {
+                            <tr>
+                                <td>@movement.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>
+                                    <strong>@movement.ProductName</strong>
+                                    <span class="stock-muted">@movement.SKU</span>
+                                </td>
+                                <td>
+                                    <span class="stock-type-pill @GetTypeClass(movement.ProductType)">
+                                        @movement.ProductType
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="stock-pill @GetMovementClass(movement.MovementType)">
+                                        @movement.MovementType
+                                    </span>
+                                </td>
+                                <td>@movement.Quantity.ToString("0.##") @GetUnitLabel(movement.UnitOfMeasure)</td>
+                                <td>@movement.QuantityBefore.ToString("0.##")</td>
+                                <td>@movement.QuantityAfter.ToString("0.##")</td>
+                                <td>@movement.ReferenceType @movement.ReferenceId</td>
+                                <td>@movement.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>
+
+<style>
+    .stock-page {
+        animation: stockIn .22s ease both;
+    }
+
+    .stock-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 18px;
+        margin-bottom: 18px;
+    }
+
+    .stock-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 750;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+
+    .stock-header h1 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 1.45rem;
+        font-weight: 680;
+        letter-spacing: -.03em;
+    }
+
+    .stock-header p {
+        margin: 6px 0 0;
+        color: #64748b;
+        font-size: .88rem;
+    }
+
+    .stock-primary-btn,
+    .stock-secondary-btn,
+    .stock-ghost-btn,
+    .stock-mini-btn {
+        min-height: 38px;
+        border-radius: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 650;
+        border: 0;
+        transition: all .18s ease;
+        white-space: nowrap;
+    }
+
+    .stock-primary-btn {
+        color: #ffffff;
+        background: #111827;
+        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+    }
+
+    .stock-secondary-btn {
+        color: #2563eb;
+        background: #eef5ff;
+    }
+
+    .stock-ghost-btn {
+        color: #475569;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+    }
+
+    .stock-mini-btn {
+        min-height: 30px;
+        color: #2563eb;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        padding: 0 10px;
+    }
+
+    .stock-alert {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        font-size: .84rem;
+        font-weight: 600;
+        border: 1px solid;
+    }
+
+        .stock-alert.success {
+            color: #166534;
+            background: #f0fdf4;
+            border-color: #bbf7d0;
+        }
+
+        .stock-alert.danger {
+            color: #991b1b;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+        .stock-alert span {
+            flex: 1;
+        }
+
+        .stock-alert button {
+            border: 0;
+            background: transparent;
+            color: inherit;
+        }
+
+    .stock-settings-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+        .stock-settings-strip div {
+            padding: 13px;
+            border-radius: 16px;
+            background: #ffffff;
+            border: 1px solid #e7edf5;
+            box-shadow: 0 12px 28px rgba(15,23,42,.04);
+        }
+
+        .stock-settings-strip span,
+        .stock-settings-strip strong {
+            display: block;
+        }
+
+        .stock-settings-strip span {
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .stock-settings-strip strong {
+            margin-top: 4px;
+            color: #0f172a;
+            font-size: .84rem;
+            font-weight: 720;
+        }
+
+    .stock-settings-warning {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: center;
+        margin-bottom: 16px;
+        padding: 16px;
+        border-radius: 18px;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+    }
+
+        .stock-settings-warning strong,
+        .stock-settings-warning span {
+            display: block;
+        }
+
+        .stock-settings-warning strong {
+            color: #9a3412;
+            font-size: .9rem;
+            font-weight: 750;
+        }
+
+        .stock-settings-warning span {
+            margin-top: 3px;
+            color: #c2410c;
+            font-size: .78rem;
+        }
+
+    .stock-settings-link {
+        min-height: 36px;
+        border-radius: 10px;
+        padding: 0 13px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #111827;
+        color: #ffffff;
+        font-size: .78rem;
+        font-weight: 700;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .stock-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .stock-summary-card {
+        padding: 16px;
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+    }
+
+        .stock-summary-card span {
+            display: block;
+            color: #64748b;
+            font-size: .74rem;
+            font-weight: 650;
+        }
+
+        .stock-summary-card strong {
+            display: block;
+            margin-top: 6px;
+            color: #0f172a;
+            font-size: 1.1rem;
+            font-weight: 720;
+        }
+
+        .stock-summary-card.blue strong {
+            color: #2563eb;
+        }
+
+        .stock-summary-card.green strong {
+            color: #16a34a;
+        }
+
+        .stock-summary-card.amber strong {
+            color: #d97706;
+        }
+
+        .stock-summary-card.red strong {
+            color: #dc2626;
+        }
+
+    .stock-control-panel {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) 170px auto auto;
+        gap: 10px;
+        padding: 14px;
+        margin-bottom: 16px;
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+    }
+
+    .stock-search {
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 13px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        color: #94a3b8;
+    }
+
+        .stock-search input,
+        .stock-filter,
+        .stock-input,
+        .stock-date-filters input {
+            width: 100%;
+            min-height: 40px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            background: #ffffff;
+            color: #0f172a;
+            padding: 0 12px;
+            font-size: .84rem;
+            outline: none;
+        }
+
+        .stock-search input {
+            border: 0;
+            background: transparent;
+            padding: 0;
+        }
+
+    .stock-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.25fr) minmax(340px, .75fr);
+        gap: 16px;
+        align-items: start;
+    }
+
+    .stock-panel {
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        border-radius: 20px;
+        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        overflow: hidden;
+    }
+
+    .stock-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 17px 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .stock-panel-header h2 {
+            margin: 0;
+            color: #0f172a;
+            font-size: .92rem;
+            font-weight: 720;
+        }
+
+        .stock-panel-header p {
+            margin: 4px 0 0;
+            color: #94a3b8;
+            font-size: .76rem;
+        }
+
+    .stock-table-wrap {
+        overflow-x: auto;
+    }
+
+    .stock-table {
+        width: 100%;
+        min-width: 940px;
+        border-collapse: collapse;
+    }
+
+        .stock-table th {
+            padding: 12px 16px;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: .7rem;
+            font-weight: 750;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            border-bottom: 1px solid #e7edf5;
+            white-space: nowrap;
+        }
+
+        .stock-table td {
+            padding: 14px 16px;
+            color: #334155;
+            font-size: .82rem;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+
+    .stock-product-cell {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+    }
+
+    .stock-avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 14px;
+        background: #eef5ff;
+        color: #2563eb;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .78rem;
+        font-weight: 750;
+    }
+
+    .stock-product-cell strong {
+        display: block;
+        color: #0f172a;
+        font-size: .85rem;
+        font-weight: 720;
+    }
+
+    .stock-product-cell span,
+    .stock-muted {
+        display: block;
+        margin-top: 2px;
+        color: #94a3b8;
+        font-size: .72rem;
+    }
+
+    .stock-type-pill,
+    .stock-age-pill,
+    .stock-pill {
+        display: inline-flex;
+        min-height: 26px;
+        align-items: center;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 750;
+    }
+
+        .stock-type-pill.physical {
+            color: #2563eb;
+            background: #eff6ff;
+        }
+
+        .stock-type-pill.package {
+            color: #7c3aed;
+            background: #f5f3ff;
+        }
+
+        .stock-type-pill.voucher {
+            color: #d97706;
+            background: #fffbeb;
+        }
+
+        .stock-type-pill.digital {
+            color: #0f766e;
+            background: #f0fdfa;
+        }
+
+        .stock-type-pill.service {
+            color: #16a34a;
+            background: #ecfdf5;
+        }
+
+    .stock-age-pill {
+        margin-left: 5px;
+        color: #b45309;
+        background: #fffbeb;
+    }
+
+    .stock-pill.success {
+        color: #15803d;
+        background: #ecfdf5;
+    }
+
+    .stock-pill.warning {
+        color: #b45309;
+        background: #fffbeb;
+    }
+
+    .stock-pill.danger {
+        color: #dc2626;
+        background: #fef2f2;
+    }
+
+    .stock-pill.blue {
+        color: #2563eb;
+        background: #eff6ff;
+    }
+
+    .stock-pill.gray {
+        color: #64748b;
+        background: #f1f5f9;
+    }
+
+    .stock-adjustment-form {
+        padding: 18px;
+        display: grid;
+        gap: 12px;
+    }
+
+        .stock-adjustment-form label {
+            display: block;
+            margin-bottom: 6px;
+            color: #475569;
+            font-size: .77rem;
+            font-weight: 700;
+        }
+
+    .stock-textarea {
+        min-height: 86px;
+        padding-top: 10px;
+        resize: vertical;
+    }
+
+    .stock-validation {
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: #fef2f2;
+        color: #991b1b;
+        font-size: .8rem;
+    }
+
+    .stock-history-panel {
+        margin-top: 16px;
+    }
+
+    .stock-history-header {
+        align-items: center;
+    }
+
+    .stock-date-filters {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .stock-empty {
+        margin: 18px;
+        padding: 34px 20px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px dashed #dbe3ef;
+        text-align: center;
+    }
+
+        .stock-empty strong,
+        .stock-empty span {
+            display: block;
+        }
+
+        .stock-empty strong {
+            color: #0f172a;
+            font-size: .9rem;
+        }
+
+        .stock-empty span {
+            margin-top: 4px;
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+    @@keyframes stockIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width: 1199px) {
+        .stock-summary-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .stock-control-panel,
+        .stock-grid,
+        .stock-settings-strip {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .stock-header,
+        .stock-history-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+            .stock-header .stock-primary-btn,
+            .stock-settings-link {
+                width: 100%;
+            }
+
+        .stock-summary-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .stock-date-filters,
+        .stock-date-filters input,
+        .stock-date-filters button {
+            width: 100%;
+        }
+
+        .stock-settings-warning {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+</style>
+
+@code {
+    private List<StockProductRowViewModel> _products = new();
+    private List<StockMovementRowViewModel> _movements = new();
+    private StockSummaryViewModel _summary = new();
+    private BusinessSettingsFormModel _settings = new();
+
+    private StockAdjustmentModel _adjustment = new()
+    {
+        AdjustmentType = "Stock In",
+        Quantity = 1
+    };
+
+    private bool _loadingStock = true;
+    private bool _loadingMovements = true;
+    private bool _savingAdjustment;
+
+    private string? _searchTerm;
+    private string _statusFilter = "all";
+
+    private DateTime? _fromDate = DateTime.Today;
+    private DateTime? _toDate = DateTime.Today;
+
+    private string? _message;
+    private bool _isSuccess;
+
+    private bool StockEnabled => _settings.StockTrackingEnabled;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserAccessService.CanAccessAsync("stock"))
+        {
+            NavigationManager.NavigateTo("/dashboard");
+            return;
+        }
+
+        _settings = await BusinessSettingsService.GetSettingsAsync();
+
+        await LoadAllAsync();
+    }
+
+    private async Task LoadAllAsync()
+    {
+        if (StockEnabled)
+        {
+            await LoadStockAsync();
+        }
+        else
+        {
+            _products = new List<StockProductRowViewModel>();
+            _summary = new StockSummaryViewModel();
+            _loadingStock = false;
+        }
+
+        await LoadMovementsAsync();
+    }
+
+    private async Task LoadStockAsync()
+    {
+        _loadingStock = true;
+
+        _products = await StockService.GetStockProductsAsync(_searchTerm, _statusFilter);
+        _summary = await StockService.GetStockSummaryAsync();
+
+        _loadingStock = false;
+    }
+
+    private async Task LoadMovementsAsync()
+    {
+        _loadingMovements = true;
+
+        _movements = await StockService.GetMovementsAsync(_fromDate, _toDate, _searchTerm);
+
+        _loadingMovements = false;
+    }
+
+    private void OpenAdjustment()
+    {
+        _adjustment = new StockAdjustmentModel
+        {
+            AdjustmentType = "Stock In",
+            Quantity = 1
+        };
+    }
+
+    private void OpenAdjustment(int productId)
+    {
+        _adjustment = new StockAdjustmentModel
+        {
+            ProductId = productId,
+            AdjustmentType = "Stock In",
+            Quantity = 1
+        };
+    }
+
+    private async Task SaveAdjustmentAsync()
+    {
+        _savingAdjustment = true;
+
+        var result = await StockService.AdjustStockAsync(_adjustment);
+
+        _savingAdjustment = false;
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            _adjustment = new StockAdjustmentModel
+            {
+                AdjustmentType = "Stock In",
+                Quantity = 1
+            };
+
+            await LoadAllAsync();
+        }
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        _searchTerm = null;
+        _statusFilter = "all";
+        await LoadAllAsync();
+    }
+
+    private string Money(decimal value)
+    {
+        var symbol = string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
+            ? "R"
+            : _settings.CurrencySymbol;
+
+        return $"{symbol} {value:0.00}";
+    }
+
+    private string GetTypeClass(string? productType)
+    {
+        return productType switch
+        {
+            "Service" => "service",
+            "Package / Bundle" => "package",
+            "Voucher" => "voucher",
+            "Digital Product" => "digital",
+            _ => "physical"
+        };
+    }
+
+    private string GetMovementClass(string movementType)
+    {
+        return movementType switch
+        {
+            "Sale" => "blue",
+            "Stock In" => "success",
+            "Stock Out" => "warning",
+            "Correction" => "gray",
+            _ => "gray"
+        };
+    }
+
+    private string GetUnitLabel(string? unit)
+    {
+        return string.IsNullOrWhiteSpace(unit) ? "" : unit;
+    }
+
+    private void ShowMessage(string message, bool success)
+    {
+        _message = message;
+        _isSuccess = success;
+    }
+
+    private void ClearMessage()
+    {
+        _message = null;
+    }
+
+    private string GetInitials(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "P";
+        }
+
+        var words = value
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Take(2)
+            .Select(x => x[0].ToString().ToUpper());
+
+        return string.Join("", words);
+    }
+}

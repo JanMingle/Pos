@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="PosPlatform.Application/PosPlatform.Application.csproj" />
+  <Project Path="PosPlatform.Domain/PosPlatform.Domain.csproj" />
+  <Project Path="PosPlatform.Infrastructure/PosPlatform.Infrastructure.csproj" />
+  <Project Path="PosPlatform.Shared/PosPlatform.Shared.csproj" />
+  <Project Path="PosPlatform.Web/PosPlatform.Web.csproj" />
+</Solution>

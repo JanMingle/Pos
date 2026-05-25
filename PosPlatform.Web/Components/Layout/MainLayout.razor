@@ -1,0 +1,50 @@
+﻿@inherits LayoutComponentBase
+
+<input type="checkbox" id="sidebarToggle" class="pos-sidebar-toggle" />
+
+<div class="pos-shell">
+    <label for="sidebarToggle" class="pos-sidebar-backdrop"></label>
+
+    <NavMenu />
+
+    <div class="pos-main">
+        <header class="pos-topbar">
+            <div class="pos-topbar-left">
+                <label for="sidebarToggle" class="pos-menu-button" title="Toggle menu">
+                    <i class="bi bi-list"></i>
+                </label>
+
+                <div class="pos-topbar-title-wrap">
+                    <div class="pos-topbar-title">Business Control Center</div>
+                    <div class="pos-topbar-subtitle">Manage sales, stock, products and reports</div>
+                </div>
+            </div>
+
+            <div class="pos-topbar-actions">
+                <a href="/" class="pos-icon-button" title="Website">
+                    <i class="bi bi-globe2"></i>
+                </a>
+
+                <div class="pos-user-pill">
+                    <div class="pos-user-avatar">P</div>
+                    <div class="pos-user-text">
+                        <strong>Owner</strong>
+                        <span>POS Platform</span>
+                    </div>
+                </div>
+
+                <form method="post" action="/account/logout" class="d-inline">
+                    <AntiforgeryToken />
+                    <button type="submit" class="pos-logout-button">
+                        <i class="bi bi-box-arrow-right"></i>
+                        <span>Logout</span>
+                    </button>
+                </form>
+            </div>
+        </header>
+
+        <main class="pos-content">
+            @Body
+        </main>
+    </div>
+</div>

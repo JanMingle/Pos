@@ -1,0 +1,993 @@
+﻿@page "/users"
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@layout MainLayout
+@attribute [Authorize]
+@using PosPlatform.Web.Components.Layout
+@using PosPlatform.Web.Models.Users
+@using PosPlatform.Web.Services
+@inject UserManagementService UserManagementService
+@inject UserAccessService UserAccessService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Users</PageTitle>
+
+<section class="users-page">
+    <div class="users-header">
+        <div>
+            <div class="users-kicker">
+                <i class="bi bi-people"></i>
+                Access control
+            </div>
+            <h1>User Management</h1>
+            <p>Create users, assign roles, control access and keep your POS operations secure.</p>
+        </div>
+
+        <button type="button" class="users-primary-btn" @onclick="OpenAddModal">
+            <i class="bi bi-person-plus"></i>
+            Add User
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="users-alert @(_isSuccess ? "success" : "danger")">
+            <i class="bi @(_isSuccess ? "bi-check-circle" : "bi-exclamation-triangle")"></i>
+            <span>@_message</span>
+            <button type="button" @onclick="ClearMessage">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    }
+
+    <div class="users-role-grid">
+        @foreach (var role in _roles)
+        {
+            <div class="users-role-card">
+                <div class="users-role-icon @GetRoleClass(role.Name)">
+                    <i class="bi @GetRoleIcon(role.Name)"></i>
+                </div>
+
+                <div>
+                    <strong>@role.Name</strong>
+                    <span>@role.Description</span>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="users-control-panel">
+        <div class="users-search">
+            <i class="bi bi-search"></i>
+            <input @bind="_searchTerm"
+                   @bind:event="oninput"
+                   placeholder="Search email or phone number" />
+        </div>
+
+        <select class="users-filter" @bind="_roleFilter">
+            <option value="all">All roles</option>
+            @foreach (var role in _roles)
+            {
+                <option value="@role.Name">@role.Name</option>
+            }
+        </select>
+
+        <button type="button" class="users-secondary-btn" @onclick="LoadUsersAsync">
+            <i class="bi bi-filter"></i>
+            Apply
+        </button>
+
+        <button type="button" class="users-ghost-btn" @onclick="ResetFiltersAsync">
+            <i class="bi bi-arrow-counterclockwise"></i>
+            Reset
+        </button>
+    </div>
+
+    <div class="users-panel">
+        <div class="users-panel-header">
+            <div>
+                <h2>System Users</h2>
+                <p>@_users.Count user@(_users.Count == 1 ? "" : "s") showing.</p>
+            </div>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="users-empty">
+                <strong>Loading users...</strong>
+                <span>Please wait while we fetch user records.</span>
+            </div>
+        }
+        else if (_users.Count == 0)
+        {
+            <div class="users-empty">
+                <strong>No users found</strong>
+                <span>Create your first user or adjust the filters.</span>
+            </div>
+        }
+        else
+        {
+            <div class="users-table-wrap">
+                <table class="users-table">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Phone</th>
+                            <th>Role</th>
+                            <th>Branch</th>
+                            <th>Status</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var user in _users)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="users-user-cell">
+                                        <div class="users-avatar">@GetInitials(user.Email)</div>
+                                        <div>
+                                            <strong>@user.Email</strong>
+                                            <span>ID: @user.Id</span>
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td>@(string.IsNullOrWhiteSpace(user.PhoneNumber) ? "-" : user.PhoneNumber)</td>
+
+                                <td>
+                                    <span class="users-role-pill @GetRoleClass(user.RoleName)">
+                                        @user.RoleName
+                                    </span>
+                                </td>
+
+                                <td>@user.BranchName</td>
+
+                                <td>
+                                    <span class="users-status-pill @(user.IsDisabled ? "disabled" : "active")">
+                                        @user.Status
+                                    </span>
+                                </td>
+
+                                <td class="text-end">
+                                    <div class="users-actions">
+                                        <button type="button" class="users-mini-btn edit" @onclick="() => OpenEditModal(user.Id)">
+                                            <i class="bi bi-pencil"></i>
+                                            Edit
+                                        </button>
+
+                                        <button type="button"
+                                                class="users-mini-btn @(user.IsDisabled ? "activate" : "disable")"
+                                                @onclick="() => ToggleUserStatusAsync(user.Id)">
+                                            <i class="bi @(user.IsDisabled ? "bi-unlock" : "bi-lock")"></i>
+                                            @(user.IsDisabled ? "Activate" : "Disable")
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>
+
+@if (_showModal)
+{
+    <div class="users-modal-backdrop">
+        <div class="users-modal">
+            <div class="users-modal-header">
+                <div>
+                    <span>User setup</span>
+                    <h4>@(_form.Id.HasValue ? "Edit User" : "Add User")</h4>
+                    <p>Assign the user to a branch and select the correct operational role.</p>
+                </div>
+
+                <button type="button" class="users-close-btn" @onclick="CloseModal">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <EditForm Model="_form" OnValidSubmit="SaveUserAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="users-validation" />
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="users-label">Email Address</label>
+                        <InputText class="users-input" @bind-Value="_form.Email" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="users-label">Phone Number</label>
+                        <InputText class="users-input" @bind-Value="_form.PhoneNumber" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="users-label">Role</label>
+                        <InputSelect class="users-input" @bind-Value="_form.RoleName">
+                            @foreach (var role in _roles)
+                            {
+                                <option value="@role.Name">@role.Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="users-label">Branch</label>
+                        <InputSelect class="users-input" @bind-Value="_form.BranchId">
+                            <option value="">Default branch</option>
+                            @foreach (var branch in _branches)
+                            {
+                                <option value="@branch.Id">@branch.Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="users-label">
+                            Password @(_form.Id.HasValue ? "(leave blank to keep current)" : "")
+                        </label>
+                        <InputText type="password" class="users-input" @bind-Value="_form.Password" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="users-label">Confirm Password</label>
+                        <InputText type="password" class="users-input" @bind-Value="_form.ConfirmPassword" />
+                    </div>
+                </div>
+
+                <div class="users-role-help">
+                    <strong>@_form.RoleName</strong>
+                    <span>@GetRoleDescription(_form.RoleName)</span>
+                </div>
+
+                <div class="users-modal-actions">
+                    <button type="button" class="users-ghost-btn" @onclick="CloseModal">Cancel</button>
+                    <button type="submit" class="users-primary-btn" disabled="@_saving">
+                        <i class="bi bi-check2-circle"></i>
+                        @(_saving ? "Saving..." : "Save User")
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+<style>
+    .users-page {
+        animation: usersIn .22s ease both;
+    }
+
+    .users-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 18px;
+        margin-bottom: 18px;
+    }
+
+    .users-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 750;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+
+    .users-header h1 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 1.45rem;
+        font-weight: 680;
+        letter-spacing: -.03em;
+    }
+
+    .users-header p {
+        margin: 6px 0 0;
+        color: #64748b;
+        font-size: .88rem;
+    }
+
+    .users-primary-btn,
+    .users-secondary-btn,
+    .users-ghost-btn,
+    .users-mini-btn {
+        min-height: 38px;
+        border-radius: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 650;
+        border: 0;
+        transition: all .18s ease;
+        white-space: nowrap;
+    }
+
+    .users-primary-btn {
+        color: #ffffff;
+        background: #111827;
+        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+    }
+
+    .users-secondary-btn {
+        color: #2563eb;
+        background: #eef5ff;
+    }
+
+    .users-ghost-btn {
+        color: #475569;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+    }
+
+    .users-role-pill.owner,
+    .users-role-icon.owner {
+        color: #be123c;
+        background: #fff1f2;
+    }
+
+    .users-alert {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        font-size: .84rem;
+        font-weight: 600;
+        border: 1px solid;
+    }
+
+        .users-alert.success {
+            color: #166534;
+            background: #f0fdf4;
+            border-color: #bbf7d0;
+        }
+
+        .users-alert.danger {
+            color: #991b1b;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+        .users-alert span {
+            flex: 1;
+        }
+
+        .users-alert button {
+            border: 0;
+            background: transparent;
+            color: inherit;
+        }
+
+    .users-role-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .users-role-card {
+        display: flex;
+        gap: 12px;
+        padding: 15px;
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+    }
+
+    .users-role-icon {
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .users-role-card strong {
+        display: block;
+        color: #0f172a;
+        font-size: .86rem;
+        font-weight: 720;
+    }
+
+    .users-role-card span {
+        display: block;
+        margin-top: 3px;
+        color: #64748b;
+        font-size: .74rem;
+        line-height: 1.35;
+    }
+
+    .users-control-panel {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) 180px auto auto;
+        gap: 10px;
+        padding: 14px;
+        margin-bottom: 16px;
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+    }
+
+    .users-search {
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 13px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        color: #94a3b8;
+    }
+
+        .users-search input,
+        .users-filter,
+        .users-input {
+            width: 100%;
+            min-height: 40px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            background: #ffffff;
+            color: #0f172a;
+            padding: 0 12px;
+            font-size: .84rem;
+            outline: none;
+        }
+
+        .users-search input {
+            border: 0;
+            background: transparent;
+            padding: 0;
+        }
+
+    .users-panel {
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        border-radius: 20px;
+        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        overflow: hidden;
+    }
+
+    .users-panel-header {
+        padding: 17px 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .users-panel-header h2 {
+            margin: 0;
+            color: #0f172a;
+            font-size: .92rem;
+            font-weight: 720;
+        }
+
+        .users-panel-header p {
+            margin: 4px 0 0;
+            color: #94a3b8;
+            font-size: .76rem;
+        }
+
+    .users-table-wrap {
+        overflow-x: auto;
+    }
+
+    .users-table {
+        width: 100%;
+        min-width: 860px;
+        border-collapse: collapse;
+    }
+
+        .users-table th {
+            padding: 12px 16px;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: .7rem;
+            font-weight: 750;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            border-bottom: 1px solid #e7edf5;
+            white-space: nowrap;
+        }
+
+        .users-table td {
+            padding: 14px 16px;
+            color: #334155;
+            font-size: .82rem;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+
+    .users-user-cell {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+    }
+
+    .users-avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 14px;
+        background: #eef5ff;
+        color: #2563eb;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .78rem;
+        font-weight: 750;
+    }
+
+    .users-user-cell strong {
+        display: block;
+        color: #0f172a;
+        font-size: .85rem;
+        font-weight: 720;
+    }
+
+    .users-user-cell span {
+        display: block;
+        margin-top: 2px;
+        color: #94a3b8;
+        font-size: .72rem;
+    }
+
+    .users-role-pill,
+    .users-status-pill {
+        display: inline-flex;
+        min-height: 26px;
+        align-items: center;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 750;
+    }
+
+        .users-role-pill.admin,
+        .users-role-icon.admin {
+            color: #2563eb;
+            background: #eff6ff;
+        }
+
+        .users-role-pill.sales,
+        .users-role-icon.sales {
+            color: #16a34a;
+            background: #ecfdf5;
+        }
+
+        .users-role-pill.inventory,
+        .users-role-icon.inventory {
+            color: #d97706;
+            background: #fffbeb;
+        }
+
+        .users-role-pill.accounting,
+        .users-role-icon.accounting {
+            color: #7c3aed;
+            background: #f5f3ff;
+        }
+
+        .users-role-pill.manager,
+        .users-role-icon.manager {
+            color: #0f172a;
+            background: #f1f5f9;
+        }
+
+        .users-role-pill.viewer,
+        .users-role-icon.viewer {
+            color: #64748b;
+            background: #f8fafc;
+        }
+
+        .users-status-pill.active {
+            color: #15803d;
+            background: #ecfdf5;
+        }
+
+        .users-status-pill.disabled {
+            color: #dc2626;
+            background: #fef2f2;
+        }
+
+    .users-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .users-mini-btn {
+        min-height: 30px;
+        padding: 0 10px;
+        border: 1px solid;
+        font-size: .74rem;
+    }
+
+        .users-mini-btn.edit {
+            color: #2563eb;
+            background: #eff6ff;
+            border-color: #bfdbfe;
+        }
+
+        .users-mini-btn.disable {
+            color: #dc2626;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+        .users-mini-btn.activate {
+            color: #16a34a;
+            background: #ecfdf5;
+            border-color: #bbf7d0;
+        }
+
+    .users-empty {
+        margin: 18px;
+        padding: 34px 20px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px dashed #dbe3ef;
+        text-align: center;
+    }
+
+        .users-empty strong,
+        .users-empty span {
+            display: block;
+        }
+
+        .users-empty strong {
+            color: #0f172a;
+            font-size: .9rem;
+        }
+
+        .users-empty span {
+            margin-top: 4px;
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+    .users-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1100;
+        padding: 20px;
+        background: rgba(15, 23, 42, .45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .users-modal {
+        width: 100%;
+        max-width: 760px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+        background: #ffffff;
+        border-radius: 22px;
+        padding: 22px;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, .24);
+    }
+
+    .users-modal-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding-bottom: 16px;
+        margin-bottom: 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .users-modal-header span {
+            color: #2563eb;
+            font-size: .72rem;
+            font-weight: 750;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+        .users-modal-header h4 {
+            margin: 3px 0 0;
+            color: #0f172a;
+            font-size: 1.08rem;
+            font-weight: 720;
+        }
+
+        .users-modal-header p {
+            margin: 5px 0 0;
+            color: #64748b;
+            font-size: .84rem;
+        }
+
+    .users-close-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        color: #64748b;
+    }
+
+    .users-label {
+        display: block;
+        margin-bottom: 6px;
+        color: #475569;
+        font-size: .77rem;
+        font-weight: 700;
+    }
+
+    .users-validation {
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        background: #fef2f2;
+        color: #991b1b;
+        font-size: .82rem;
+    }
+
+    .users-role-help {
+        margin-top: 16px;
+        padding: 13px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+    }
+
+        .users-role-help strong,
+        .users-role-help span {
+            display: block;
+        }
+
+        .users-role-help strong {
+            color: #0f172a;
+            font-size: .86rem;
+        }
+
+        .users-role-help span {
+            margin-top: 3px;
+            color: #64748b;
+            font-size: .76rem;
+        }
+
+    .users-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding-top: 16px;
+        margin-top: 20px;
+        border-top: 1px solid #edf2f7;
+    }
+
+    @@keyframes usersIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width: 1199px) {
+        .users-role-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .users-control-panel {
+            grid-template-columns: 1fr 180px;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .users-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+            .users-header .users-primary-btn {
+                width: 100%;
+            }
+
+        .users-role-grid,
+        .users-control-panel {
+            grid-template-columns: 1fr;
+        }
+
+        .users-modal-actions {
+            flex-direction: column-reverse;
+        }
+
+            .users-modal-actions button {
+                width: 100%;
+            }
+    }
+</style>
+
+@code {
+    private List<UserListItemViewModel> _users = new();
+    private List<RoleOptionViewModel> _roles = new();
+    private List<BranchOptionViewModel> _branches = new();
+
+    private UserFormModel _form = new()
+    {
+        RoleName = "Sales User"
+    };
+
+    private bool _loading = true;
+    private bool _saving;
+    private bool _showModal;
+
+    private string? _searchTerm;
+    private string _roleFilter = "all";
+
+    private string? _message;
+    private bool _isSuccess;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserAccessService.CanAccessAsync("users"))
+        {
+            NavigationManager.NavigateTo("/dashboard");
+            return;
+        }
+
+        _roles = await UserManagementService.GetRoleOptionsAsync();
+        _branches = await UserManagementService.GetBranchesAsync();
+
+        await LoadUsersAsync();
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        _loading = true;
+        _users = await UserManagementService.GetUsersAsync(_searchTerm, _roleFilter);
+        _loading = false;
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        _searchTerm = null;
+        _roleFilter = "all";
+        await LoadUsersAsync();
+    }
+
+    private void OpenAddModal()
+    {
+        _form = new UserFormModel
+        {
+            RoleName = "Sales User"
+        };
+
+        _showModal = true;
+    }
+
+    private async Task OpenEditModal(int id)
+    {
+        var model = await UserManagementService.GetUserFormAsync(id);
+
+        if (model == null)
+        {
+            ShowMessage("User not found.", false);
+            return;
+        }
+
+        _form = model;
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _form = new UserFormModel
+        {
+            RoleName = "Sales User"
+        };
+    }
+
+    private async Task SaveUserAsync()
+    {
+        _saving = true;
+
+        var result = await UserManagementService.SaveUserAsync(_form);
+
+        _saving = false;
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            CloseModal();
+            await LoadUsersAsync();
+        }
+    }
+
+    private async Task ToggleUserStatusAsync(int userId)
+    {
+        var result = await UserManagementService.ToggleUserStatusAsync(userId);
+
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            await LoadUsersAsync();
+        }
+    }
+
+    private void ShowMessage(string message, bool success)
+    {
+        _message = message;
+        _isSuccess = success;
+    }
+
+    private void ClearMessage()
+    {
+        _message = null;
+    }
+
+    private string GetRoleDescription(string roleName)
+    {
+        return _roles.FirstOrDefault(x => x.Name == roleName)?.Description ?? "";
+    }
+
+    private string GetRoleClass(string roleName)
+    {
+        return roleName switch
+        {
+            "Owner" => "owner",
+            "Admin" => "admin",
+            "Sales User" => "sales",
+            "Inventory User" => "inventory",
+            "Accounting User" => "accounting",
+            "Manager" => "manager",
+            "Viewer" => "viewer",
+            _ => "viewer"
+        };
+    }
+
+    private string GetRoleIcon(string roleName)
+    {
+        return roleName switch
+        {
+            "Owner" => "bi-gem",
+            "Admin" => "bi-shield-lock",
+            "Sales User" => "bi-cart-check",
+            "Inventory User" => "bi-boxes",
+            "Accounting User" => "bi-calculator",
+            "Manager" => "bi-person-badge",
+            "Viewer" => "bi-eye",
+            _ => "bi-person"
+        };
+    }
+
+    private string GetInitials(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "U";
+        }
+
+        var emailName = value.Split('@')[0];
+
+        var words = emailName
+            .Split(new[] { '.', '-', '_' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Take(2)
+            .Select(x => x[0].ToString().ToUpper());
+
+        var result = string.Join("", words);
+
+        return string.IsNullOrWhiteSpace(result) ? "U" : result;
+    }
+}

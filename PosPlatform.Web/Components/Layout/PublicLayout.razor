@@ -1,0 +1,38 @@
+﻿@inherits LayoutComponentBase
+
+<div class="public-shell">
+    <header class="public-header">
+        <div class="public-container header-inner">
+            <a href="/" class="brand-wrap text-decoration-none">
+                <div class="brand-box">P</div>
+                <div>
+                    <div class="brand-title">POS Platform</div>
+                    <div class="brand-subtitle">Multi-tenant business system</div>
+                </div>
+            </a>
+
+            <nav class="public-nav">
+                <a href="/" class="nav-item">Home</a>
+                <a href="/login" class="nav-item">Login</a>
+                <a href="/register-business" class="btn btn-primary btn-sm">Register Business</a>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        @Body
+    </main>
+
+    <footer class="public-footer">
+        <div class="public-container footer-inner">
+            <div>
+                <strong>POS Platform</strong><br />
+                <span class="footer-text">Sales, stock, branches, and users in one system.</span>
+            </div>
+
+            <div class="footer-text">
+                © @DateTime.Now.Year POS Platform
+            </div>
+        </div>
+    </footer>
+</div>

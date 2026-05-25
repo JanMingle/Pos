@@ -1,0 +1,690 @@
+﻿@page "/register-business"
+@layout PublicLayout
+@using PosPlatform.Web.Components.Layout
+@inject NavigationManager Nav
+@inject PosPlatform.Infrastructure.Data.AppDbContext Db
+@using Microsoft.EntityFrameworkCore
+
+<PageTitle>Register Business</PageTitle>
+
+@code {
+    private string? Error => GetQueryValue("error");
+    private List<PosPlatform.Domain.Entities.SubscriptionPlan> Plans = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Plans = await Db.SubscriptionPlans
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.PriceMonthly)
+            .ToListAsync();
+    }
+
+    private string? GetQueryValue(string key)
+    {
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+        return query.TryGetValue(key, out var value) ? value.ToString() : null;
+    }
+}
+
+<div class="reg-shell">
+    <div class="reg-card">
+        <section class="reg-intro">
+            <div class="reg-brand">
+                <div class="reg-logo">P</div>
+                <div>
+                    <strong>POS Platform</strong>
+                    <span>Business setup</span>
+                </div>
+            </div>
+
+            <div class="reg-copy">
+                <span class="reg-kicker">Create your workspace</span>
+                <h1>Set up your business POS in minutes.</h1>
+                <p>
+                    Register your business, configure basic settings, add your owner account,
+                    and start managing sales, stock, users and receipts.
+                </p>
+            </div>
+
+            <div class="reg-steps">
+                <div>
+                    <strong>1</strong>
+                    <span>Business profile</span>
+                </div>
+                <div>
+                    <strong>2</strong>
+                    <span>POS settings</span>
+                </div>
+                <div>
+                    <strong>3</strong>
+                    <span>Owner account</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="reg-form-panel">
+            <div class="reg-form-header">
+                <span>Register business</span>
+                <h2>Create your account</h2>
+                <p>These settings can still be changed later from the Settings page.</p>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(Error))
+            {
+                <div class="reg-alert">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <span>@Error</span>
+                </div>
+            }
+
+            <form method="post" action="/account/register-business" class="reg-form">
+                <AntiforgeryToken />
+
+                <div class="reg-section">
+                    <div class="reg-section-heading">
+                        <h3>Business Details</h3>
+                        <p>Tell us what kind of business this tenant will operate.</p>
+                    </div>
+
+                    <div class="reg-grid">
+                        <div>
+                            <label>Business Name</label>
+                            <input name="BusinessName" class="reg-input" required placeholder="Example: Thabo Mini Market" />
+                        </div>
+
+                        <div>
+                            <label>Business Type</label>
+                            <select name="BusinessType" class="reg-input" required>
+                                <option value="">Select business type</option>
+                                <option>General Business</option>
+                                <option>Retail Store</option>
+                                <option>Salon / Beauty</option>
+                                <option>Liquor Store</option>
+                                <option>Clothing Store</option>
+                                <option>Service Business</option>
+                                <option>Mini Market / Grocery</option>
+                                <option>Restaurant / Cafe</option>
+                                <option>Other</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label>Business Email</label>
+                            <input name="BusinessEmail" type="email" class="reg-input" placeholder="business@email.co.za" />
+                        </div>
+
+                        <div>
+                            <label>Business Phone</label>
+                            <input name="BusinessPhone" class="reg-input" placeholder="+27..." />
+                        </div>
+
+                        <div class="reg-span-2">
+                            <label>Business Address</label>
+                            <input name="BusinessAddress" class="reg-input" placeholder="Street address, city, province" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="reg-section">
+                    <div class="reg-section-heading">
+                        <h3>Currency & Tax</h3>
+                        <p>Set the default currency and whether this business uses VAT/tax.</p>
+                    </div>
+
+                    <div class="reg-grid">
+                        <div>
+                            <label>Currency Code</label>
+                            <input name="CurrencyCode" class="reg-input" value="ZAR" required />
+                        </div>
+
+                        <div>
+                            <label>Currency Symbol</label>
+                            <input name="CurrencySymbol" class="reg-input" value="R" required />
+                        </div>
+
+                        <div>
+                            <label>Tax Name</label>
+                            <input name="TaxName" class="reg-input" value="VAT" />
+                        </div>
+
+                        <div>
+                            <label>Tax Rate %</label>
+                            <input name="TaxRate" type="number" min="0" max="100" step="0.01" class="reg-input" value="0" />
+                        </div>
+
+                        <div class="reg-span-2">
+                            <label class="reg-check-card">
+                                <input type="hidden" name="TaxEnabled" value="false" />
+                                <input type="checkbox" name="TaxEnabled" value="true" />
+                                <span>
+                                    <strong>Enable tax/VAT</strong>
+                                    <small>Turn this on if prices or receipts must include VAT/tax calculation.</small>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="reg-section">
+                    <div class="reg-section-heading">
+                        <h3>Modules & POS Rules</h3>
+                        <p>Choose what this business will use. These help the system fit salons, stores, liquor shops and services.</p>
+                    </div>
+
+                    <div class="reg-switch-grid">
+                        <label class="reg-check-card">
+                            <input type="hidden" name="ProductsEnabled" value="false" />
+                            <input type="checkbox" name="ProductsEnabled" value="true" checked />
+                            <span>
+                                <strong>Products</strong>
+                                <small>Enable product catalogue.</small>
+                            </span>
+                        </label>
+
+                        <label class="reg-check-card">
+                            <input type="hidden" name="StockTrackingEnabled" value="false" />
+                            <input type="checkbox" name="StockTrackingEnabled" value="true" checked />
+                            <span>
+                                <strong>Stock Tracking</strong>
+                                <small>Track quantities and stock movements.</small>
+                            </span>
+                        </label>
+
+                        <label class="reg-check-card">
+                            <input type="hidden" name="ServicesEnabled" value="false" />
+                            <input type="checkbox" name="ServicesEnabled" value="true" />
+                            <span>
+                                <strong>Services</strong>
+                                <small>Useful for salons and service businesses.</small>
+                            </span>
+                        </label>
+
+                        <label class="reg-check-card">
+                            <input type="hidden" name="AppointmentsEnabled" value="false" />
+                            <input type="checkbox" name="AppointmentsEnabled" value="true" />
+                            <span>
+                                <strong>Appointments</strong>
+                                <small>Enable bookings later.</small>
+                            </span>
+                        </label>
+
+                        <label class="reg-check-card">
+                            <input type="hidden" name="CustomersEnabled" value="false" />
+                            <input type="checkbox" name="CustomersEnabled" value="true" checked />
+                            <span>
+                                <strong>Customers</strong>
+                                <small>Track customer profiles and history.</small>
+                            </span>
+                        </label>
+
+                        <label class="reg-check-card">
+                            <input type="hidden" name="AgeRestrictedProductsEnabled" value="false" />
+                            <input type="checkbox" name="AgeRestrictedProductsEnabled" value="true" />
+                            <span>
+                                <strong>Age-Restricted Products</strong>
+                                <small>Useful for liquor stores.</small>
+                            </span>
+                        </label>
+
+                        <label class="reg-check-card">
+                            <input type="hidden" name="AllowDiscounts" value="false" />
+                            <input type="checkbox" name="AllowDiscounts" value="true" checked />
+                            <span>
+                                <strong>Allow Discounts</strong>
+                                <small>Allow discounts at checkout.</small>
+                            </span>
+                        </label>
+
+                        <label class="reg-check-card">
+                            <input type="hidden" name="AllowNegativeStock" value="false" />
+                            <input type="checkbox" name="AllowNegativeStock" value="true" />
+                            <span>
+                                <strong>Allow Negative Stock</strong>
+                                <small>Usually keep this off for proper stock control.</small>
+                            </span>
+                        </label>
+
+                        <label class="reg-check-card">
+                            <input type="hidden" name="RequireCustomerForSale" value="false" />
+                            <input type="checkbox" name="RequireCustomerForSale" value="true" />
+                            <span>
+                                <strong>Require Customer for Sale</strong>
+                                <small>Useful for salons and account-based businesses.</small>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="reg-section">
+                    <div class="reg-section-heading">
+                        <h3>Receipt Settings</h3>
+                        <p>Set default wording for customer slips.</p>
+                    </div>
+
+                    <div class="reg-grid">
+                        <div class="reg-span-2">
+                            <label>Receipt Title</label>
+                            <input name="ReceiptTitle" class="reg-input" value="Sales Receipt" required />
+                        </div>
+
+                        <div class="reg-span-2">
+                            <label>Receipt Footer Message</label>
+                            <textarea name="ReceiptFooterMessage" class="reg-input reg-textarea">Thank you for your purchase.</textarea>
+                        </div>
+
+                        <div class="reg-span-2">
+                            <label>Return Policy Text</label>
+                            <textarea name="ReturnPolicyText" class="reg-input reg-textarea" placeholder="Optional: Add your return or exchange policy."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="reg-section">
+                    <div class="reg-section-heading">
+                        <h3>Main Branch</h3>
+                        <p>Create the first branch for this business.</p>
+                    </div>
+
+                    <div class="reg-grid">
+                        <div>
+                            <label>Branch Name</label>
+                            <input name="BranchName" class="reg-input" value="Main Branch" />
+                        </div>
+
+                        <div>
+                            <label>Branch Code</label>
+                            <input name="BranchCode" class="reg-input" value="MAIN" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="reg-section">
+                    <div class="reg-section-heading">
+                        <h3>Owner Account</h3>
+                        <p>This user will have full owner access.</p>
+                    </div>
+
+                    <div class="reg-grid">
+                        <div>
+                            <label>Full Name</label>
+                            <input name="OwnerFullName" class="reg-input" required />
+                        </div>
+
+                        <div>
+                            <label>Owner Email</label>
+                            <input name="OwnerEmail" type="email" class="reg-input" required />
+                        </div>
+
+                        <div>
+                            <label>Password</label>
+                            <input name="Password" type="password" class="reg-input" required />
+                        </div>
+
+                        <div>
+                            <label>Plan</label>
+                            <select name="SubscriptionPlanId" class="reg-input">
+                                @foreach (var plan in Plans)
+                                {
+                                    <option value="@plan.Id">@plan.Name - R @plan.PriceMonthly.ToString("0.00") / month</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="reg-actions">
+                    <a href="/login">Already have an account?</a>
+
+                    <button type="submit" class="reg-submit">
+                        Create Business Account
+                        <i class="bi bi-arrow-right"></i>
+                    </button>
+                </div>
+            </form>
+        </section>
+    </div>
+</div>
+
+<style>
+    .reg-shell {
+        min-height: calc(100vh - 120px);
+        padding: 24px;
+        background: radial-gradient(circle at top left, rgba(37, 99, 235, .12), transparent 34%), linear-gradient(135deg, #f8fbff, #eef4fb);
+    }
+
+    .reg-card {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 330px minmax(0, 1fr);
+        border-radius: 28px;
+        overflow: hidden;
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 28px 80px rgba(15, 23, 42, .12);
+    }
+
+    .reg-intro {
+        padding: 32px;
+        color: #ffffff;
+        background: radial-gradient(circle at top right, rgba(56, 189, 248, .25), transparent 35%), linear-gradient(145deg, #0f172a, #1d4ed8);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 30px;
+    }
+
+    .reg-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .reg-logo {
+        width: 42px;
+        height: 42px;
+        border-radius: 15px;
+        background: rgba(255,255,255,.14);
+        border: 1px solid rgba(255,255,255,.18);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 750;
+    }
+
+    .reg-brand strong,
+    .reg-brand span {
+        display: block;
+    }
+
+    .reg-brand strong {
+        font-size: .95rem;
+    }
+
+    .reg-brand span {
+        margin-top: 2px;
+        color: rgba(255,255,255,.68);
+        font-size: .72rem;
+    }
+
+    .reg-kicker {
+        display: inline-flex;
+        margin-bottom: 12px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.12);
+        color: rgba(255,255,255,.86);
+        font-size: .7rem;
+        font-weight: 750;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+    }
+
+    .reg-copy h1 {
+        margin: 0;
+        font-size: 1.65rem;
+        line-height: 1.1;
+        font-weight: 720;
+        letter-spacing: -.04em;
+    }
+
+    .reg-copy p {
+        margin: 12px 0 0;
+        color: rgba(255,255,255,.76);
+        font-size: .88rem;
+        line-height: 1.6;
+    }
+
+    .reg-steps {
+        display: grid;
+        gap: 10px;
+    }
+
+        .reg-steps div {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 11px;
+            border-radius: 14px;
+            background: rgba(255,255,255,.1);
+            border: 1px solid rgba(255,255,255,.15);
+        }
+
+        .reg-steps strong {
+            width: 26px;
+            height: 26px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.16);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: .75rem;
+        }
+
+        .reg-steps span {
+            color: rgba(255,255,255,.82);
+            font-size: .78rem;
+            font-weight: 650;
+        }
+
+    .reg-form-panel {
+        padding: 32px;
+    }
+
+    .reg-form-header span {
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 750;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+    }
+
+    .reg-form-header h2 {
+        margin: 7px 0 0;
+        color: #0f172a;
+        font-size: 1.45rem;
+        font-weight: 720;
+    }
+
+    .reg-form-header p {
+        margin: 7px 0 0;
+        color: #64748b;
+        font-size: .86rem;
+    }
+
+    .reg-alert {
+        margin-top: 18px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #991b1b;
+        font-size: .84rem;
+        font-weight: 650;
+    }
+
+    .reg-form {
+        margin-top: 22px;
+        display: grid;
+        gap: 16px;
+    }
+
+    .reg-section {
+        padding: 18px;
+        border-radius: 20px;
+        border: 1px solid #e7edf5;
+        background: #ffffff;
+        box-shadow: 0 12px 28px rgba(15,23,42,.04);
+    }
+
+    .reg-section-heading {
+        margin-bottom: 14px;
+    }
+
+        .reg-section-heading h3 {
+            margin: 0;
+            color: #0f172a;
+            font-size: .95rem;
+            font-weight: 720;
+        }
+
+        .reg-section-heading p {
+            margin: 4px 0 0;
+            color: #94a3b8;
+            font-size: .76rem;
+        }
+
+    .reg-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .reg-span-2 {
+        grid-column: 1 / -1;
+    }
+
+    .reg-form label:not(.reg-check-card) {
+        display: block;
+        margin-bottom: 6px;
+        color: #475569;
+        font-size: .77rem;
+        font-weight: 700;
+    }
+
+    .reg-input {
+        width: 100%;
+        min-height: 42px;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+        background: #f8fafc;
+        color: #0f172a;
+        padding: 0 12px;
+        font-size: .86rem;
+        outline: none;
+    }
+
+        .reg-input:focus {
+            border-color: #bfdbfe;
+            box-shadow: 0 0 0 4px rgba(37,99,235,.08);
+            background: #ffffff;
+        }
+
+    .reg-textarea {
+        min-height: 84px;
+        padding-top: 10px;
+        resize: vertical;
+    }
+
+    .reg-switch-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .reg-check-card {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+        cursor: pointer;
+    }
+
+        .reg-check-card input[type="checkbox"] {
+            margin-top: 4px;
+        }
+
+        .reg-check-card strong,
+        .reg-check-card small {
+            display: block;
+        }
+
+        .reg-check-card strong {
+            color: #0f172a;
+            font-size: .8rem;
+            font-weight: 720;
+        }
+
+        .reg-check-card small {
+            margin-top: 2px;
+            color: #64748b;
+            font-size: .7rem;
+            line-height: 1.35;
+        }
+
+    .reg-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding-top: 4px;
+    }
+
+        .reg-actions a {
+            color: #2563eb;
+            font-size: .84rem;
+            font-weight: 700;
+        }
+
+    .reg-submit {
+        min-height: 42px;
+        border: 0;
+        border-radius: 12px;
+        padding: 0 16px;
+        background: #111827;
+        color: #ffffff;
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        font-size: .86rem;
+        font-weight: 700;
+        box-shadow: 0 14px 28px rgba(15,23,42,.16);
+    }
+
+    @@media (max-width: 1100px) {
+        .reg-card {
+            grid-template-columns: 1fr;
+        }
+
+        .reg-intro {
+            padding: 28px;
+        }
+
+        .reg-switch-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .reg-shell {
+            padding: 12px;
+        }
+
+        .reg-form-panel {
+            padding: 20px;
+        }
+
+        .reg-grid,
+        .reg-switch-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .reg-actions {
+            flex-direction: column-reverse;
+            align-items: stretch;
+        }
+
+        .reg-submit {
+            justify-content: center;
+            width: 100%;
+        }
+    }
+</style>

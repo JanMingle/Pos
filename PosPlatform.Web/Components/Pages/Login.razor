@@ -1,0 +1,376 @@
+﻿@page "/login"
+@layout PublicLayout
+@using PosPlatform.Web.Components.Layout
+@inject NavigationManager Nav
+
+<PageTitle>Login</PageTitle>
+
+@code {
+    private string? Error => GetQueryValue("error");
+    private string? ReturnUrl => GetQueryValue("returnUrl");
+
+    private string? GetQueryValue(string key)
+    {
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+        return query.TryGetValue(key, out var value) ? value.ToString() : null;
+    }
+}
+
+<div class="login-shell">
+    <div class="login-card">
+        <section class="login-brand-panel">
+            <div class="login-brand-top">
+                <div class="login-logo">P</div>
+                <div>
+                    <strong>POS Platform</strong>
+                    <span>Business Control Center</span>
+                </div>
+            </div>
+
+            <div class="login-hero-copy">
+                <span class="login-kicker">Built for many business types</span>
+                <h1>Run sales, stock and users from one clean workspace.</h1>
+                <p>
+                    Sign in to manage your products, sales, inventory, users, reports and business settings.
+                </p>
+            </div>
+
+            <div class="login-feature-grid">
+                <div>
+                    <i class="bi bi-cart-check"></i>
+                    <strong>Sales</strong>
+                    <span>Process transactions and receipts.</span>
+                </div>
+
+                <div>
+                    <i class="bi bi-boxes"></i>
+                    <strong>Stock</strong>
+                    <span>Track inventory and movement history.</span>
+                </div>
+
+                <div>
+                    <i class="bi bi-people"></i>
+                    <strong>Users</strong>
+                    <span>Control roles and access.</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="login-form-panel">
+            <div class="login-form-header">
+                <span>Welcome back</span>
+                <h2>Sign in to your account</h2>
+                <p>Enter your business account details to continue.</p>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(Error))
+            {
+                <div class="login-alert">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <span>@Error</span>
+                </div>
+            }
+
+            <form method="post" action="/account/login" class="login-form">
+                <AntiforgeryToken />
+                <input type="hidden" name="ReturnUrl" value="@ReturnUrl" />
+
+                <div>
+                    <label>Email Address</label>
+                    <div class="login-input-wrap">
+                        <i class="bi bi-envelope"></i>
+                        <input name="Email" type="email" required placeholder="you@business.co.za" />
+                    </div>
+                </div>
+
+                <div>
+                    <label>Password</label>
+                    <div class="login-input-wrap">
+                        <i class="bi bi-lock"></i>
+                        <input name="Password" type="password" required placeholder="Enter your password" />
+                    </div>
+                </div>
+
+                <button type="submit" class="login-submit">
+                    Sign In
+                    <i class="bi bi-arrow-right"></i>
+                </button>
+            </form>
+
+            <div class="login-footer-link">
+                <span>No account yet?</span>
+                <a href="/register-business">Register your business</a>
+            </div>
+        </section>
+    </div>
+</div>
+
+<style>
+    .login-shell {
+        min-height: calc(100vh - 120px);
+        padding: 26px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle at top left, rgba(37, 99, 235, .12), transparent 34%), linear-gradient(135deg, #f8fbff, #eef4fb);
+    }
+
+    .login-card {
+        width: 100%;
+        max-width: 1080px;
+        display: grid;
+        grid-template-columns: 1.05fr .95fr;
+        overflow: hidden;
+        border-radius: 28px;
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 28px 80px rgba(15, 23, 42, .14);
+    }
+
+    .login-brand-panel {
+        padding: 38px;
+        color: #ffffff;
+        background: radial-gradient(circle at top right, rgba(56, 189, 248, .26), transparent 32%), linear-gradient(135deg, #0f172a, #1d4ed8);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 34px;
+    }
+
+    .login-brand-top {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .login-logo {
+        width: 44px;
+        height: 44px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255,255,255,.14);
+        border: 1px solid rgba(255,255,255,.2);
+        font-weight: 750;
+    }
+
+    .login-brand-top strong,
+    .login-brand-top span {
+        display: block;
+    }
+
+    .login-brand-top strong {
+        font-size: .95rem;
+        font-weight: 750;
+    }
+
+    .login-brand-top span {
+        margin-top: 2px;
+        color: rgba(255,255,255,.68);
+        font-size: .72rem;
+    }
+
+    .login-kicker {
+        display: inline-flex;
+        margin-bottom: 12px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.12);
+        color: rgba(255,255,255,.86);
+        font-size: .72rem;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+    .login-hero-copy h1 {
+        margin: 0;
+        max-width: 520px;
+        font-size: 2.15rem;
+        line-height: 1.08;
+        font-weight: 720;
+        letter-spacing: -.04em;
+    }
+
+    .login-hero-copy p {
+        margin: 14px 0 0;
+        max-width: 510px;
+        color: rgba(255,255,255,.78);
+        font-size: .95rem;
+        line-height: 1.65;
+    }
+
+    .login-feature-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+        .login-feature-grid div {
+            padding: 13px;
+            border-radius: 16px;
+            background: rgba(255,255,255,.1);
+            border: 1px solid rgba(255,255,255,.16);
+        }
+
+        .login-feature-grid i {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 1rem;
+        }
+
+        .login-feature-grid strong,
+        .login-feature-grid span {
+            display: block;
+        }
+
+        .login-feature-grid strong {
+            font-size: .8rem;
+        }
+
+        .login-feature-grid span {
+            margin-top: 3px;
+            color: rgba(255,255,255,.68);
+            font-size: .7rem;
+            line-height: 1.35;
+        }
+
+    .login-form-panel {
+        padding: 42px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .login-form-header span {
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 750;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+    }
+
+    .login-form-header h2 {
+        margin: 7px 0 0;
+        color: #0f172a;
+        font-size: 1.45rem;
+        font-weight: 720;
+        letter-spacing: -.03em;
+    }
+
+    .login-form-header p {
+        margin: 7px 0 0;
+        color: #64748b;
+        font-size: .88rem;
+    }
+
+    .login-alert {
+        margin-top: 18px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #991b1b;
+        font-size: .84rem;
+        font-weight: 650;
+    }
+
+    .login-form {
+        margin-top: 22px;
+        display: grid;
+        gap: 15px;
+    }
+
+        .login-form label {
+            display: block;
+            margin-bottom: 6px;
+            color: #475569;
+            font-size: .78rem;
+            font-weight: 700;
+        }
+
+    .login-input-wrap {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 13px;
+        border-radius: 13px;
+        border: 1px solid #e5e7eb;
+        background: #f8fafc;
+        color: #94a3b8;
+    }
+
+        .login-input-wrap input {
+            width: 100%;
+            border: 0;
+            outline: none;
+            background: transparent;
+            color: #0f172a;
+            font-size: .9rem;
+        }
+
+    .login-submit {
+        margin-top: 4px;
+        min-height: 44px;
+        border: 0;
+        border-radius: 13px;
+        background: #111827;
+        color: #ffffff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        font-size: .88rem;
+        font-weight: 700;
+        box-shadow: 0 14px 28px rgba(15,23,42,.18);
+    }
+
+    .login-footer-link {
+        margin-top: 22px;
+        text-align: center;
+        font-size: .84rem;
+        color: #64748b;
+    }
+
+        .login-footer-link a {
+            color: #2563eb;
+            font-weight: 700;
+            margin-left: 4px;
+        }
+
+    @@media (max-width: 991px) {
+        .login-card {
+            grid-template-columns: 1fr;
+        }
+
+        .login-brand-panel,
+        .login-form-panel {
+            padding: 28px;
+        }
+
+        .login-hero-copy h1 {
+            font-size: 1.65rem;
+        }
+
+        .login-feature-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 640px) {
+        .login-shell {
+            padding: 12px;
+        }
+
+        .login-brand-panel,
+        .login-form-panel {
+            padding: 22px;
+        }
+    }
+</style>

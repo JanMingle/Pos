@@ -1,0 +1,140 @@
+﻿@page "/"
+@layout PublicLayout
+@using PosPlatform.Web.Components.Layout
+
+<PageTitle>POS Platform</PageTitle>
+
+<div class="landing-wrapper">
+    <section class="hero-section">
+        <div class="hero-content">
+            <div class="hero-badge">Multi-tenant POS SaaS</div>
+            <h1>Run sales, stock, users, and branches in one powerful platform</h1>
+            <p>
+                Built for retail shops, taverns, internet cafes, coffee shops, mini markets,
+                and many other business types. Manage your operations from one secure system.
+            </p>
+
+            <div class="hero-actions">
+                <a href="/register-business" class="btn btn-primary btn-lg">Register Business</a>
+                <a href="/login" class="btn btn-outline-light btn-lg">Login</a>
+            </div>
+        </div>
+    </section>
+
+    <section class="info-section">
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="info-card shadow-sm">
+                    <div class="info-icon">🛒</div>
+                    <h4>Sales Management</h4>
+                    <p>Process sales, manage products, and track performance across your business.</p>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="info-card shadow-sm">
+                    <div class="info-icon">📦</div>
+                    <h4>Stock Control</h4>
+                    <p>Monitor inventory, track quantities, and know when stock is running low.</p>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="info-card shadow-sm">
+                    <div class="info-icon">🏢</div>
+                    <h4>Multi-Tenant Platform</h4>
+                    <p>Each business has its own secure environment with users, branches, and settings.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<style>
+    .landing-wrapper {
+        min-height: calc(100vh - 154px);
+        background: #f8fafc;
+    }
+
+    .hero-section {
+        background: linear-gradient(135deg, #0f172a, #1d4ed8);
+        color: #fff;
+        padding: 80px 24px;
+        text-align: center;
+    }
+
+    .hero-content {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    .hero-badge {
+        display: inline-block;
+        background: rgba(255,255,255,0.15);
+        color: #fff;
+        padding: 8px 18px;
+        border-radius: 999px;
+        font-weight: 600;
+        margin-bottom: 20px;
+    }
+
+    .hero-content h1 {
+        font-size: 2.7rem;
+        font-weight: 800;
+        margin-bottom: 18px;
+    }
+
+    .hero-content p {
+        font-size: 1.05rem;
+        color: rgba(255,255,255,0.88);
+        max-width: 760px;
+        margin: 0 auto 30px auto;
+    }
+
+    .hero-actions {
+        display: flex;
+        justify-content: center;
+        gap: 14px;
+        flex-wrap: wrap;
+    }
+
+    .info-section {
+        padding: 50px 24px 70px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .info-card {
+        background: #fff;
+        border-radius: 20px;
+        padding: 28px;
+        height: 100%;
+        border: 1px solid #e5e7eb;
+    }
+
+    .info-icon {
+        font-size: 2rem;
+        margin-bottom: 14px;
+    }
+
+    .info-card h4 {
+        font-weight: 700;
+        margin-bottom: 10px;
+        color: #111827;
+    }
+
+    .info-card p {
+        color: #6b7280;
+        margin-bottom: 0;
+    }
+
+    @@media (max-width: 768px) {
+        .hero-content h1 {
+            font-size: 1.9rem;
+        }
+
+        .hero-section {
+            padding: 60px 18px;
+        }
+    }
+</style>

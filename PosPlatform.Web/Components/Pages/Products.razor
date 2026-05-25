@@ -1,0 +1,1861 @@
+﻿@page "/products"
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@layout MainLayout
+@using PosPlatform.Web.Components.Layout
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using PosPlatform.Web.Models.Products
+@using PosPlatform.Web.Models.Settings
+@using PosPlatform.Web.Services
+@inject ProductService ProductService
+@inject BusinessSettingsService BusinessSettingsService
+@inject UserAccessService UserAccessService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Products</PageTitle>
+
+<section class="catalog-page">
+    <div class="catalog-header">
+        <div>
+            <div class="catalog-kicker">
+                <i class="bi bi-box-seam"></i>
+                Product catalogue
+            </div>
+            <h1>@CatalogueTitle</h1>
+            <p>@CatalogueDescription</p>
+        </div>
+
+        @if (CatalogueEnabled)
+        {
+            <button type="button" class="catalog-primary-btn" @onclick="OpenAddModal">
+                <i class="bi bi-plus-lg"></i>
+                @AddButtonText
+            </button>
+        }
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="catalog-alert @(_isSuccess ? "success" : "danger")">
+            <i class="bi @(_isSuccess ? "bi-check-circle" : "bi-exclamation-triangle")"></i>
+            <span>@_message</span>
+            <button type="button" @onclick="ClearMessage">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    }
+
+    @if (!CatalogueEnabled)
+    {
+        <div class="catalog-settings-warning">
+            <div>
+                <strong>Catalogue module is disabled</strong>
+                <span>Products and services are currently switched off in Business Settings.</span>
+            </div>
+
+            <a href="/settings" class="catalog-settings-link">
+                Open Settings
+            </a>
+        </div>
+    }
+    else
+    {
+        <div class="catalog-settings-strip">
+            <div>
+                <span>Business type</span>
+                <strong>@_settings.BusinessType</strong>
+            </div>
+
+            <div>
+                <span>Currency</span>
+                <strong>@_settings.CurrencyCode · @_settings.CurrencySymbol</strong>
+            </div>
+
+            <div>
+                <span>Stock tracking</span>
+                <strong>@(StockEnabled ? "Enabled" : "Disabled")</strong>
+            </div>
+
+            <div>
+                <span>Services</span>
+                <strong>@(ServicesEnabled ? "Enabled" : "Disabled")</strong>
+            </div>
+
+            <div>
+                <span>Age restriction</span>
+                <strong>@(AgeRestrictedEnabled ? "Enabled" : "Disabled")</strong>
+            </div>
+        </div>
+
+        <div class="catalog-summary-grid">
+            <div class="catalog-summary-card">
+                <div class="catalog-summary-icon blue">
+                    <i class="bi bi-boxes"></i>
+                </div>
+                <div>
+                    <span>Total items</span>
+                    <strong>@TotalProducts</strong>
+                </div>
+            </div>
+
+            <div class="catalog-summary-card">
+                <div class="catalog-summary-icon green">
+                    <i class="bi bi-check2-circle"></i>
+                </div>
+                <div>
+                    <span>Active items</span>
+                    <strong>@ActiveProducts</strong>
+                </div>
+            </div>
+
+            <div class="catalog-summary-card">
+                <div class="catalog-summary-icon amber">
+                    <i class="bi @(StockEnabled ? "bi-exclamation-circle" : "bi-slash-circle")"></i>
+                </div>
+                <div>
+                    <span>@(StockEnabled ? "Low stock" : "Stock tracking")</span>
+                    <strong>@(StockEnabled? LowStockProducts.ToString() : "Disabled")</strong>
+                </div>
+            </div>
+
+            <div class="catalog-summary-card">
+                <div class="catalog-summary-icon violet">
+                    <i class="bi bi-cash-stack"></i>
+                </div>
+                <div>
+                    <span>@(StockEnabled ? "Stock value" : "Catalogue value")</span>
+                    <strong>@Money(InventoryValue)</strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="catalog-control-panel">
+            <div class="catalog-search-box">
+                <i class="bi bi-search"></i>
+                <input @bind="_searchTerm"
+                       @bind:event="oninput"
+                       placeholder="Search by name, SKU, barcode, or item type" />
+            </div>
+
+            <select class="catalog-filter" @bind="_statusFilter">
+                <option value="all">All items</option>
+                <option value="active">Active only</option>
+                <option value="inactive">Inactive only</option>
+                <option value="physical">Physical products</option>
+                <option value="service">Services</option>
+                <option value="package">Packages / bundles</option>
+                <option value="voucher">Vouchers</option>
+                <option value="digital">Digital products</option>
+
+                @if (StockEnabled)
+                {
+                    <option value="low">Low stock only</option>
+                }
+
+                @if (AgeRestrictedEnabled)
+                {
+                    <option value="age">Age-restricted only</option>
+                }
+            </select>
+
+            <button type="button" class="catalog-secondary-btn" @onclick="LoadProducts">
+                <i class="bi bi-search"></i>
+                Search
+            </button>
+
+            <button type="button" class="catalog-ghost-btn" @onclick="ClearFilters">
+                <i class="bi bi-arrow-counterclockwise"></i>
+                Reset
+            </button>
+        </div>
+
+        <div class="catalog-table-card">
+            <div class="catalog-table-header">
+                <div>
+                    <h2>@CatalogueTitle list</h2>
+                    <p>@VisibleProducts.Count item@(VisibleProducts.Count == 1 ? "" : "s") showing</p>
+                </div>
+
+                <span class="catalog-status-note">
+                    <i class="bi bi-shield-check"></i>
+                    Tenant scoped
+                </span>
+            </div>
+
+            @if (_loading)
+            {
+                <div class="catalog-loading">
+                    <div class="catalog-spinner"></div>
+                    <div>
+                        <strong>Loading catalogue</strong>
+                        <span>Fetching your business items...</span>
+                    </div>
+                </div>
+            }
+            else if (VisibleProducts.Count == 0)
+            {
+                <div class="catalog-empty">
+                    <div class="catalog-empty-icon">
+                        <i class="bi bi-box"></i>
+                    </div>
+                    <h3>No items found</h3>
+                    <p>Add a new item or adjust your search/filter criteria.</p>
+                    <button type="button" class="catalog-primary-btn" @onclick="OpenAddModal">
+                        <i class="bi bi-plus-lg"></i>
+                        @AddButtonText
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="catalog-table-wrap">
+                    <table class="catalog-table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Type</th>
+                                <th>SKU</th>
+                                <th>Category</th>
+                                <th>Cost</th>
+                                <th>Selling</th>
+
+                                @if (StockEnabled)
+                                {
+                                    <th>Stock</th>
+                                }
+
+                                <th>Rules</th>
+                                <th>Status</th>
+                                <th class="catalog-actions-col">Actions</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var item in VisibleProducts)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="catalog-product-cell">
+                                            <div class="catalog-product-avatar">@GetInitials(item.ProductName)</div>
+                                            <div>
+                                                <strong>@item.ProductName</strong>
+                                                <span>@(string.IsNullOrWhiteSpace(item.Barcode) ? "No barcode captured" : item.Barcode)</span>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <span class="catalog-type-pill @GetProductTypeClass(item.ProductType)">
+                                            @item.ProductType
+                                        </span>
+
+                                        @if (item.ProductType == "Service" && item.DurationMinutes.HasValue)
+                                        {
+                                            <small class="catalog-type-note">@item.DurationMinutes min</small>
+                                        }
+                                    </td>
+
+                                    <td>
+                                        <span class="catalog-code">@item.SKU</span>
+                                    </td>
+
+                                    <td>
+                                        <span class="catalog-category">
+                                            @(string.IsNullOrWhiteSpace(item.CategoryName) ? "Uncategorised" : item.CategoryName)
+                                        </span>
+                                    </td>
+
+                                    <td>@Money(item.CostPrice)</td>
+                                    <td class="catalog-price">@Money(item.SellingPrice)</td>
+
+                                    @if (StockEnabled)
+                                    {
+                                        <td>
+                                            @if (item.TrackStock)
+                                            {
+                                                <div class="catalog-stock">
+                                                    <strong>@item.QuantityInStock.ToString("0.##") @GetUnitLabel(item.UnitOfMeasure)</strong>
+
+                                                    @if (item.QuantityInStock <= item.ReorderLevel)
+                                                    {
+                                                        <span class="low">Low stock</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span>Healthy</span>
+                                                    }
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="catalog-muted-pill">Not tracked</span>
+                                            }
+                                        </td>
+                                    }
+
+                                    <td>
+                                        <div class="catalog-rule-tags">
+                                            @if (item.TrackStock)
+                                            {
+                                                <span class="catalog-rule good">Stock</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="catalog-rule muted">No stock</span>
+                                            }
+
+                                            @if (item.AgeRestricted)
+                                            {
+                                                <span class="catalog-rule warn">Age</span>
+                                            }
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <span class="catalog-pill @(item.IsActive ? "active" : "inactive")">
+                                            @(item.IsActive ? "Active" : "Inactive")
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        <div class="catalog-row-actions">
+                                            <button type="button" class="row-action edit" @onclick="() => OpenEditModal(item.Id)">
+                                                <i class="bi bi-pencil"></i>
+                                                Edit
+                                            </button>
+
+                                            <button type="button" class="row-action status" @onclick="() => ToggleStatus(item.Id)">
+                                                <i class="bi @(item.IsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
+                                                @(item.IsActive ? "Pause" : "Activate")
+                                            </button>
+
+                                            <button type="button" class="row-action delete" @onclick="() => ConfirmDelete(item.Id, item.ProductName)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+</section>
+
+@if (_showModal)
+{
+    <div class="catalog-modal-backdrop">
+        <div class="catalog-modal">
+            <div class="catalog-modal-header">
+                <div>
+                    <span>Catalogue setup</span>
+                    <h4>@(_form.Id.HasValue ? "Edit Item" : AddButtonText)</h4>
+                    <p>Capture item details, pricing and availability based on your business settings.</p>
+                </div>
+
+                <button type="button" class="catalog-close-btn" @onclick="CloseModal">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <EditForm Model="_form" OnValidSubmit="SaveProductAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="catalog-validation" />
+
+                <div class="catalog-modal-context">
+                    <div>
+                        <span>Business type</span>
+                        <strong>@_settings.BusinessType</strong>
+                    </div>
+
+                    <div>
+                        <span>Stock tracking</span>
+                        <strong>@(StockEnabled ? "Enabled" : "Disabled")</strong>
+                    </div>
+
+                    <div>
+                        <span>Services</span>
+                        <strong>@(ServicesEnabled ? "Enabled" : "Disabled")</strong>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="catalog-label">Item Name</label>
+                        <InputText class="catalog-input" @bind-Value="_form.ProductName" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="catalog-label">SKU</label>
+                        <InputText class="catalog-input" @bind-Value="_form.SKU" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="catalog-label">Product Type</label>
+                        <InputSelect class="catalog-input" @bind-Value="_form.ProductType" @onchange="HandleProductTypeChanged">
+                            @foreach (var option in ProductTypeOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="catalog-label">Unit of Measure</label>
+                        <InputSelect class="catalog-input" @bind-Value="_form.UnitOfMeasure">
+                            <option value="Each">Each</option>
+                            <option value="Bottle">Bottle</option>
+                            <option value="Pack">Pack</option>
+                            <option value="Box">Box</option>
+                            <option value="Kg">Kg</option>
+                            <option value="Gram">Gram</option>
+                            <option value="Litre">Litre</option>
+                            <option value="Millilitre">Millilitre</option>
+                            <option value="Hour">Hour</option>
+                            <option value="Session">Session</option>
+                            <option value="Service">Service</option>
+                        </InputSelect>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="catalog-label">Barcode</label>
+                        <InputText class="catalog-input" @bind-Value="_form.Barcode" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="catalog-label">Category</label>
+                        <InputSelect class="catalog-input" @bind-Value="_form.ProductCategoryId">
+                            <option value="">Select category</option>
+                            @foreach (var category in _categories)
+                            {
+                                <option value="@category.Id">@category.Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="catalog-label">Cost Price (@CurrencyLabel)</label>
+                        <InputNumber class="catalog-input" @bind-Value="_form.CostPrice" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="catalog-label">Selling Price (@CurrencyLabel)</label>
+                        <InputNumber class="catalog-input" @bind-Value="_form.SellingPrice" />
+                    </div>
+
+                    @if (_form.ProductType == "Service")
+                    {
+                        <div class="col-md-6">
+                            <label class="catalog-label">Duration Minutes</label>
+                            <InputNumber class="catalog-input" @bind-Value="_form.DurationMinutes" />
+                        </div>
+                    }
+
+                    @if (CanTrackStockForCurrentForm)
+                    {
+                        <div class="col-md-6">
+                            <label class="catalog-label">Quantity In Stock</label>
+                            <InputNumber class="catalog-input" @bind-Value="_form.QuantityInStock" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="catalog-label">Reorder Level</label>
+                            <InputNumber class="catalog-input" @bind-Value="_form.ReorderLevel" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="col-12">
+                            <div class="catalog-info-note">
+                                <strong>Stock will not be tracked for this item</strong>
+                                <span>Services and digital products do not deduct stock. If this is a physical item, choose Physical Product and enable Track Stock.</span>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="col-12">
+                        <div class="catalog-check-grid">
+                            @if (StockEnabled && IsStockTrackableType(_form.ProductType))
+                            {
+                                <label class="catalog-check">
+                                    <InputCheckbox @bind-Value="_form.TrackStock" />
+                                    <span>
+                                        <strong>Track stock for this item</strong>
+                                        <small>Enable quantity tracking and low-stock alerts.</small>
+                                    </span>
+                                </label>
+                            }
+
+                            @if (AgeRestrictedEnabled)
+                            {
+                                <label class="catalog-check">
+                                    <InputCheckbox @bind-Value="_form.AgeRestricted" />
+                                    <span>
+                                        <strong>Age-restricted item</strong>
+                                        <small>Useful for liquor stores or regulated products.</small>
+                                    </span>
+                                </label>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="catalog-label">Description</label>
+                        <InputTextArea class="catalog-input catalog-textarea" @bind-Value="_form.Description" />
+                    </div>
+
+                    <div class="col-12">
+                        <label class="catalog-check">
+                            <InputCheckbox @bind-Value="_form.IsActive" />
+                            <span>
+                                <strong>Active item</strong>
+                                <small>Allow this item to be used in sales and stock operations.</small>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="catalog-modal-actions">
+                    <button type="button" class="catalog-ghost-btn" @onclick="CloseModal">Cancel</button>
+                    <button type="submit" class="catalog-primary-btn">
+                        <i class="bi bi-check2"></i>
+                        Save Item
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@if (_showDeleteConfirm)
+{
+    <div class="catalog-modal-backdrop">
+        <div class="catalog-modal catalog-delete-modal">
+            <div class="catalog-delete-icon">
+                <i class="bi bi-trash"></i>
+            </div>
+
+            <h4>Delete Item</h4>
+            <p>
+                Are you sure you want to delete <strong>@_deleteProductName</strong>?
+                This action cannot be undone.
+            </p>
+
+            <div class="catalog-modal-actions">
+                <button type="button" class="catalog-ghost-btn" @onclick="CancelDelete">Cancel</button>
+                <button type="button" class="catalog-danger-btn" @onclick="DeleteConfirmed">
+                    <i class="bi bi-trash"></i>
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .catalog-page {
+        animation: catalogIn .22s ease both;
+    }
+
+    .catalog-header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 18px;
+    }
+
+    .catalog-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 750;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+    }
+
+    .catalog-header h1 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 1.45rem;
+        font-weight: 680;
+        letter-spacing: -.03em;
+    }
+
+    .catalog-header p {
+        margin: 6px 0 0;
+        color: #64748b;
+        font-size: .88rem;
+    }
+
+    .catalog-primary-btn,
+    .catalog-secondary-btn,
+    .catalog-ghost-btn,
+    .catalog-danger-btn {
+        min-height: 38px;
+        border-radius: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 650;
+        border: 0;
+        transition: all .18s ease;
+        white-space: nowrap;
+    }
+
+    .catalog-primary-btn {
+        color: #fff;
+        background: #111827;
+        box-shadow: 0 12px 24px rgba(15, 23, 42, .14);
+    }
+
+    .catalog-secondary-btn {
+        color: #2563eb;
+        background: #eef5ff;
+    }
+
+    .catalog-ghost-btn {
+        color: #475569;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+    }
+
+    .catalog-danger-btn {
+        color: #fff;
+        background: #ef4444;
+    }
+
+        .catalog-primary-btn:hover,
+        .catalog-secondary-btn:hover,
+        .catalog-ghost-btn:hover,
+        .catalog-danger-btn:hover {
+            transform: translateY(-1px);
+        }
+
+    .catalog-alert {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        font-size: .84rem;
+        font-weight: 600;
+        border: 1px solid;
+    }
+
+        .catalog-alert.success {
+            color: #166534;
+            background: #f0fdf4;
+            border-color: #bbf7d0;
+        }
+
+        .catalog-alert.danger {
+            color: #991b1b;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+        .catalog-alert span {
+            flex: 1;
+        }
+
+        .catalog-alert button {
+            border: 0;
+            background: transparent;
+            color: inherit;
+        }
+
+    .catalog-settings-warning {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: center;
+        margin-bottom: 16px;
+        padding: 16px;
+        border-radius: 18px;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+    }
+
+        .catalog-settings-warning strong,
+        .catalog-settings-warning span {
+            display: block;
+        }
+
+        .catalog-settings-warning strong {
+            color: #9a3412;
+            font-size: .9rem;
+            font-weight: 750;
+        }
+
+        .catalog-settings-warning span {
+            margin-top: 3px;
+            color: #c2410c;
+            font-size: .78rem;
+        }
+
+    .catalog-settings-link {
+        min-height: 36px;
+        border-radius: 10px;
+        padding: 0 13px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #111827;
+        color: #ffffff;
+        font-size: .78rem;
+        font-weight: 700;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .catalog-settings-strip {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+        .catalog-settings-strip div {
+            padding: 13px;
+            border-radius: 16px;
+            background: #ffffff;
+            border: 1px solid #e7edf5;
+            box-shadow: 0 12px 28px rgba(15,23,42,.04);
+        }
+
+        .catalog-settings-strip span,
+        .catalog-settings-strip strong {
+            display: block;
+        }
+
+        .catalog-settings-strip span {
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .catalog-settings-strip strong {
+            margin-top: 4px;
+            color: #0f172a;
+            font-size: .84rem;
+            font-weight: 720;
+        }
+
+    .catalog-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 16px;
+    }
+
+    .catalog-summary-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 82px;
+        padding: 16px;
+        border-radius: 18px;
+        background: rgba(255,255,255,.88);
+        border: 1px solid #e7edf5;
+        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+    }
+
+    .catalog-summary-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+    }
+
+        .catalog-summary-icon.blue {
+            color: #2563eb;
+            background: #eff6ff;
+        }
+
+        .catalog-summary-icon.green {
+            color: #16a34a;
+            background: #ecfdf5;
+        }
+
+        .catalog-summary-icon.amber {
+            color: #d97706;
+            background: #fffbeb;
+        }
+
+        .catalog-summary-icon.violet {
+            color: #7c3aed;
+            background: #f5f3ff;
+        }
+
+    .catalog-summary-card span {
+        display: block;
+        color: #64748b;
+        font-size: .76rem;
+        font-weight: 650;
+    }
+
+    .catalog-summary-card strong {
+        display: block;
+        margin-top: 3px;
+        color: #0f172a;
+        font-size: 1.05rem;
+        font-weight: 720;
+    }
+
+    .catalog-control-panel {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) 210px auto auto;
+        gap: 10px;
+        padding: 14px;
+        margin-bottom: 16px;
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+    }
+
+    .catalog-search-box {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 40px;
+        padding: 0 13px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        color: #94a3b8;
+    }
+
+        .catalog-search-box input,
+        .catalog-filter {
+            width: 100%;
+            border: 0;
+            outline: none;
+            background: transparent;
+            color: #0f172a;
+            font-size: .85rem;
+        }
+
+    .catalog-filter {
+        min-height: 40px;
+        padding: 0 12px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+    }
+
+    .catalog-table-card {
+        overflow: hidden;
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 16px 34px rgba(15,23,42,.06);
+    }
+
+    .catalog-table-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 17px 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .catalog-table-header h2 {
+            margin: 0;
+            color: #0f172a;
+            font-size: .92rem;
+            font-weight: 720;
+        }
+
+        .catalog-table-header p {
+            margin: 4px 0 0;
+            color: #94a3b8;
+            font-size: .76rem;
+        }
+
+    .catalog-status-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        color: #2563eb;
+        background: #eef5ff;
+        font-size: .74rem;
+        font-weight: 700;
+    }
+
+    .catalog-table-wrap {
+        overflow-x: auto;
+    }
+
+    .catalog-table {
+        width: 100%;
+        min-width: 1080px;
+        border-collapse: collapse;
+    }
+
+        .catalog-table th {
+            padding: 12px 16px;
+            color: #64748b;
+            background: #f8fafc;
+            border-bottom: 1px solid #e7edf5;
+            font-size: .7rem;
+            font-weight: 750;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .catalog-table td {
+            padding: 15px 16px;
+            color: #334155;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: .82rem;
+            vertical-align: middle;
+        }
+
+        .catalog-table tbody tr:hover {
+            background: #fbfdff;
+        }
+
+    .catalog-actions-col {
+        text-align: right;
+    }
+
+    .catalog-product-cell {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        min-width: 230px;
+    }
+
+    .catalog-product-avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #2563eb;
+        background: #eef5ff;
+        font-size: .78rem;
+        font-weight: 750;
+    }
+
+    .catalog-product-cell strong {
+        display: block;
+        color: #0f172a;
+        font-size: .86rem;
+        font-weight: 700;
+    }
+
+    .catalog-product-cell span {
+        display: block;
+        margin-top: 2px;
+        color: #94a3b8;
+        font-size: .72rem;
+    }
+
+    .catalog-code,
+    .catalog-category,
+    .catalog-muted-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 0 9px;
+        border-radius: 999px;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+        color: #475569;
+        font-size: .74rem;
+        font-weight: 650;
+    }
+
+    .catalog-type-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 750;
+        border: 1px solid transparent;
+        white-space: nowrap;
+    }
+
+        .catalog-type-pill.physical {
+            color: #2563eb;
+            background: #eff6ff;
+            border-color: #bfdbfe;
+        }
+
+        .catalog-type-pill.service {
+            color: #16a34a;
+            background: #ecfdf5;
+            border-color: #bbf7d0;
+        }
+
+        .catalog-type-pill.package {
+            color: #7c3aed;
+            background: #f5f3ff;
+            border-color: #ddd6fe;
+        }
+
+        .catalog-type-pill.voucher {
+            color: #d97706;
+            background: #fffbeb;
+            border-color: #fde68a;
+        }
+
+        .catalog-type-pill.digital {
+            color: #0f766e;
+            background: #f0fdfa;
+            border-color: #99f6e4;
+        }
+
+    .catalog-type-note {
+        display: block;
+        margin-top: 4px;
+        color: #64748b;
+        font-size: .7rem;
+    }
+
+    .catalog-price {
+        color: #0f172a;
+        font-weight: 700;
+    }
+
+    .catalog-stock strong {
+        display: block;
+        color: #0f172a;
+        font-size: .84rem;
+    }
+
+    .catalog-stock span {
+        display: block;
+        margin-top: 2px;
+        color: #16a34a;
+        font-size: .72rem;
+        font-weight: 650;
+    }
+
+    .catalog-stock .low {
+        color: #dc2626;
+    }
+
+    .catalog-rule-tags {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+    }
+
+    .catalog-rule {
+        display: inline-flex;
+        min-height: 24px;
+        align-items: center;
+        padding: 0 8px;
+        border-radius: 999px;
+        font-size: .68rem;
+        font-weight: 750;
+    }
+
+        .catalog-rule.good {
+            color: #15803d;
+            background: #ecfdf5;
+        }
+
+        .catalog-rule.warn {
+            color: #b45309;
+            background: #fffbeb;
+        }
+
+        .catalog-rule.muted {
+            color: #64748b;
+            background: #f1f5f9;
+        }
+
+    .catalog-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: .73rem;
+        font-weight: 750;
+    }
+
+        .catalog-pill.active {
+            color: #15803d;
+            background: #ecfdf5;
+        }
+
+        .catalog-pill.inactive {
+            color: #64748b;
+            background: #f1f5f9;
+        }
+
+    .catalog-row-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+    }
+
+    .row-action {
+        min-height: 31px;
+        border-radius: 9px;
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 9px;
+        font-size: .72rem;
+        font-weight: 700;
+        transition: all .18s ease;
+        white-space: nowrap;
+    }
+
+        .row-action:hover {
+            transform: translateY(-1px);
+        }
+
+        .row-action.edit {
+            color: #2563eb;
+            background: #eff6ff;
+            border-color: #bfdbfe;
+        }
+
+        .row-action.status {
+            color: #b45309;
+            background: #fffbeb;
+            border-color: #fde68a;
+        }
+
+        .row-action.delete {
+            color: #dc2626;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+    .catalog-loading,
+    .catalog-empty {
+        margin: 18px;
+        padding: 34px 20px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px dashed #dbe3ef;
+    }
+
+    .catalog-loading {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+        .catalog-loading strong,
+        .catalog-loading span {
+            display: block;
+        }
+
+        .catalog-loading strong {
+            color: #0f172a;
+            font-size: .88rem;
+        }
+
+        .catalog-loading span {
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+    .catalog-spinner {
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        background: #2563eb;
+        box-shadow: 0 0 0 8px rgba(37,99,235,.12);
+    }
+
+    .catalog-empty {
+        text-align: center;
+    }
+
+    .catalog-empty-icon {
+        width: 48px;
+        height: 48px;
+        margin: 0 auto 12px;
+        border-radius: 16px;
+        background: #eef5ff;
+        color: #2563eb;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .catalog-empty h3 {
+        margin: 0;
+        color: #0f172a;
+        font-size: .98rem;
+        font-weight: 720;
+    }
+
+    .catalog-empty p {
+        margin: 7px auto 16px;
+        max-width: 390px;
+        color: #64748b;
+        font-size: .84rem;
+    }
+
+    .catalog-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1050;
+        padding: 20px;
+        background: rgba(15, 23, 42, .44);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: catalogFade .18s ease both;
+    }
+
+    .catalog-modal {
+        width: 100%;
+        max-width: 860px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+        padding: 22px;
+        border-radius: 22px;
+        background: #ffffff;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, .24);
+        animation: catalogModal .2s ease both;
+    }
+
+    .catalog-delete-modal {
+        max-width: 440px;
+        text-align: center;
+    }
+
+    .catalog-modal-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding-bottom: 16px;
+        margin-bottom: 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .catalog-modal-header span {
+            color: #2563eb;
+            font-size: .72rem;
+            font-weight: 750;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+        .catalog-modal-header h4,
+        .catalog-delete-modal h4 {
+            margin: 3px 0 0;
+            color: #0f172a;
+            font-size: 1.08rem;
+            font-weight: 720;
+        }
+
+        .catalog-modal-header p,
+        .catalog-delete-modal p {
+            margin: 5px 0 0;
+            color: #64748b;
+            font-size: .84rem;
+            line-height: 1.5;
+        }
+
+    .catalog-modal-context {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+        .catalog-modal-context div,
+        .catalog-info-note {
+            padding: 13px;
+            border-radius: 16px;
+            background: #f8fafc;
+            border: 1px solid #e7edf5;
+        }
+
+            .catalog-modal-context span,
+            .catalog-modal-context strong,
+            .catalog-info-note strong,
+            .catalog-info-note span {
+                display: block;
+            }
+
+        .catalog-modal-context span {
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .catalog-modal-context strong {
+            margin-top: 4px;
+            color: #0f172a;
+            font-size: .84rem;
+            font-weight: 720;
+        }
+
+    .catalog-info-note strong {
+        color: #0f172a;
+        font-size: .85rem;
+        font-weight: 720;
+    }
+
+    .catalog-info-note span {
+        margin-top: 3px;
+        color: #64748b;
+        font-size: .76rem;
+    }
+
+    .catalog-close-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        color: #64748b;
+    }
+
+    .catalog-label {
+        display: block;
+        margin-bottom: 6px;
+        color: #475569;
+        font-size: .77rem;
+        font-weight: 700;
+    }
+
+    .catalog-input {
+        width: 100%;
+        min-height: 42px;
+        padding: 9px 12px;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        color: #0f172a;
+        font-size: .9rem;
+        outline: none;
+    }
+
+        .catalog-input:focus {
+            border-color: #bfdbfe;
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, .08);
+        }
+
+    .catalog-textarea {
+        min-height: 96px;
+        resize: vertical;
+    }
+
+    .catalog-check-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .catalog-check {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px;
+        border-radius: 14px;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+    }
+
+        .catalog-check input {
+            margin-top: 4px;
+        }
+
+        .catalog-check strong,
+        .catalog-check small {
+            display: block;
+        }
+
+        .catalog-check strong {
+            color: #0f172a;
+            font-size: .85rem;
+        }
+
+        .catalog-check small {
+            margin-top: 2px;
+            color: #64748b;
+            font-size: .76rem;
+        }
+
+    .catalog-validation {
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        background: #fef2f2;
+        color: #991b1b;
+        font-size: .82rem;
+    }
+
+    .catalog-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding-top: 16px;
+        margin-top: 20px;
+        border-top: 1px solid #edf2f7;
+    }
+
+    .catalog-delete-icon {
+        width: 52px;
+        height: 52px;
+        margin: 0 auto 14px;
+        border-radius: 18px;
+        color: #dc2626;
+        background: #fef2f2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+    }
+
+    @@keyframes catalogIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@keyframes catalogFade {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
+    @@keyframes catalogModal {
+        from {
+            opacity: 0;
+            transform: translateY(12px) scale(.98);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    }
+
+    @@media (max-width: 1199px) {
+        .catalog-summary-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .catalog-control-panel {
+            grid-template-columns: 1fr 210px;
+        }
+
+        .catalog-settings-strip {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .catalog-header {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+            .catalog-header .catalog-primary-btn {
+                width: 100%;
+            }
+
+        .catalog-settings-strip,
+        .catalog-summary-grid,
+        .catalog-control-panel,
+        .catalog-modal-context,
+        .catalog-check-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .catalog-settings-warning {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .catalog-settings-link {
+            width: 100%;
+        }
+
+        .catalog-modal {
+            padding: 18px;
+        }
+
+        .catalog-modal-actions {
+            flex-direction: column-reverse;
+        }
+
+            .catalog-modal-actions button {
+                width: 100%;
+            }
+    }
+</style>
+
+@code {
+    private List<ProductListItemViewModel> _products = new();
+    private List<ProductCategoryOptionViewModel> _categories = new();
+    private ProductFormModel _form = new();
+    private BusinessSettingsFormModel _settings = new();
+
+    private bool _loading = true;
+    private string? _searchTerm;
+    private string _statusFilter = "all";
+    private string? _message;
+    private bool _isSuccess;
+    private bool _showModal;
+    private bool _showDeleteConfirm;
+    private int _deleteId;
+    private string _deleteProductName = string.Empty;
+
+    private bool ProductsEnabled => _settings.ProductsEnabled;
+    private bool StockEnabled => _settings.StockTrackingEnabled;
+    private bool ServicesEnabled => _settings.ServicesEnabled;
+    private bool AgeRestrictedEnabled => _settings.AgeRestrictedProductsEnabled;
+    private bool CatalogueEnabled => ProductsEnabled || ServicesEnabled;
+
+    private string CatalogueTitle => ServicesEnabled ? "Products & Services" : "Products";
+
+    private string CatalogueDescription => ServicesEnabled
+        ? "Manage physical products, services, pricing, stock rules and item availability."
+        : "Manage pricing, stock levels, categories and product availability from one place.";
+
+    private string AddButtonText => ServicesEnabled && !ProductsEnabled
+        ? "Add Service"
+        : ServicesEnabled
+            ? "Add Item"
+            : "Add Product";
+
+    private string CurrencyLabel =>
+        string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
+            ? "R"
+            : _settings.CurrencySymbol;
+
+    private List<string> ProductTypeOptions
+    {
+        get
+        {
+            var options = new List<string>();
+
+            if (ProductsEnabled)
+            {
+                options.Add("Physical Product");
+                options.Add("Package / Bundle");
+                options.Add("Voucher");
+                options.Add("Digital Product");
+            }
+
+            if (ServicesEnabled)
+            {
+                options.Add("Service");
+            }
+
+            if (!options.Contains(_form.ProductType) && !string.IsNullOrWhiteSpace(_form.ProductType))
+            {
+                options.Add(_form.ProductType);
+            }
+
+            return options.Count == 0 ? new List<string> { "Physical Product" } : options;
+        }
+    }
+
+    private bool CanTrackStockForCurrentForm =>
+        StockEnabled &&
+        _form.TrackStock &&
+        IsStockTrackableType(_form.ProductType);
+
+    private int TotalProducts => _products.Count;
+    private int ActiveProducts => _products.Count(x => x.IsActive);
+    private int LowStockProducts => StockEnabled ? _products.Count(x => x.TrackStock && x.QuantityInStock <= x.ReorderLevel) : 0;
+    private decimal InventoryValue => _products.Where(x => x.TrackStock).Sum(x => x.QuantityInStock * x.CostPrice);
+
+    private List<ProductListItemViewModel> VisibleProducts =>
+        _statusFilter switch
+        {
+            "active" => _products.Where(x => x.IsActive).ToList(),
+            "inactive" => _products.Where(x => !x.IsActive).ToList(),
+            "physical" => _products.Where(x => x.ProductType == "Physical Product").ToList(),
+            "service" => _products.Where(x => x.ProductType == "Service").ToList(),
+            "package" => _products.Where(x => x.ProductType == "Package / Bundle").ToList(),
+            "voucher" => _products.Where(x => x.ProductType == "Voucher").ToList(),
+            "digital" => _products.Where(x => x.ProductType == "Digital Product").ToList(),
+            "low" when StockEnabled => _products.Where(x => x.TrackStock && x.QuantityInStock <= x.ReorderLevel).ToList(),
+            "age" when AgeRestrictedEnabled => _products.Where(x => x.AgeRestricted).ToList(),
+            _ => _products
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserAccessService.CanAccessAsync("products"))
+        {
+            NavigationManager.NavigateTo("/dashboard");
+            return;
+        }
+
+        _settings = await BusinessSettingsService.GetSettingsAsync();
+
+        if (!CatalogueEnabled)
+        {
+            _loading = false;
+            return;
+        }
+
+        await LoadCategories();
+        await LoadProducts();
+    }
+
+    private async Task LoadProducts()
+    {
+        _loading = true;
+        _products = await ProductService.GetProductsAsync(_searchTerm);
+        _loading = false;
+    }
+
+    private async Task LoadCategories()
+    {
+        _categories = await ProductService.GetCategoriesAsync();
+    }
+
+    private void OpenAddModal()
+    {
+        var defaultType = ServicesEnabled && !ProductsEnabled
+            ? "Service"
+            : "Physical Product";
+
+        _form = new ProductFormModel
+        {
+            IsActive = true,
+            ProductType = defaultType,
+            TrackStock = StockEnabled && IsStockTrackableType(defaultType),
+            UnitOfMeasure = defaultType == "Service" ? "Service" : "Each",
+            QuantityInStock = 0,
+            ReorderLevel = 0
+        };
+
+        _showModal = true;
+    }
+
+    private async Task OpenEditModal(int id)
+    {
+        var model = await ProductService.GetByIdAsync(id);
+
+        if (model == null)
+        {
+            ShowMessage("Item not found.", false);
+            return;
+        }
+
+        _form = model;
+
+        if (!IsStockTrackableType(_form.ProductType))
+        {
+            _form.TrackStock = false;
+        }
+
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _form = new ProductFormModel();
+    }
+
+    private async Task SaveProductAsync()
+    {
+        if (!IsStockTrackableType(_form.ProductType) || !StockEnabled)
+        {
+            _form.TrackStock = false;
+            _form.QuantityInStock = 0;
+            _form.ReorderLevel = 0;
+        }
+
+        if (_form.ProductType != "Service")
+        {
+            _form.DurationMinutes = null;
+        }
+
+        if (!AgeRestrictedEnabled)
+        {
+            _form.AgeRestricted = false;
+        }
+
+        var result = await ProductService.SaveAsync(_form);
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            _showModal = false;
+            _form = new ProductFormModel();
+            await LoadProducts();
+        }
+    }
+
+    private async Task ToggleStatus(int id)
+    {
+        var result = await ProductService.ToggleStatusAsync(id);
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            await LoadProducts();
+        }
+    }
+
+    private void ConfirmDelete(int id, string productName)
+    {
+        _deleteId = id;
+        _deleteProductName = productName;
+        _showDeleteConfirm = true;
+    }
+
+    private void CancelDelete()
+    {
+        _showDeleteConfirm = false;
+        _deleteId = 0;
+        _deleteProductName = string.Empty;
+    }
+
+    private async Task DeleteConfirmed()
+    {
+        var result = await ProductService.DeleteAsync(_deleteId);
+        ShowMessage(result.Message, result.Success);
+
+        _showDeleteConfirm = false;
+        _deleteId = 0;
+        _deleteProductName = string.Empty;
+
+        if (result.Success)
+        {
+            await LoadProducts();
+        }
+    }
+
+    private async Task ClearFilters()
+    {
+        _searchTerm = null;
+        _statusFilter = "all";
+        await LoadProducts();
+    }
+
+    private void HandleProductTypeChanged(ChangeEventArgs e)
+    {
+        var selected = e.Value?.ToString() ?? "Physical Product";
+
+        _form.ProductType = selected;
+
+        if (!IsStockTrackableType(selected))
+        {
+            _form.TrackStock = false;
+            _form.QuantityInStock = 0;
+            _form.ReorderLevel = 0;
+        }
+        else
+        {
+            _form.TrackStock = StockEnabled;
+        }
+
+        if (selected == "Service")
+        {
+            _form.UnitOfMeasure = "Service";
+            _form.DurationMinutes ??= 30;
+        }
+        else if (string.IsNullOrWhiteSpace(_form.UnitOfMeasure) || _form.UnitOfMeasure == "Service")
+        {
+            _form.UnitOfMeasure = "Each";
+            _form.DurationMinutes = null;
+        }
+    }
+
+    private bool IsStockTrackableType(string? productType)
+    {
+        return productType is "Physical Product" or "Package / Bundle" or "Voucher";
+    }
+
+    private string GetProductTypeClass(string? productType)
+    {
+        return productType switch
+        {
+            "Physical Product" => "physical",
+            "Service" => "service",
+            "Package / Bundle" => "package",
+            "Voucher" => "voucher",
+            "Digital Product" => "digital",
+            _ => "physical"
+        };
+    }
+
+    private string GetUnitLabel(string? unit)
+    {
+        return string.IsNullOrWhiteSpace(unit) ? "" : unit;
+    }
+
+    private void ShowMessage(string message, bool success)
+    {
+        _message = message;
+        _isSuccess = success;
+    }
+
+    private void ClearMessage()
+    {
+        _message = null;
+    }
+
+    private string Money(decimal value)
+    {
+        var symbol = string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
+            ? "R"
+            : _settings.CurrencySymbol;
+
+        return $"{symbol} {value:0.00}";
+    }
+
+    private string GetInitials(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "P";
+        }
+
+        var words = value
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Take(2)
+            .Select(x => x[0].ToString().ToUpper());
+
+        return string.Join("", words);
+    }
+}
