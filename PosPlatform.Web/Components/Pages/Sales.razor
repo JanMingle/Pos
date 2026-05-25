@@ -8,9 +8,11 @@
 @using PosPlatform.Web.Models.Settings
 @using PosPlatform.Web.Services
 @inject SaleService SaleService
+@inject CashierShiftService CashierShiftService
 @inject BusinessSettingsService BusinessSettingsService
 @inject UserAccessService UserAccessService
 @inject NavigationManager NavigationManager
+@using PosPlatform.Web.Models.Shifts
 
 <PageTitle>Sales</PageTitle>
 
@@ -68,6 +70,30 @@
             <strong>@(_settings.RequireCustomerForSale ? "Required" : "Optional")</strong>
         </div>
     </div>
+
+    @if (!HasOpenShift)
+    {
+        <div class="sales-shift-warning">
+            <div>
+                <strong>No open cashier shift</strong>
+                <span>You need to open a shift before completing sales. This keeps cash, card, EFT, and till totals accurate.</span>
+            </div>
+
+            <a href="/cashier-shift" class="sales-open-shift-btn">
+                <i class="bi bi-cash-coin"></i>
+                Open Shift
+            </a>
+        </div>
+    }
+    else
+    {
+        <div class="sales-shift-active">
+            <i class="bi bi-check2-circle"></i>
+            <span>
+                Shift open since @_openShift!.OpenedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+            </span>
+        </div>
+    }
 
     <div class="sales-grid">
         <div class="sales-panel">
@@ -329,10 +355,10 @@
                 </div>
 
                 <button class="sales-complete-btn"
-                        disabled="@_savingSale"
+                        disabled="@(_savingSale || !HasOpenShift)"
                         @onclick="CompleteSaleAsync">
                     <i class="bi bi-check2-circle"></i>
-                    @(_savingSale ? "Completing..." : "Complete Sale")
+                    @(_savingSale ? "Completing..." : HasOpenShift ? "Complete Sale" : "Open Shift Required")
                 </button>
             }
         </div>
@@ -1437,6 +1463,65 @@
             margin-bottom: 12px;
         }
 
+    .sales-shift-warning {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 16px;
+        padding: 15px;
+        border-radius: 18px;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+    }
+
+        .sales-shift-warning strong,
+        .sales-shift-warning span {
+            display: block;
+        }
+
+        .sales-shift-warning strong {
+            color: #9a3412;
+            font-size: .9rem;
+            font-weight: 750;
+        }
+
+        .sales-shift-warning span {
+            margin-top: 3px;
+            color: #c2410c;
+            font-size: .78rem;
+        }
+
+    .sales-open-shift-btn {
+        min-height: 36px;
+        border-radius: 10px;
+        padding: 0 13px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        background: #111827;
+        color: #ffffff;
+        font-size: .78rem;
+        font-weight: 700;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .sales-shift-active {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+        padding: 9px 12px;
+        border-radius: 999px;
+        color: #15803d;
+        background: #ecfdf5;
+        border: 1px solid #bbf7d0;
+        font-size: .78rem;
+        font-weight: 700;
+    }
+
     @@keyframes salesIn {
         from {
             opacity: 0;
@@ -1475,6 +1560,15 @@
         .sales-summary-grid,
         .sales-search-row {
             grid-template-columns: 1fr;
+        }
+
+        .sales-shift-warning {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .sales-open-shift-btn {
+            width: 100%;
         }
 
         .sales-cart-item {
@@ -1541,6 +1635,8 @@
     private List<SaleProductOptionViewModel> _products = new();
     private List<SaleCartLineViewModel> _cart = new();
     private BusinessSettingsFormModel _settings = new();
+    private CashierShiftViewModel? _openShift;
+    private bool HasOpenShift => _openShift != null;
 
     private SaleReceiptViewModel? _receipt;
     private List<SaleHistoryRowViewModel> _mySales = new();
@@ -1585,6 +1681,7 @@
         }
 
         _settings = await BusinessSettingsService.GetSettingsAsync();
+        _openShift = await CashierShiftService.GetOpenShiftAsync();
 
         await LoadProducts();
         await LoadMySalesAsync();
@@ -1734,6 +1831,14 @@
 
     private async Task CompleteSaleInternalAsync(bool forceAgeConfirmed)
     {
+        _openShift = await CashierShiftService.GetOpenShiftAsync();
+
+        if (!HasOpenShift)
+        {
+            ShowMessage("Open a cashier shift before completing sales.", false);
+            return;
+        }
+
         if (_cart.Count == 0)
         {
             ShowMessage("Add items before completing the sale.", false);
@@ -1782,6 +1887,13 @@
             return;
         }
 
+        if (result.RequiresOpenShift)
+        {
+            _openShift = null;
+            ShowMessage(result.Message, false);
+            return;
+        }
+
         ShowMessage(result.Message, result.Success);
 
         if (result.Success)
@@ -1800,6 +1912,8 @@
             _customerPhone = null;
             _saleNotes = null;
             _ageRestrictionConfirmed = false;
+
+            _openShift = await CashierShiftService.GetOpenShiftAsync();
 
             await LoadProducts();
             await LoadMySalesAsync();

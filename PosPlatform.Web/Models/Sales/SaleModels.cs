@@ -59,6 +59,7 @@ namespace PosPlatform.Web.Models.Sales
         public decimal TotalAmount { get; set; }
         public decimal ChangeAmount { get; set; }
         public bool RequiresAgeConfirmation { get; set; }
+        public bool RequiresOpenShift { get; set; }
     }
 
     public class SaleCartLineViewModel

@@ -85,7 +85,22 @@ namespace PosPlatform.Web.Services
             {
                 return Fail("Logged-in user could not be identified.");
             }
+            var hasOpenShift = await _db.CashierShifts
+    .AsNoTracking()
+    .AnyAsync(x =>
+        x.TenantId == tenantId.Value &&
+        x.CashierUserId == cashierUserId.Value &&
+        x.Status == "Open");
 
+            if (!hasOpenShift)
+            {
+                return new SaleResult
+                {
+                    Success = false,
+                    Message = "You must open a cashier shift before completing sales.",
+                    RequiresOpenShift = true
+                };
+            }
             var settings = await _db.BusinessSettings
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x => x.TenantId == tenantId.Value);
