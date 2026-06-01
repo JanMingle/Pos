@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using PosPlatform.Domain.Entities;
 
 
+
 namespace PosPlatform.Infrastructure.Data
 {
     public class AppDbContext : IdentityDbContext<ApplicationUser, Role, int,
@@ -37,6 +38,9 @@ namespace PosPlatform.Infrastructure.Data
         public DbSet<CashierShift> CashierShifts => Set<CashierShift>();
 
         public DbSet<Customer> Customers => Set<Customer>();
+
+        public DbSet<SaleReturn> SaleReturns => Set<SaleReturn>();
+        public DbSet<SaleReturnItem> SaleReturnItems => Set<SaleReturnItem>();
 
 
         protected override void OnModelCreating(ModelBuilder builder)
@@ -509,6 +513,102 @@ namespace PosPlatform.Infrastructure.Data
                 entity.HasOne(x => x.Branch)
                       .WithMany()
                       .HasForeignKey(x => x.BranchId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+            builder.Entity<SaleReturn>(entity =>
+            {
+                entity.ToTable("SaleReturns");
+
+                entity.Property(x => x.ReturnNumber)
+                      .HasMaxLength(80)
+                      .IsRequired();
+
+                entity.Property(x => x.ReturnType)
+                      .HasMaxLength(30)
+                      .IsRequired();
+
+                entity.Property(x => x.RefundMethod)
+                      .HasMaxLength(50)
+                      .IsRequired();
+
+                entity.Property(x => x.Status)
+                      .HasMaxLength(30)
+                      .IsRequired();
+
+                entity.Property(x => x.ReturnedByName)
+                      .HasMaxLength(150)
+                      .IsRequired();
+
+                entity.Property(x => x.Reason)
+                      .HasMaxLength(500);
+
+                entity.Property(x => x.TotalRefundAmount)
+                      .HasColumnType("decimal(18,2)");
+
+                entity.HasIndex(x => new { x.TenantId, x.ReturnNumber }).IsUnique();
+
+                entity.HasOne(x => x.Tenant)
+                      .WithMany()
+                      .HasForeignKey(x => x.TenantId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Branch)
+                      .WithMany()
+                      .HasForeignKey(x => x.BranchId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Sale)
+                      .WithMany(x => x.SaleReturns)
+                      .HasForeignKey(x => x.SaleId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.ReturnedByUser)
+                      .WithMany()
+                      .HasForeignKey(x => x.ReturnedByUserId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            builder.Entity<SaleReturnItem>(entity =>
+            {
+                entity.ToTable("SaleReturnItems");
+
+                entity.Property(x => x.ProductName)
+                      .HasMaxLength(150)
+                      .IsRequired();
+
+                entity.Property(x => x.SKU)
+                      .HasMaxLength(80)
+                      .IsRequired();
+
+                entity.Property(x => x.ProductType)
+                      .HasMaxLength(50)
+                      .IsRequired();
+
+                entity.Property(x => x.UnitOfMeasure)
+                      .HasMaxLength(50);
+
+                entity.Property(x => x.Quantity)
+                      .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.UnitPrice)
+                      .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.LineTotal)
+                      .HasColumnType("decimal(18,2)");
+
+                entity.HasOne(x => x.SaleReturn)
+                      .WithMany(x => x.SaleReturnItems)
+                      .HasForeignKey(x => x.SaleReturnId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(x => x.SaleItem)
+                      .WithMany()
+                      .HasForeignKey(x => x.SaleItemId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Product)
+                      .WithMany()
+                      .HasForeignKey(x => x.ProductId)
                       .OnDelete(DeleteBehavior.Restrict);
             });
         }

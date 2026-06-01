@@ -34,6 +34,7 @@ builder.Services.AddScoped<BusinessSettingsService>();
 builder.Services.AddScoped<CashierShiftService>();
 builder.Services.AddScoped<CustomerService>();
 builder.Services.AddScoped<ReportsService>();
+builder.Services.AddScoped<RefundService>();
 
 var app = builder.Build();
 

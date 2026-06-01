@@ -29,6 +29,7 @@
 
         public int? CustomerId { get; set; }
         public Customer? Customer { get; set; }
+        public ICollection<SaleReturn> SaleReturns { get; set; } = new List<SaleReturn>();
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
