@@ -69,8 +69,18 @@
     {
         <div class="reports-summary-grid">
             <div class="reports-summary-card dark">
-                <span>Total Sales</span>
-                <strong>@Money(_dashboard.TotalSales)</strong>
+                <span>Net Sales</span>
+                <strong>@Money(_dashboard.NetSales)</strong>
+            </div>
+
+            <div class="reports-summary-card">
+                <span>Gross Sales</span>
+                <strong>@Money(_dashboard.GrossSales)</strong>
+            </div>
+
+            <div class="reports-summary-card red">
+                <span>Refunds / Returns</span>
+                <strong>@Money(_dashboard.TotalRefunds)</strong>
             </div>
 
             <div class="reports-summary-card">
@@ -81,6 +91,16 @@
             <div class="reports-summary-card">
                 <span>Average Sale</span>
                 <strong>@Money(_dashboard.AverageSale)</strong>
+            </div>
+
+            <div class="reports-summary-card amber">
+                <span>Refund Count</span>
+                <strong>@_dashboard.RefundCount</strong>
+            </div>
+
+            <div class="reports-summary-card red">
+                <span>Voids</span>
+                <strong>@_dashboard.VoidCount</strong>
             </div>
 
             <div class="reports-summary-card green">
@@ -96,26 +116,6 @@
             <div class="reports-summary-card violet">
                 <span>EFT Sales</span>
                 <strong>@Money(_dashboard.EftSales)</strong>
-            </div>
-
-            <div class="reports-summary-card amber">
-                <span>Discounts</span>
-                <strong>@Money(_dashboard.TotalDiscounts)</strong>
-            </div>
-
-            <div class="reports-summary-card teal">
-                <span>Tax</span>
-                <strong>@Money(_dashboard.TotalTax)</strong>
-            </div>
-
-            <div class="reports-summary-card red">
-                <span>Low Stock</span>
-                <strong>@_dashboard.LowStockItems</strong>
-            </div>
-
-            <div class="reports-summary-card">
-                <span>Out of Stock</span>
-                <strong>@_dashboard.OutOfStockItems</strong>
             </div>
 
             <div class="reports-summary-card">
@@ -147,13 +147,17 @@
                     <div class="reports-list">
                         @foreach (var item in _dashboard.PaymentMethods)
                         {
-                            <div class="reports-list-row">
+                            <div class="reports-list-row reports-payment-row">
                                 <div>
                                     <strong>@item.PaymentMethod</strong>
-                                    <span>@item.Transactions transaction@(item.Transactions == 1 ? "" : "s")</span>
+                                    <span>@item.Transactions sale@(item.Transactions == 1 ? "" : "s") · @item.Refunds refund@(item.Refunds == 1 ? "" : "s")</span>
                                 </div>
 
-                                <strong>@Money(item.TotalAmount)</strong>
+                                <div class="reports-mini-metrics">
+                                    <span>Gross: <strong>@Money(item.TotalAmount)</strong></span>
+                                    <span>Refunds: <strong>@Money(item.RefundAmount)</strong></span>
+                                    <span>Net: <strong>@Money(item.NetAmount)</strong></span>
+                                </div>
                             </div>
                         }
                     </div>
@@ -193,6 +197,36 @@
             <div class="reports-panel">
                 <div class="reports-panel-header">
                     <div>
+                        <h2>Refund Activity by Cashier</h2>
+                        <p>Refunds, returns and voids processed by users.</p>
+                    </div>
+                </div>
+
+                @if (_dashboard.RefundCashiers.Count == 0)
+                {
+                    <ReportsEmpty Text="No refund activity found." />
+                }
+                else
+                {
+                    <div class="reports-list">
+                        @foreach (var item in _dashboard.RefundCashiers)
+                        {
+                            <div class="reports-list-row">
+                                <div>
+                                    <strong>@item.CashierName</strong>
+                                    <span>@item.Refunds refund@(item.Refunds == 1 ? "" : "s") processed</span>
+                                </div>
+
+                                <strong class="reports-negative">@Money(item.TotalRefunded)</strong>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="reports-panel">
+                <div class="reports-panel-header">
+                    <div>
                         <h2>Top Selling Items</h2>
                         <p>Products and services with highest sales value.</p>
                     </div>
@@ -222,6 +256,46 @@
                                         <td>@item.SKU</td>
                                         <td>@item.QuantitySold.ToString("0.##")</td>
                                         <td>@Money(item.TotalAmount)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+
+            <div class="reports-panel">
+                <div class="reports-panel-header">
+                    <div>
+                        <h2>Top Refunded Items</h2>
+                        <p>Items with the highest refund or return value.</p>
+                    </div>
+                </div>
+
+                @if (_dashboard.TopRefundedItems.Count == 0)
+                {
+                    <ReportsEmpty Text="No refunded items found." />
+                }
+                else
+                {
+                    <div class="reports-table-wrap">
+                        <table class="reports-table">
+                            <thead>
+                                <tr>
+                                    <th>Item</th>
+                                    <th>SKU</th>
+                                    <th>Qty Returned</th>
+                                    <th>Refunded</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in _dashboard.TopRefundedItems)
+                                {
+                                    <tr>
+                                        <td>@item.ProductName</td>
+                                        <td>@item.SKU</td>
+                                        <td>@item.QuantityReturned.ToString("0.##")</td>
+                                        <td class="reports-negative">@Money(item.RefundAmount)</td>
                                     </tr>
                                 }
                             </tbody>
@@ -289,13 +363,17 @@
                     <div class="reports-list">
                         @foreach (var item in _dashboard.TopCustomers)
                         {
-                            <div class="reports-list-row">
+                            <div class="reports-list-row reports-payment-row">
                                 <div>
                                     <strong>@item.CustomerName</strong>
                                     <span>@item.Purchases purchase@(item.Purchases == 1 ? "" : "s") · Last @item.LastPurchaseDate?.ToLocalTime().ToString("yyyy-MM-dd")</span>
                                 </div>
 
-                                <strong>@Money(item.TotalSpent)</strong>
+                                <div class="reports-mini-metrics">
+                                    <span>Gross: <strong>@Money(item.GrossSpent)</strong></span>
+                                    <span>Refunded: <strong>@Money(item.Refunded)</strong></span>
+                                    <span>Net: <strong>@Money(item.TotalSpent)</strong></span>
+                                </div>
                             </div>
                         }
                     </div>
@@ -338,6 +416,57 @@
                                         <td>@sale.PaymentMethod</td>
                                         <td>@sale.ItemCount</td>
                                         <td>@Money(sale.TotalAmount)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+
+            <div class="reports-panel">
+                <div class="reports-panel-header">
+                    <div>
+                        <h2>Recent Refunds / Returns</h2>
+                        <p>Latest refund, return and void activity.</p>
+                    </div>
+                </div>
+
+                @if (_dashboard.RecentRefunds.Count == 0)
+                {
+                    <ReportsEmpty Text="No recent refunds found." />
+                }
+                else
+                {
+                    <div class="reports-table-wrap">
+                        <table class="reports-table">
+                            <thead>
+                                <tr>
+                                    <th>Return No.</th>
+                                    <th>Sale</th>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>Method</th>
+                                    <th>Processed By</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var item in _dashboard.RecentRefunds)
+                                {
+                                    <tr>
+                                        <td>@item.ReturnNumber</td>
+                                        <td>@item.SaleNumber</td>
+                                        <td>@item.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                        <td>@item.ReturnType</td>
+                                        <td>@item.RefundMethod</td>
+                                        <td>@item.ReturnedByName</td>
+                                        <td class="reports-negative">@Money(item.TotalRefundAmount)</td>
+                                        <td>
+                                            <span class="reports-status-pill closed">@item.Status</span>
+                                        </td>
                                     </tr>
                                 }
                             </tbody>
@@ -785,7 +914,40 @@
         .reports-summary-grid,
         .reports-settings-strip {
             grid-template-columns: 1fr;
+
+            .reports-mini-metrics {
+                text-align: left;
+            }
         }
+    }
+
+    .reports-mini-metrics {
+        display: grid;
+        gap: 3px;
+        text-align: right;
+    }
+
+        .reports-mini-metrics span {
+            display: block;
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .reports-mini-metrics strong {
+            display: inline;
+            color: #0f172a;
+            font-size: .76rem;
+            font-weight: 750;
+        }
+
+    .reports-negative {
+        color: #dc2626 !important;
+        font-weight: 750;
+    }
+
+    .reports-payment-row {
+        align-items: flex-start;
     }
 </style>
 
