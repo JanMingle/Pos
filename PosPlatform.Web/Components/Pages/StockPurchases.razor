@@ -1,0 +1,1040 @@
+﻿@page "/stock-purchases"
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@layout MainLayout
+@attribute [Authorize]
+@using PosPlatform.Web.Components.Layout
+@using PosPlatform.Web.Models.Settings
+@using PosPlatform.Web.Models.Suppliers
+@using PosPlatform.Web.Models.Purchases
+@using PosPlatform.Web.Services
+@inject StockPurchaseService StockPurchaseService
+@inject SupplierService SupplierService
+@inject BusinessSettingsService BusinessSettingsService
+@inject UserAccessService UserAccessService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Stock Purchases</PageTitle>
+
+<section class="purchase-page">
+    <div class="purchase-header">
+        <div>
+            <div class="purchase-kicker">
+                <i class="bi bi-box-arrow-in-down"></i>
+                Stock receiving
+            </div>
+            <h1>Stock Purchases</h1>
+            <p>Record supplier purchases, receive stock, update cost prices and create stock movements.</p>
+        </div>
+
+        <button type="button" class="purchase-primary-btn" @onclick="OpenReceivePanel">
+            <i class="bi bi-plus-lg"></i>
+            Receive Stock
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="purchase-alert @(_isSuccess ? "success" : "danger")">
+            <i class="bi @(_isSuccess ? "bi-check-circle" : "bi-exclamation-triangle")"></i>
+            <span>@_message</span>
+            <button type="button" @onclick="ClearMessage">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    }
+
+    <div class="purchase-settings-strip">
+        <div>
+            <span>Business</span>
+            <strong>@_settings.BusinessName</strong>
+        </div>
+
+        <div>
+            <span>Currency</span>
+            <strong>@_settings.CurrencyCode · @_settings.CurrencySymbol</strong>
+        </div>
+
+        <div>
+            <span>Stock Tracking</span>
+            <strong>@(_settings.StockTrackingEnabled ? "Enabled" : "Disabled")</strong>
+        </div>
+
+        <div>
+            <span>Suppliers</span>
+            <strong>@_suppliers.Count active</strong>
+        </div>
+    </div>
+
+    @if (!_settings.StockTrackingEnabled)
+    {
+        <div class="purchase-warning">
+            <div>
+                <strong>Stock tracking is disabled</strong>
+                <span>Enable stock tracking in Business Settings before receiving stock purchases.</span>
+            </div>
+
+            <a href="/settings" class="purchase-warning-link">
+                Open Settings
+            </a>
+        </div>
+    }
+
+    @if (_showReceivePanel && _settings.StockTrackingEnabled)
+    {
+        <div class="purchase-receive-panel">
+            <div class="purchase-panel-header">
+                <div>
+                    <h2>Receive Stock</h2>
+                    <p>Select a supplier, add stock-tracked products, then receive into inventory.</p>
+                </div>
+
+                <button type="button" class="purchase-ghost-btn" @onclick="CloseReceivePanel">
+                    Close
+                </button>
+            </div>
+
+            <EditForm Model="_purchase" OnValidSubmit="SavePurchaseAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="purchase-validation" />
+
+                <div class="purchase-form-grid">
+                    <div>
+                        <label>Supplier</label>
+                        <InputSelect class="purchase-input" @bind-Value="_purchase.SupplierId">
+                            <option value="0">Select supplier</option>
+                            @foreach (var supplier in _suppliers)
+                            {
+                                <option value="@supplier.Id">@supplier.SupplierName</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div>
+                        <label>Supplier Invoice No.</label>
+                        <InputText class="purchase-input" @bind-Value="_purchase.SupplierInvoiceNumber" />
+                    </div>
+
+                    <div>
+                        <label>Purchase Date</label>
+                        <InputDate class="purchase-input" @bind-Value="_purchase.PurchaseDate" />
+                    </div>
+
+                    <div>
+                        <label>Tax Amount (@CurrencyLabel)</label>
+                        <InputNumber class="purchase-input" @bind-Value="_purchase.TaxAmount" />
+                    </div>
+                </div>
+
+                <div class="purchase-check-row">
+                    <label>
+                        <InputCheckbox @bind-Value="_purchase.UpdateProductCostPrice" />
+                        <span>
+                            <strong>Update product cost price</strong>
+                            <small>Use the latest supplier unit cost as the product cost price.</small>
+                        </span>
+                    </label>
+                </div>
+
+                <div class="purchase-items-card">
+                    <div class="purchase-items-header">
+                        <div>
+                            <h3>Purchase Items</h3>
+                            <p>Only stock-tracked products are listed here.</p>
+                        </div>
+
+                        <button type="button" class="purchase-secondary-btn" @onclick="AddLine">
+                            <i class="bi bi-plus-lg"></i>
+                            Add Line
+                        </button>
+                    </div>
+
+                    @if (_purchase.Items.Count == 0)
+                    {
+                        <div class="purchase-empty small">
+                            <strong>No items added</strong>
+                            <span>Add at least one stock item to receive.</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="purchase-lines">
+                            @foreach (var line in _purchase.Items)
+                            {
+                                <div class="purchase-line">
+                                    <div>
+                                        <label>Product</label>
+                                        <select class="purchase-input"
+                                                value="@line.ProductId"
+                                                @onchange="(e) => ProductChanged(line, e.Value?.ToString())">
+                                            <option value="0">Select product</option>
+                                            @foreach (var product in _products)
+                                            {
+                                                <option value="@product.Id">
+                                                    @GetProductOptionText(product)
+                                                </option>
+                                            }
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label>Qty</label>
+                                        <InputNumber class="purchase-input" @bind-Value="line.Quantity" />
+                                    </div>
+
+                                    <div>
+                                        <label>Unit Cost (@CurrencyLabel)</label>
+                                        <InputNumber class="purchase-input" @bind-Value="line.UnitCost" />
+                                    </div>
+
+                                    <div>
+                                        <label>Line Total</label>
+                                        <div class="purchase-line-total">@Money(GetLineTotal(line))</div>
+                                    </div>
+
+                                    <button type="button" class="purchase-remove-btn" @onclick="() => RemoveLine(line)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div>
+                    <label>Notes</label>
+                    <InputTextArea class="purchase-input purchase-textarea" @bind-Value="_purchase.Notes" />
+                </div>
+
+                <div class="purchase-total-box">
+                    <div>
+                        <span>Subtotal</span>
+                        <strong>@Money(PurchaseSubtotal)</strong>
+                    </div>
+
+                    <div>
+                        <span>Tax</span>
+                        <strong>@Money(_purchase.TaxAmount)</strong>
+                    </div>
+
+                    <div class="final">
+                        <span>Total</span>
+                        <strong>@Money(PurchaseTotal)</strong>
+                    </div>
+                </div>
+
+                <div class="purchase-actions">
+                    <button type="button" class="purchase-ghost-btn" @onclick="ResetPurchaseForm">
+                        Reset
+                    </button>
+
+                    <button type="submit" class="purchase-primary-btn" disabled="@_savingPurchase">
+                        <i class="bi bi-check2-circle"></i>
+                        @(_savingPurchase ? "Receiving..." : "Receive Stock")
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    }
+
+    <div class="purchase-history-panel">
+        <div class="purchase-panel-header">
+            <div>
+                <h2>Purchase History</h2>
+                <p>Supplier purchases and stock receiving records.</p>
+            </div>
+
+            <div class="purchase-date-filters">
+                <input type="date" @bind="_fromDate" />
+                <input type="date" @bind="_toDate" />
+
+                <div class="purchase-search small-search">
+                    <i class="bi bi-search"></i>
+                    <input @bind="_searchTerm"
+                           @bind:event="oninput"
+                           placeholder="Search PO, invoice or supplier" />
+                </div>
+
+                <button type="button" class="purchase-secondary-btn" @onclick="LoadPurchasesAsync">
+                    Filter
+                </button>
+            </div>
+        </div>
+
+        @if (_loadingPurchases)
+        {
+            <div class="purchase-empty">
+                <strong>Loading purchases...</strong>
+                <span>Please wait while we fetch purchase records.</span>
+            </div>
+        }
+        else if (_purchases.Count == 0)
+        {
+            <div class="purchase-empty">
+                <strong>No purchases found</strong>
+                <span>Receive stock from suppliers to see purchase records here.</span>
+            </div>
+        }
+        else
+        {
+            <div class="purchase-table-wrap">
+                <table class="purchase-table">
+                    <thead>
+                        <tr>
+                            <th>Purchase No.</th>
+                            <th>Supplier</th>
+                            <th>Invoice</th>
+                            <th>Date</th>
+                            <th>Items</th>
+                            <th>Qty</th>
+                            <th>Subtotal</th>
+                            <th>Tax</th>
+                            <th>Total</th>
+                            <th>Status</th>
+                            <th>Created By</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var item in _purchases)
+                        {
+                            <tr>
+                                <td>@item.PurchaseNumber</td>
+                                <td>@item.SupplierName</td>
+                                <td>@(string.IsNullOrWhiteSpace(item.SupplierInvoiceNumber) ? "-" : item.SupplierInvoiceNumber)</td>
+                                <td>@item.PurchaseDate.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                                <td>@item.ItemCount</td>
+                                <td>@item.TotalQuantity.ToString("0.##")</td>
+                                <td>@Money(item.Subtotal)</td>
+                                <td>@Money(item.TaxAmount)</td>
+                                <td class="purchase-strong">@Money(item.TotalAmount)</td>
+                                <td>
+                                    <span class="purchase-status-pill">@item.Status</span>
+                                </td>
+                                <td>@item.CreatedByName</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>
+
+<style>
+    .purchase-page {
+        animation: purchaseIn .22s ease both;
+    }
+
+    .purchase-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 18px;
+        margin-bottom: 18px;
+    }
+
+    .purchase-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 750;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+
+    .purchase-header h1 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 1.45rem;
+        font-weight: 680;
+        letter-spacing: -.03em;
+    }
+
+    .purchase-header p {
+        margin: 6px 0 0;
+        color: #64748b;
+        font-size: .88rem;
+    }
+
+    .purchase-primary-btn,
+    .purchase-secondary-btn,
+    .purchase-ghost-btn,
+    .purchase-warning-link {
+        min-height: 38px;
+        border-radius: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 650;
+        border: 0;
+        white-space: nowrap;
+        text-decoration: none;
+    }
+
+    .purchase-primary-btn {
+        color: #ffffff;
+        background: #111827;
+        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+    }
+
+    .purchase-secondary-btn {
+        color: #2563eb;
+        background: #eef5ff;
+    }
+
+    .purchase-ghost-btn {
+        color: #475569;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+    }
+
+    .purchase-alert {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        font-size: .84rem;
+        font-weight: 600;
+        border: 1px solid;
+    }
+
+        .purchase-alert.success {
+            color: #166534;
+            background: #f0fdf4;
+            border-color: #bbf7d0;
+        }
+
+        .purchase-alert.danger {
+            color: #991b1b;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+        .purchase-alert span {
+            flex: 1;
+        }
+
+        .purchase-alert button {
+            border: 0;
+            background: transparent;
+            color: inherit;
+        }
+
+    .purchase-settings-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+        .purchase-settings-strip div {
+            padding: 13px;
+            border-radius: 16px;
+            background: #ffffff;
+            border: 1px solid #e7edf5;
+            box-shadow: 0 12px 28px rgba(15,23,42,.04);
+        }
+
+        .purchase-settings-strip span,
+        .purchase-settings-strip strong {
+            display: block;
+        }
+
+        .purchase-settings-strip span {
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .purchase-settings-strip strong {
+            margin-top: 4px;
+            color: #0f172a;
+            font-size: .84rem;
+            font-weight: 720;
+        }
+
+    .purchase-warning {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: center;
+        margin-bottom: 16px;
+        padding: 16px;
+        border-radius: 18px;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+    }
+
+        .purchase-warning strong,
+        .purchase-warning span {
+            display: block;
+        }
+
+        .purchase-warning strong {
+            color: #9a3412;
+            font-size: .9rem;
+            font-weight: 750;
+        }
+
+        .purchase-warning span {
+            margin-top: 3px;
+            color: #c2410c;
+            font-size: .78rem;
+        }
+
+    .purchase-warning-link {
+        color: #ffffff;
+        background: #111827;
+    }
+
+    .purchase-receive-panel,
+    .purchase-history-panel,
+    .purchase-items-card {
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        border-radius: 20px;
+        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        overflow: hidden;
+        margin-bottom: 16px;
+    }
+
+    .purchase-panel-header,
+    .purchase-items-header {
+        padding: 17px 18px;
+        border-bottom: 1px solid #edf2f7;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+    }
+
+        .purchase-panel-header h2,
+        .purchase-items-header h3 {
+            margin: 0;
+            color: #0f172a;
+            font-size: .92rem;
+            font-weight: 720;
+        }
+
+        .purchase-panel-header p,
+        .purchase-items-header p {
+            margin: 4px 0 0;
+            color: #94a3b8;
+            font-size: .76rem;
+        }
+
+    .purchase-form-grid {
+        padding: 18px;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+        .purchase-form-grid label,
+        .purchase-lines label,
+        .purchase-receive-panel > form > div > label {
+            display: block;
+            margin-bottom: 6px;
+            color: #475569;
+            font-size: .77rem;
+            font-weight: 700;
+        }
+
+    .purchase-input {
+        width: 100%;
+        min-height: 40px;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        color: #0f172a;
+        padding: 0 12px;
+        font-size: .84rem;
+        outline: none;
+    }
+
+    .purchase-textarea {
+        min-height: 86px;
+        padding-top: 10px;
+        resize: vertical;
+        margin: 0 18px 14px;
+        width: calc(100% - 36px);
+    }
+
+    .purchase-check-row {
+        padding: 0 18px 14px;
+    }
+
+        .purchase-check-row label {
+            display: flex;
+            gap: 10px;
+            padding: 12px;
+            border-radius: 14px;
+            background: #f8fafc;
+            border: 1px solid #e7edf5;
+        }
+
+        .purchase-check-row input {
+            margin-top: 4px;
+        }
+
+        .purchase-check-row strong,
+        .purchase-check-row small {
+            display: block;
+        }
+
+        .purchase-check-row strong {
+            color: #0f172a;
+            font-size: .84rem;
+        }
+
+        .purchase-check-row small {
+            margin-top: 2px;
+            color: #64748b;
+            font-size: .74rem;
+        }
+
+    .purchase-items-card {
+        margin: 0 18px 14px;
+        box-shadow: none;
+    }
+
+    .purchase-lines {
+        padding: 14px 18px;
+        display: grid;
+        gap: 10px;
+    }
+
+    .purchase-line {
+        display: grid;
+        grid-template-columns: minmax(240px, 1fr) 120px 150px 140px auto;
+        gap: 10px;
+        align-items: end;
+        padding: 13px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+    }
+
+    .purchase-line-total {
+        min-height: 40px;
+        border-radius: 12px;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        color: #0f172a;
+        font-size: .84rem;
+        font-weight: 750;
+    }
+
+    .purchase-remove-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        border: 1px solid #fecaca;
+        background: #fef2f2;
+        color: #dc2626;
+    }
+
+    .purchase-total-box {
+        margin: 0 18px 14px;
+        border-top: 1px solid #edf2f7;
+        padding-top: 12px;
+        display: grid;
+        gap: 8px;
+    }
+
+        .purchase-total-box div {
+            display: flex;
+            justify-content: space-between;
+            color: #64748b;
+            font-size: .84rem;
+        }
+
+        .purchase-total-box strong {
+            color: #0f172a;
+        }
+
+        .purchase-total-box .final {
+            padding-top: 8px;
+            border-top: 1px solid #edf2f7;
+            color: #0f172a;
+            font-size: .95rem;
+            font-weight: 750;
+        }
+
+    .purchase-actions {
+        padding: 0 18px 18px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+
+    .purchase-validation {
+        margin: 0 18px 14px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: #fef2f2;
+        color: #991b1b;
+        font-size: .82rem;
+    }
+
+    .purchase-date-filters {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+        .purchase-date-filters input[type="date"] {
+            min-height: 38px;
+            border-radius: 10px;
+            border: 1px solid #e5e7eb;
+            padding: 0 10px;
+            font-size: .82rem;
+        }
+
+    .purchase-search {
+        min-height: 38px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 12px;
+        border-radius: 10px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        color: #94a3b8;
+    }
+
+        .purchase-search input {
+            border: 0;
+            outline: none;
+            background: transparent;
+            color: #0f172a;
+            font-size: .84rem;
+        }
+
+    .small-search {
+        width: 260px;
+    }
+
+    .purchase-table-wrap {
+        overflow-x: auto;
+    }
+
+    .purchase-table {
+        width: 100%;
+        min-width: 1050px;
+        border-collapse: collapse;
+    }
+
+        .purchase-table th {
+            padding: 12px 16px;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: .7rem;
+            font-weight: 750;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            border-bottom: 1px solid #e7edf5;
+            white-space: nowrap;
+        }
+
+        .purchase-table td {
+            padding: 14px 16px;
+            color: #334155;
+            font-size: .82rem;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+
+    .purchase-strong {
+        color: #0f172a !important;
+        font-weight: 750;
+    }
+
+    .purchase-status-pill {
+        display: inline-flex;
+        min-height: 26px;
+        align-items: center;
+        padding: 0 9px;
+        border-radius: 999px;
+        color: #15803d;
+        background: #ecfdf5;
+        font-size: .72rem;
+        font-weight: 750;
+    }
+
+    .purchase-empty {
+        margin: 18px;
+        padding: 34px 20px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px dashed #dbe3ef;
+        text-align: center;
+    }
+
+        .purchase-empty.small {
+            margin: 14px 18px;
+            padding: 24px 16px;
+        }
+
+        .purchase-empty strong,
+        .purchase-empty span {
+            display: block;
+        }
+
+        .purchase-empty strong {
+            color: #0f172a;
+            font-size: .9rem;
+        }
+
+        .purchase-empty span {
+            margin-top: 4px;
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+    @@keyframes purchaseIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width: 1199px) {
+        .purchase-settings-strip,
+        .purchase-form-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .purchase-line {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .purchase-header,
+        .purchase-panel-header,
+        .purchase-items-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+            .purchase-header .purchase-primary-btn,
+            .purchase-actions button,
+            .purchase-warning-link {
+                width: 100%;
+            }
+
+        .purchase-settings-strip,
+        .purchase-form-grid,
+        .purchase-line {
+            grid-template-columns: 1fr;
+        }
+
+        .purchase-warning {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .purchase-actions {
+            flex-direction: column-reverse;
+        }
+
+        .purchase-date-filters,
+        .purchase-date-filters input,
+        .purchase-date-filters button,
+        .small-search {
+            width: 100%;
+        }
+
+        .purchase-search input {
+            width: 100%;
+        }
+    }
+</style>
+
+@code {
+    private BusinessSettingsFormModel _settings = new();
+
+    private List<SupplierOptionViewModel> _suppliers = new();
+    private List<PurchaseProductOptionViewModel> _products = new();
+    private List<StockPurchaseListItemViewModel> _purchases = new();
+
+    private CreateStockPurchaseModel _purchase = new();
+
+    private bool _loadingPurchases = true;
+    private bool _savingPurchase;
+    private bool _showReceivePanel;
+
+    private DateTime? _fromDate = DateTime.Today.AddDays(-30);
+    private DateTime? _toDate = DateTime.Today;
+    private string? _searchTerm;
+
+    private string? _message;
+    private bool _isSuccess;
+
+    private string CurrencyLabel =>
+        string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
+            ? "R"
+            : _settings.CurrencySymbol;
+
+    private decimal PurchaseSubtotal =>
+        _purchase.Items.Sum(x => GetLineTotal(x));
+
+    private decimal PurchaseTotal =>
+        PurchaseSubtotal + _purchase.TaxAmount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserAccessService.CanAccessAsync("stock-purchases"))
+        {
+            NavigationManager.NavigateTo("/dashboard");
+            return;
+        }
+
+        _settings = await BusinessSettingsService.GetSettingsAsync();
+
+        _suppliers = await SupplierService.GetSupplierOptionsAsync();
+        _products = await StockPurchaseService.GetStockProductOptionsAsync();
+
+        ResetPurchaseForm();
+        await LoadPurchasesAsync();
+    }
+
+    private async Task LoadPurchasesAsync()
+    {
+        _loadingPurchases = true;
+        _purchases = await StockPurchaseService.GetPurchasesAsync(_fromDate, _toDate, _searchTerm);
+        _loadingPurchases = false;
+    }
+
+    private void OpenReceivePanel()
+    {
+        _showReceivePanel = true;
+
+        if (_purchase.Items.Count == 0)
+        {
+            AddLine();
+        }
+    }
+
+    private void CloseReceivePanel()
+    {
+        _showReceivePanel = false;
+    }
+
+    private void ResetPurchaseForm()
+    {
+        _purchase = new CreateStockPurchaseModel
+        {
+            PurchaseDate = DateTime.Today,
+            UpdateProductCostPrice = true,
+            Items = new List<CreateStockPurchaseItemModel>()
+        };
+
+        AddLine();
+    }
+
+    private void AddLine()
+    {
+        _purchase.Items.Add(new CreateStockPurchaseItemModel
+        {
+            Quantity = 1,
+            UnitCost = 0
+        });
+    }
+
+    private void RemoveLine(CreateStockPurchaseItemModel line)
+    {
+        _purchase.Items.Remove(line);
+    }
+
+    private void ProductChanged(CreateStockPurchaseItemModel line, string? value)
+    {
+        if (!int.TryParse(value, out var productId))
+        {
+            line.ProductId = 0;
+            line.UnitCost = 0;
+            return;
+        }
+
+        line.ProductId = productId;
+
+        var product = _products.FirstOrDefault(x => x.Id == productId);
+
+        if (product != null && line.UnitCost <= 0)
+        {
+            line.UnitCost = product.CostPrice;
+        }
+    }
+
+    private async Task SavePurchaseAsync()
+    {
+        _savingPurchase = true;
+
+        _purchase.Items = _purchase.Items
+            .Where(x => x.ProductId > 0 && x.Quantity > 0)
+            .ToList();
+
+        var result = await StockPurchaseService.CreateAndReceiveAsync(_purchase);
+
+        _savingPurchase = false;
+
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            _products = await StockPurchaseService.GetStockProductOptionsAsync();
+            _suppliers = await SupplierService.GetSupplierOptionsAsync();
+
+            ResetPurchaseForm();
+            _showReceivePanel = false;
+
+            await LoadPurchasesAsync();
+        }
+    }
+
+    private decimal GetLineTotal(CreateStockPurchaseItemModel line)
+    {
+        return line.Quantity * line.UnitCost;
+    }
+
+    private string GetProductOptionText(PurchaseProductOptionViewModel product)
+    {
+        var unit = string.IsNullOrWhiteSpace(product.UnitOfMeasure) ? "" : $" {product.UnitOfMeasure}";
+        return $"{product.ProductName} ({product.SKU}) · Stock {product.CurrentStock:0.##}{unit}";
+    }
+
+    private string Money(decimal value)
+    {
+        return $"{CurrencyLabel} {value:0.00}";
+    }
+
+    private void ShowMessage(string message, bool success)
+    {
+        _message = message;
+        _isSuccess = success;
+    }
+
+    private void ClearMessage()
+    {
+        _message = null;
+    }
+}

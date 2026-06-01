@@ -41,6 +41,22 @@
             </NavLink>
         }
 
+        @if (_canStockPurchases)
+        {
+            <NavLink href="/stock-purchases" class="pos-nav-link">
+                <span class="pos-nav-icon"><i class="bi bi-box-arrow-in-down"></i></span>
+                <span class="pos-nav-text">Stock Purchases</span>
+            </NavLink>
+        }
+
+        @if (_canSuppliers)
+        {
+            <NavLink href="/suppliers" class="pos-nav-link">
+                <span class="pos-nav-icon"><i class="bi bi-truck"></i></span>
+                <span class="pos-nav-text">Suppliers</span>
+            </NavLink>
+        }
+
         @if (_canSales)
         {
             <NavLink href="/sales" class="pos-nav-link">
@@ -127,6 +143,8 @@
     private bool _canSettings;
     private bool _canCashierShift;
     private bool _canCustomers;
+    private bool _canSuppliers;
+    private bool _canStockPurchases;
 
     protected override async Task OnInitializedAsync()
     {
@@ -141,5 +159,7 @@
         _canSettings = await UserAccessService.CanAccessAsync("settings");
         _canCashierShift = await UserAccessService.CanAccessAsync("cashier-shift");
         _canCustomers = await UserAccessService.CanAccessAsync("customers");
+        _canSuppliers = await UserAccessService.CanAccessAsync("suppliers");
+        _canStockPurchases = await UserAccessService.CanAccessAsync("stock-purchases");
     }
 }
