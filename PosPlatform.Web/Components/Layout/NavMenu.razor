@@ -1,6 +1,7 @@
 ﻿@using PosPlatform.Web.Services
 @inject UserAccessService UserAccessService
 
+
 <aside class="pos-sidebar">
     <div class="pos-sidebar-brand">
         <div class="pos-brand-logo">P</div>
@@ -53,6 +54,14 @@
             <NavLink href="/cashier-shift" class="pos-nav-link">
                 <span class="pos-nav-icon"><i class="bi bi-cash-coin"></i></span>
                 <span class="pos-nav-text">Cashier Shift</span>
+            </NavLink>
+        }
+
+        @if (_canCustomers)
+        {
+            <NavLink href="/customers" class="pos-nav-link">
+                <span class="pos-nav-icon"><i class="bi bi-person-lines-fill"></i></span>
+                <span class="pos-nav-text">Customers</span>
             </NavLink>
         }
 
@@ -117,6 +126,7 @@
     private bool _canReports;
     private bool _canSettings;
     private bool _canCashierShift;
+    private bool _canCustomers;
 
     protected override async Task OnInitializedAsync()
     {
@@ -130,5 +140,6 @@
         _canReports = await UserAccessService.CanAccessAsync("reports");
         _canSettings = await UserAccessService.CanAccessAsync("settings");
         _canCashierShift = await UserAccessService.CanAccessAsync("cashier-shift");
+        _canCustomers = await UserAccessService.CanAccessAsync("customers");
     }
 }

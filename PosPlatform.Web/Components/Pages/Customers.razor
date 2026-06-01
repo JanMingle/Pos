@@ -1,0 +1,1192 @@
+﻿@page "/customers"
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@layout MainLayout
+@attribute [Authorize]
+@using PosPlatform.Web.Components.Layout
+@using PosPlatform.Web.Models.Customers
+@using PosPlatform.Web.Models.Settings
+@using PosPlatform.Web.Services
+@inject CustomerService CustomerService
+@inject BusinessSettingsService BusinessSettingsService
+@inject UserAccessService UserAccessService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Customers</PageTitle>
+
+<section class="customers-page">
+    <div class="customers-header">
+        <div>
+            <div class="customers-kicker">
+                <i class="bi bi-person-lines-fill"></i>
+                Customer records
+            </div>
+            <h1>Customers</h1>
+            <p>Manage customer profiles, contact details, business customers and purchase history.</p>
+        </div>
+
+        @if (CustomersEnabled)
+        {
+            <button type="button" class="customers-primary-btn" @onclick="OpenAddModal">
+                <i class="bi bi-person-plus"></i>
+                Add Customer
+            </button>
+        }
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="customers-alert @(_isSuccess ? "success" : "danger")">
+            <i class="bi @(_isSuccess ? "bi-check-circle" : "bi-exclamation-triangle")"></i>
+            <span>@_message</span>
+            <button type="button" @onclick="ClearMessage">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    }
+
+    <div class="customers-settings-strip">
+        <div>
+            <span>Business</span>
+            <strong>@_settings.BusinessName</strong>
+        </div>
+
+        <div>
+            <span>Business Type</span>
+            <strong>@_settings.BusinessType</strong>
+        </div>
+
+        <div>
+            <span>Customers Module</span>
+            <strong>@(CustomersEnabled ? "Enabled" : "Disabled")</strong>
+        </div>
+
+        <div>
+            <span>Customer on Sale</span>
+            <strong>@(_settings.RequireCustomerForSale ? "Required" : "Optional")</strong>
+        </div>
+    </div>
+
+    @if (!CustomersEnabled)
+    {
+        <div class="customers-settings-warning">
+            <div>
+                <strong>Customers module is disabled</strong>
+                <span>Enable customers in Business Settings if this business needs customer records.</span>
+            </div>
+
+            <a href="/settings" class="customers-settings-link">
+                Open Settings
+            </a>
+        </div>
+    }
+    else
+    {
+        <div class="customers-summary-grid">
+            <div class="customers-summary-card">
+                <span>Total Customers</span>
+                <strong>@TotalCustomers</strong>
+            </div>
+
+            <div class="customers-summary-card green">
+                <span>Active</span>
+                <strong>@ActiveCustomers</strong>
+            </div>
+
+            <div class="customers-summary-card blue">
+                <span>Individuals</span>
+                <strong>@IndividualCustomers</strong>
+            </div>
+
+            <div class="customers-summary-card violet">
+                <span>Businesses</span>
+                <strong>@BusinessCustomers</strong>
+            </div>
+
+            <div class="customers-summary-card amber">
+                <span>Total Spent</span>
+                <strong>@Money(TotalSpent)</strong>
+            </div>
+        </div>
+
+        <div class="customers-control-panel">
+            <div class="customers-search">
+                <i class="bi bi-search"></i>
+                <input @bind="_searchTerm"
+                       @bind:event="oninput"
+                       placeholder="Search name, phone or email" />
+            </div>
+
+            <select class="customers-filter" @bind="_statusFilter">
+                <option value="all">All customers</option>
+                <option value="active">Active only</option>
+                <option value="inactive">Inactive only</option>
+                <option value="individual">Individuals</option>
+                <option value="business">Businesses</option>
+            </select>
+
+            <button type="button" class="customers-secondary-btn" @onclick="LoadCustomersAsync">
+                <i class="bi bi-filter"></i>
+                Apply
+            </button>
+
+            <button type="button" class="customers-ghost-btn" @onclick="ResetFiltersAsync">
+                <i class="bi bi-arrow-counterclockwise"></i>
+                Reset
+            </button>
+        </div>
+
+        <div class="customers-panel">
+            <div class="customers-panel-header">
+                <div>
+                    <h2>Customer List</h2>
+                    <p>@_customers.Count customer@(_customers.Count == 1 ? "" : "s") showing.</p>
+                </div>
+            </div>
+
+            @if (_loading)
+            {
+                <div class="customers-empty">
+                    <strong>Loading customers...</strong>
+                    <span>Please wait while we fetch customer records.</span>
+                </div>
+            }
+            else if (_customers.Count == 0)
+            {
+                <div class="customers-empty">
+                    <strong>No customers found</strong>
+                    <span>Add your first customer or adjust the filters.</span>
+                </div>
+            }
+            else
+            {
+                <div class="customers-table-wrap">
+                    <table class="customers-table">
+                        <thead>
+                            <tr>
+                                <th>Customer</th>
+                                <th>Type</th>
+                                <th>Contact</th>
+                                <th>Purchases</th>
+                                <th>Total Spent</th>
+                                <th>Last Purchase</th>
+                                <th>Status</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var customer in _customers)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="customers-cell">
+                                            <div class="customers-avatar">@GetInitials(customer.DisplayName)</div>
+                                            <div>
+                                                <strong>@customer.DisplayName</strong>
+                                                <span>Created @customer.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</span>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <span class="customers-type-pill @(customer.CustomerType == "Business" ? "business" : "individual")">
+                                            @customer.CustomerType
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        <div class="customers-contact">
+                                            <strong>@(string.IsNullOrWhiteSpace(customer.Phone) ? "-" : customer.Phone)</strong>
+                                            <span>@(string.IsNullOrWhiteSpace(customer.Email) ? "No email" : customer.Email)</span>
+                                        </div>
+                                    </td>
+
+                                    <td>@customer.TotalPurchases</td>
+                                    <td>@Money(customer.TotalSpent)</td>
+                                    <td>@(customer.LastPurchaseDate.HasValue? customer.LastPurchaseDate.Value.ToLocalTime().ToString("yyyy-MM-dd") : "-")</td>
+
+                                    <td>
+                                        <span class="customers-status-pill @(customer.IsActive ? "active" : "inactive")">
+                                            @(customer.IsActive ? "Active" : "Inactive")
+                                        </span>
+                                    </td>
+
+                                    <td class="text-end">
+                                        <div class="customers-actions">
+                                            <button type="button" class="customers-mini-btn edit" @onclick="() => OpenEditModal(customer.Id)">
+                                                <i class="bi bi-pencil"></i>
+                                                Edit
+                                            </button>
+
+                                            <button type="button" class="customers-mini-btn status" @onclick="() => ToggleStatusAsync(customer.Id)">
+                                                <i class="bi @(customer.IsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
+                                                @(customer.IsActive ? "Pause" : "Activate")
+                                            </button>
+
+                                            <button type="button" class="customers-mini-btn delete" @onclick="() => ConfirmDelete(customer.Id, customer.DisplayName)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+</section>
+
+@if (_showModal)
+{
+    <div class="customers-modal-backdrop">
+        <div class="customers-modal">
+            <div class="customers-modal-header">
+                <div>
+                    <span>Customer setup</span>
+                    <h4>@(_form.Id.HasValue ? "Edit Customer" : "Add Customer")</h4>
+                    <p>Create customer records for sales history, salons, service businesses and repeat buyers.</p>
+                </div>
+
+                <button type="button" class="customers-close-btn" @onclick="CloseModal">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <EditForm Model="_form" OnValidSubmit="SaveCustomerAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="customers-validation" />
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="customers-label">Customer Type</label>
+                        <InputSelect class="customers-input" @bind-Value="_form.CustomerType">
+                            <option value="Individual">Individual</option>
+                            <option value="Business">Business</option>
+                        </InputSelect>
+                    </div>
+
+                    @if (_form.CustomerType == "Business")
+                    {
+                        <div class="col-md-6">
+                            <label class="customers-label">Business Name</label>
+                            <InputText class="customers-input" @bind-Value="_form.BusinessName" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="col-md-6">
+                            <label class="customers-label">First Name</label>
+                            <InputText class="customers-input" @bind-Value="_form.FirstName" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="customers-label">Last Name</label>
+                            <InputText class="customers-input" @bind-Value="_form.LastName" />
+                        </div>
+                    }
+
+                    <div class="col-md-6">
+                        <label class="customers-label">Phone</label>
+                        <InputText class="customers-input" @bind-Value="_form.Phone" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="customers-label">Email</label>
+                        <InputText class="customers-input" @bind-Value="_form.Email" />
+                    </div>
+
+                    <div class="col-12">
+                        <label class="customers-label">Notes</label>
+                        <InputTextArea class="customers-input customers-textarea" @bind-Value="_form.Notes" />
+                    </div>
+
+                    <div class="col-12">
+                        <label class="customers-check">
+                            <InputCheckbox @bind-Value="_form.IsActive" />
+                            <span>
+                                <strong>Active customer</strong>
+                                <small>Allow this customer to be selected during sales later.</small>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="customers-modal-actions">
+                    <button type="button" class="customers-ghost-btn" @onclick="CloseModal">Cancel</button>
+                    <button type="submit" class="customers-primary-btn" disabled="@_saving">
+                        <i class="bi bi-check2-circle"></i>
+                        @(_saving ? "Saving..." : "Save Customer")
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@if (_showDeleteConfirm)
+{
+    <div class="customers-modal-backdrop">
+        <div class="customers-modal customers-delete-modal">
+            <div class="customers-delete-icon">
+                <i class="bi bi-trash"></i>
+            </div>
+
+            <h4>Delete Customer</h4>
+            <p>
+                Are you sure you want to delete <strong>@_deleteCustomerName</strong>?
+                If this customer has sales history, they will be deactivated instead.
+            </p>
+
+            <div class="customers-modal-actions">
+                <button type="button" class="customers-ghost-btn" @onclick="CancelDelete">Cancel</button>
+                <button type="button" class="customers-danger-btn" @onclick="DeleteConfirmedAsync">
+                    <i class="bi bi-trash"></i>
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .customers-page {
+        animation: customersIn .22s ease both;
+    }
+
+    .customers-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 18px;
+        margin-bottom: 18px;
+    }
+
+    .customers-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 750;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+
+    .customers-header h1 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 1.45rem;
+        font-weight: 680;
+        letter-spacing: -.03em;
+    }
+
+    .customers-header p {
+        margin: 6px 0 0;
+        color: #64748b;
+        font-size: .88rem;
+    }
+
+    .customers-primary-btn,
+    .customers-secondary-btn,
+    .customers-ghost-btn,
+    .customers-danger-btn,
+    .customers-mini-btn {
+        min-height: 38px;
+        border-radius: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 650;
+        border: 0;
+        transition: all .18s ease;
+        white-space: nowrap;
+    }
+
+    .customers-primary-btn {
+        color: #ffffff;
+        background: #111827;
+        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+    }
+
+    .customers-secondary-btn {
+        color: #2563eb;
+        background: #eef5ff;
+    }
+
+    .customers-ghost-btn {
+        color: #475569;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+    }
+
+    .customers-danger-btn {
+        color: #ffffff;
+        background: #dc2626;
+    }
+
+    .customers-alert {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        font-size: .84rem;
+        font-weight: 600;
+        border: 1px solid;
+    }
+
+        .customers-alert.success {
+            color: #166534;
+            background: #f0fdf4;
+            border-color: #bbf7d0;
+        }
+
+        .customers-alert.danger {
+            color: #991b1b;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+        .customers-alert span {
+            flex: 1;
+        }
+
+        .customers-alert button {
+            border: 0;
+            background: transparent;
+            color: inherit;
+        }
+
+    .customers-settings-strip,
+    .customers-summary-grid {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+    .customers-settings-strip {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .customers-summary-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .customers-settings-strip div,
+    .customers-summary-card {
+        padding: 13px;
+        border-radius: 16px;
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 12px 28px rgba(15,23,42,.04);
+    }
+
+    .customers-summary-card {
+        padding: 16px;
+    }
+
+        .customers-settings-strip span,
+        .customers-settings-strip strong,
+        .customers-summary-card span,
+        .customers-summary-card strong {
+            display: block;
+        }
+
+        .customers-settings-strip span,
+        .customers-summary-card span {
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .customers-settings-strip strong,
+        .customers-summary-card strong {
+            margin-top: 4px;
+            color: #0f172a;
+            font-size: .88rem;
+            font-weight: 720;
+        }
+
+        .customers-summary-card strong {
+            font-size: 1.08rem;
+        }
+
+        .customers-summary-card.green strong {
+            color: #16a34a;
+        }
+
+        .customers-summary-card.blue strong {
+            color: #2563eb;
+        }
+
+        .customers-summary-card.violet strong {
+            color: #7c3aed;
+        }
+
+        .customers-summary-card.amber strong {
+            color: #d97706;
+        }
+
+    .customers-settings-warning {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: center;
+        margin-bottom: 16px;
+        padding: 16px;
+        border-radius: 18px;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+    }
+
+        .customers-settings-warning strong,
+        .customers-settings-warning span {
+            display: block;
+        }
+
+        .customers-settings-warning strong {
+            color: #9a3412;
+            font-size: .9rem;
+            font-weight: 750;
+        }
+
+        .customers-settings-warning span {
+            margin-top: 3px;
+            color: #c2410c;
+            font-size: .78rem;
+        }
+
+    .customers-settings-link {
+        min-height: 36px;
+        border-radius: 10px;
+        padding: 0 13px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #111827;
+        color: #ffffff;
+        font-size: .78rem;
+        font-weight: 700;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .customers-control-panel {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) 180px auto auto;
+        gap: 10px;
+        padding: 14px;
+        margin-bottom: 16px;
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+    }
+
+    .customers-search {
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 13px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        color: #94a3b8;
+    }
+
+        .customers-search input,
+        .customers-filter,
+        .customers-input {
+            width: 100%;
+            min-height: 40px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            background: #ffffff;
+            color: #0f172a;
+            padding: 0 12px;
+            font-size: .84rem;
+            outline: none;
+        }
+
+        .customers-search input {
+            border: 0;
+            background: transparent;
+            padding: 0;
+        }
+
+    .customers-panel {
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        border-radius: 20px;
+        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        overflow: hidden;
+    }
+
+    .customers-panel-header {
+        padding: 17px 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .customers-panel-header h2 {
+            margin: 0;
+            color: #0f172a;
+            font-size: .92rem;
+            font-weight: 720;
+        }
+
+        .customers-panel-header p {
+            margin: 4px 0 0;
+            color: #94a3b8;
+            font-size: .76rem;
+        }
+
+    .customers-table-wrap {
+        overflow-x: auto;
+    }
+
+    .customers-table {
+        width: 100%;
+        min-width: 980px;
+        border-collapse: collapse;
+    }
+
+        .customers-table th {
+            padding: 12px 16px;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: .7rem;
+            font-weight: 750;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            border-bottom: 1px solid #e7edf5;
+            white-space: nowrap;
+        }
+
+        .customers-table td {
+            padding: 14px 16px;
+            color: #334155;
+            font-size: .82rem;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+
+    .customers-cell {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+    }
+
+    .customers-avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 14px;
+        background: #eef5ff;
+        color: #2563eb;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .78rem;
+        font-weight: 750;
+    }
+
+    .customers-cell strong,
+    .customers-contact strong {
+        display: block;
+        color: #0f172a;
+        font-size: .85rem;
+        font-weight: 720;
+    }
+
+    .customers-cell span,
+    .customers-contact span {
+        display: block;
+        margin-top: 2px;
+        color: #94a3b8;
+        font-size: .72rem;
+    }
+
+    .customers-type-pill,
+    .customers-status-pill {
+        display: inline-flex;
+        min-height: 26px;
+        align-items: center;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 750;
+    }
+
+        .customers-type-pill.individual {
+            color: #2563eb;
+            background: #eff6ff;
+        }
+
+        .customers-type-pill.business {
+            color: #7c3aed;
+            background: #f5f3ff;
+        }
+
+        .customers-status-pill.active {
+            color: #15803d;
+            background: #ecfdf5;
+        }
+
+        .customers-status-pill.inactive {
+            color: #64748b;
+            background: #f1f5f9;
+        }
+
+    .customers-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .customers-mini-btn {
+        min-height: 30px;
+        padding: 0 10px;
+        border: 1px solid;
+        font-size: .74rem;
+    }
+
+        .customers-mini-btn.edit {
+            color: #2563eb;
+            background: #eff6ff;
+            border-color: #bfdbfe;
+        }
+
+        .customers-mini-btn.status {
+            color: #b45309;
+            background: #fffbeb;
+            border-color: #fde68a;
+        }
+
+        .customers-mini-btn.delete {
+            color: #dc2626;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+    .customers-empty {
+        margin: 18px;
+        padding: 34px 20px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px dashed #dbe3ef;
+        text-align: center;
+    }
+
+        .customers-empty strong,
+        .customers-empty span {
+            display: block;
+        }
+
+        .customers-empty strong {
+            color: #0f172a;
+            font-size: .9rem;
+        }
+
+        .customers-empty span {
+            margin-top: 4px;
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+    .customers-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1100;
+        padding: 20px;
+        background: rgba(15, 23, 42, .45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .customers-modal {
+        width: 100%;
+        max-width: 760px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+        background: #ffffff;
+        border-radius: 22px;
+        padding: 22px;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, .24);
+    }
+
+    .customers-delete-modal {
+        max-width: 440px;
+        text-align: center;
+    }
+
+    .customers-modal-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding-bottom: 16px;
+        margin-bottom: 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .customers-modal-header span {
+            color: #2563eb;
+            font-size: .72rem;
+            font-weight: 750;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+        .customers-modal-header h4,
+        .customers-delete-modal h4 {
+            margin: 3px 0 0;
+            color: #0f172a;
+            font-size: 1.08rem;
+            font-weight: 720;
+        }
+
+        .customers-modal-header p,
+        .customers-delete-modal p {
+            margin: 5px 0 0;
+            color: #64748b;
+            font-size: .84rem;
+            line-height: 1.5;
+        }
+
+    .customers-close-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        color: #64748b;
+    }
+
+    .customers-label {
+        display: block;
+        margin-bottom: 6px;
+        color: #475569;
+        font-size: .77rem;
+        font-weight: 700;
+    }
+
+    .customers-textarea {
+        min-height: 86px;
+        padding-top: 10px;
+        resize: vertical;
+    }
+
+    .customers-check {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px;
+        border-radius: 14px;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+    }
+
+        .customers-check input {
+            margin-top: 4px;
+        }
+
+        .customers-check strong,
+        .customers-check small {
+            display: block;
+        }
+
+        .customers-check strong {
+            color: #0f172a;
+            font-size: .85rem;
+        }
+
+        .customers-check small {
+            margin-top: 2px;
+            color: #64748b;
+            font-size: .76rem;
+        }
+
+    .customers-validation {
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        background: #fef2f2;
+        color: #991b1b;
+        font-size: .82rem;
+    }
+
+    .customers-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding-top: 16px;
+        margin-top: 20px;
+        border-top: 1px solid #edf2f7;
+    }
+
+    .customers-delete-icon {
+        width: 52px;
+        height: 52px;
+        margin: 0 auto 14px;
+        border-radius: 18px;
+        color: #dc2626;
+        background: #fef2f2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+    }
+
+    @@keyframes customersIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width: 1199px) {
+        .customers-settings-strip,
+        .customers-summary-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .customers-control-panel {
+            grid-template-columns: 1fr 180px;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .customers-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+            .customers-header .customers-primary-btn {
+                width: 100%;
+            }
+
+        .customers-settings-strip,
+        .customers-summary-grid,
+        .customers-control-panel {
+            grid-template-columns: 1fr;
+        }
+
+        .customers-settings-warning {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .customers-settings-link {
+            width: 100%;
+        }
+
+        .customers-modal-actions {
+            flex-direction: column-reverse;
+        }
+
+            .customers-modal-actions button {
+                width: 100%;
+            }
+    }
+</style>
+
+@code {
+    private BusinessSettingsFormModel _settings = new();
+    private List<CustomerListItemViewModel> _customers = new();
+
+    private CustomerFormModel _form = new();
+
+    private bool _loading = true;
+    private bool _saving;
+    private bool _showModal;
+    private bool _showDeleteConfirm;
+
+    private string? _searchTerm;
+    private string _statusFilter = "all";
+
+    private int _deleteId;
+    private string _deleteCustomerName = string.Empty;
+
+    private string? _message;
+    private bool _isSuccess;
+
+    private bool CustomersEnabled => _settings.CustomersEnabled;
+
+    private int TotalCustomers => _customers.Count;
+    private int ActiveCustomers => _customers.Count(x => x.IsActive);
+    private int IndividualCustomers => _customers.Count(x => x.CustomerType == "Individual");
+    private int BusinessCustomers => _customers.Count(x => x.CustomerType == "Business");
+    private decimal TotalSpent => _customers.Sum(x => x.TotalSpent);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserAccessService.CanAccessAsync("customers"))
+        {
+            NavigationManager.NavigateTo("/dashboard");
+            return;
+        }
+
+        _settings = await BusinessSettingsService.GetSettingsAsync();
+
+        if (CustomersEnabled)
+        {
+            await LoadCustomersAsync();
+        }
+        else
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadCustomersAsync()
+    {
+        _loading = true;
+        _customers = await CustomerService.GetCustomersAsync(_searchTerm, _statusFilter);
+        _loading = false;
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        _searchTerm = null;
+        _statusFilter = "all";
+        await LoadCustomersAsync();
+    }
+
+    private void OpenAddModal()
+    {
+        _form = new CustomerFormModel
+        {
+            CustomerType = "Individual",
+            IsActive = true
+        };
+
+        _showModal = true;
+    }
+
+    private async Task OpenEditModal(int id)
+    {
+        var model = await CustomerService.GetByIdAsync(id);
+
+        if (model == null)
+        {
+            ShowMessage("Customer not found.", false);
+            return;
+        }
+
+        _form = model;
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _form = new CustomerFormModel();
+    }
+
+    private async Task SaveCustomerAsync()
+    {
+        _saving = true;
+
+        var result = await CustomerService.SaveAsync(_form);
+
+        _saving = false;
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            _showModal = false;
+            _form = new CustomerFormModel();
+            await LoadCustomersAsync();
+        }
+    }
+
+    private async Task ToggleStatusAsync(int id)
+    {
+        var result = await CustomerService.ToggleStatusAsync(id);
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            await LoadCustomersAsync();
+        }
+    }
+
+    private void ConfirmDelete(int id, string name)
+    {
+        _deleteId = id;
+        _deleteCustomerName = name;
+        _showDeleteConfirm = true;
+    }
+
+    private void CancelDelete()
+    {
+        _deleteId = 0;
+        _deleteCustomerName = string.Empty;
+        _showDeleteConfirm = false;
+    }
+
+    private async Task DeleteConfirmedAsync()
+    {
+        var result = await CustomerService.DeleteAsync(_deleteId);
+
+        ShowMessage(result.Message, result.Success);
+
+        _deleteId = 0;
+        _deleteCustomerName = string.Empty;
+        _showDeleteConfirm = false;
+
+        if (result.Success)
+        {
+            await LoadCustomersAsync();
+        }
+    }
+
+    private string Money(decimal value)
+    {
+        var symbol = string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
+            ? "R"
+            : _settings.CurrencySymbol;
+
+        return $"{symbol} {value:0.00}";
+    }
+
+    private string GetInitials(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "C";
+        }
+
+        var words = value
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Take(2)
+            .Select(x => x[0].ToString().ToUpper());
+
+        return string.Join("", words);
+    }
+
+    private void ShowMessage(string message, bool success)
+    {
+        _message = message;
+        _isSuccess = success;
+    }
+
+    private void ClearMessage()
+    {
+        _message = null;
+    }
+}

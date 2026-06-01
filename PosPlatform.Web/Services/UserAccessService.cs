@@ -63,6 +63,7 @@ namespace PosPlatform.Web.Services
                 "users" => false,
                 "reports" => role is "Accounting User" or "Manager" or "Viewer",
                 "settings" => false,
+                "customers" => role is "Sales User" or "Manager" or "Accounting User",
 
 
                 _ => false

@@ -32,6 +32,7 @@ builder.Services.AddScoped<UserManagementService>();
 builder.Services.AddScoped<UserAccessService>();
 builder.Services.AddScoped<BusinessSettingsService>();
 builder.Services.AddScoped<CashierShiftService>();
+builder.Services.AddScoped<CustomerService>();
 
 var app = builder.Build();
 

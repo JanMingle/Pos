@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using PosPlatform.Domain.Entities;
 
+
 namespace PosPlatform.Infrastructure.Data
 {
     public class AppDbContext : IdentityDbContext<ApplicationUser, Role, int,
@@ -34,6 +35,8 @@ namespace PosPlatform.Infrastructure.Data
         public DbSet<BusinessSettings> BusinessSettings => Set<BusinessSettings>();
 
         public DbSet<CashierShift> CashierShifts => Set<CashierShift>();
+
+        public DbSet<Customer> Customers => Set<Customer>();
 
 
         protected override void OnModelCreating(ModelBuilder builder)
@@ -363,6 +366,11 @@ namespace PosPlatform.Infrastructure.Data
                       .WithMany()
                       .HasForeignKey(x => x.BranchId)
                       .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Customer)
+      .WithMany(x => x.Sales)
+      .HasForeignKey(x => x.CustomerId)
+      .OnDelete(DeleteBehavior.SetNull);
             });
             builder.Entity<BusinessSettings>(entity =>
             {
@@ -461,6 +469,46 @@ namespace PosPlatform.Infrastructure.Data
                 entity.HasOne(x => x.CashierUser)
                       .WithMany()
                       .HasForeignKey(x => x.CashierUserId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            builder.Entity<Customer>(entity =>
+            {
+                entity.ToTable("Customers");
+
+                entity.Property(x => x.CustomerType)
+                      .HasMaxLength(30)
+                      .IsRequired();
+
+                entity.Property(x => x.FirstName)
+                      .HasMaxLength(100);
+
+                entity.Property(x => x.LastName)
+                      .HasMaxLength(100);
+
+                entity.Property(x => x.BusinessName)
+                      .HasMaxLength(180);
+
+                entity.Property(x => x.Phone)
+                      .HasMaxLength(50);
+
+                entity.Property(x => x.Email)
+                      .HasMaxLength(150);
+
+                entity.Property(x => x.Notes)
+                      .HasMaxLength(500);
+
+                entity.HasIndex(x => new { x.TenantId, x.Phone });
+                entity.HasIndex(x => new { x.TenantId, x.Email });
+
+                entity.HasOne(x => x.Tenant)
+                      .WithMany()
+                      .HasForeignKey(x => x.TenantId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Branch)
+                      .WithMany()
+                      .HasForeignKey(x => x.BranchId)
                       .OnDelete(DeleteBehavior.Restrict);
             });
         }
