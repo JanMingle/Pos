@@ -42,6 +42,10 @@ namespace PosPlatform.Infrastructure.Data
         public DbSet<SaleReturn> SaleReturns => Set<SaleReturn>();
         public DbSet<SaleReturnItem> SaleReturnItems => Set<SaleReturnItem>();
 
+        public DbSet<Supplier> Suppliers => Set<Supplier>();
+        public DbSet<StockPurchase> StockPurchases => Set<StockPurchase>();
+        public DbSet<StockPurchaseItem> StockPurchaseItems => Set<StockPurchaseItem>();
+
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -605,6 +609,139 @@ namespace PosPlatform.Infrastructure.Data
                       .WithMany()
                       .HasForeignKey(x => x.SaleItemId)
                       .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Product)
+                      .WithMany()
+                      .HasForeignKey(x => x.ProductId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+            builder.Entity<Supplier>(entity =>
+            {
+                entity.ToTable("Suppliers");
+
+                entity.Property(x => x.SupplierName)
+                      .HasMaxLength(180)
+                      .IsRequired();
+
+                entity.Property(x => x.ContactPerson)
+                      .HasMaxLength(150);
+
+                entity.Property(x => x.Phone)
+                      .HasMaxLength(50);
+
+                entity.Property(x => x.Email)
+                      .HasMaxLength(150);
+
+                entity.Property(x => x.Address)
+                      .HasMaxLength(300);
+
+                entity.Property(x => x.TaxNumber)
+                      .HasMaxLength(80);
+
+                entity.Property(x => x.Notes)
+                      .HasMaxLength(500);
+
+                entity.HasIndex(x => new { x.TenantId, x.SupplierName });
+
+                entity.HasOne(x => x.Tenant)
+                      .WithMany()
+                      .HasForeignKey(x => x.TenantId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Branch)
+                      .WithMany()
+                      .HasForeignKey(x => x.BranchId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            builder.Entity<StockPurchase>(entity =>
+            {
+                entity.ToTable("StockPurchases");
+
+                entity.Property(x => x.PurchaseNumber)
+                      .HasMaxLength(80)
+                      .IsRequired();
+
+                entity.Property(x => x.SupplierInvoiceNumber)
+                      .HasMaxLength(100);
+
+                entity.Property(x => x.Status)
+                      .HasMaxLength(40)
+                      .IsRequired();
+
+                entity.Property(x => x.Notes)
+                      .HasMaxLength(500);
+
+                entity.Property(x => x.CreatedByName)
+                      .HasMaxLength(150)
+                      .IsRequired();
+
+                entity.Property(x => x.Subtotal)
+                      .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.TaxAmount)
+                      .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.TotalAmount)
+                      .HasColumnType("decimal(18,2)");
+
+                entity.HasIndex(x => new { x.TenantId, x.PurchaseNumber }).IsUnique();
+
+                entity.HasOne(x => x.Tenant)
+                      .WithMany()
+                      .HasForeignKey(x => x.TenantId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Branch)
+                      .WithMany()
+                      .HasForeignKey(x => x.BranchId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Supplier)
+                      .WithMany(x => x.StockPurchases)
+                      .HasForeignKey(x => x.SupplierId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.CreatedByUser)
+                      .WithMany()
+                      .HasForeignKey(x => x.CreatedByUserId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            builder.Entity<StockPurchaseItem>(entity =>
+            {
+                entity.ToTable("StockPurchaseItems");
+
+                entity.Property(x => x.ProductName)
+                      .HasMaxLength(150)
+                      .IsRequired();
+
+                entity.Property(x => x.SKU)
+                      .HasMaxLength(80)
+                      .IsRequired();
+
+                entity.Property(x => x.UnitOfMeasure)
+                      .HasMaxLength(50);
+
+                entity.Property(x => x.Quantity)
+                      .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.UnitCost)
+                      .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.LineTotal)
+                      .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.QuantityBefore)
+                      .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.QuantityAfter)
+                      .HasColumnType("decimal(18,2)");
+
+                entity.HasOne(x => x.StockPurchase)
+                      .WithMany(x => x.StockPurchaseItems)
+                      .HasForeignKey(x => x.StockPurchaseId)
+                      .OnDelete(DeleteBehavior.Cascade);
 
                 entity.HasOne(x => x.Product)
                       .WithMany()

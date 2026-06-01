@@ -35,6 +35,8 @@ builder.Services.AddScoped<CashierShiftService>();
 builder.Services.AddScoped<CustomerService>();
 builder.Services.AddScoped<ReportsService>();
 builder.Services.AddScoped<RefundService>();
+builder.Services.AddScoped<SupplierService>();
+builder.Services.AddScoped<StockPurchaseService>();
 
 var app = builder.Build();
 
