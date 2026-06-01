@@ -56,29 +56,38 @@ namespace PosPlatform.Web.Services
                 CustomerName = sale.CustomerName,
                 TotalAmount = sale.TotalAmount,
                 Items = sale.SaleItems
-                    .OrderBy(x => x.Id)
-                    .Select(x =>
-                    {
-                        var alreadyReturned = returnedQuantities.TryGetValue(x.Id, out var qty)
-                            ? qty
-                            : 0;
+    .OrderBy(x => x.Id)
+    .Select(x =>
+    {
+        var alreadyReturned = returnedQuantities.TryGetValue(x.Id, out var qty)
+            ? qty
+            : 0;
 
-                        var remaining = Math.Max(0, x.Quantity - alreadyReturned);
+        var remaining = Math.Max(0, x.Quantity - alreadyReturned);
 
-                        return new RefundableSaleItemViewModel
-                        {
-                            SaleItemId = x.Id,
-                            ProductId = x.ProductId,
-                            ProductName = x.ProductName,
-                            SKU = x.SKU,
-                            QuantitySold = x.Quantity,
-                            QuantityAlreadyReturned = alreadyReturned,
-                            QuantityRemaining = remaining,
-                            UnitPrice = x.UnitPrice
-                        };
-                    })
-                    .Where(x => x.QuantityRemaining > 0)
-                    .ToList()
+        var product = _db.Products
+            .AsNoTracking()
+            .FirstOrDefault(p => p.Id == x.ProductId && p.TenantId == tenantId.Value);
+
+        return new RefundableSaleItemViewModel
+        {
+            SaleItemId = x.Id,
+            ProductId = x.ProductId,
+            ProductName = x.ProductName,
+            SKU = x.SKU,
+
+            ProductType = product?.ProductType ?? "Physical Product",
+            TrackStock = product?.TrackStock ?? false,
+            UnitOfMeasure = product?.UnitOfMeasure,
+
+            QuantitySold = x.Quantity,
+            QuantityAlreadyReturned = alreadyReturned,
+            QuantityRemaining = remaining,
+            UnitPrice = x.UnitPrice
+        };
+    })
+    .Where(x => x.QuantityRemaining > 0)
+    .ToList()
             };
         }
 

@@ -1,5 +1,6 @@
 ﻿@page "/sales"
 @using static Microsoft.AspNetCore.Components.Web.RenderMode
+@using PosPlatform.Web.Models.Refunds
 @rendermode InteractiveServer
 @layout MainLayout
 @attribute [Authorize]
@@ -8,6 +9,7 @@
 @using PosPlatform.Web.Models.Settings
 @using PosPlatform.Web.Services
 @inject SaleService SaleService
+@inject RefundService RefundService
 @inject CustomerService CustomerService
 @inject CashierShiftService CashierShiftService
 @inject BusinessSettingsService BusinessSettingsService
@@ -15,6 +17,7 @@
 @inject NavigationManager NavigationManager
 @using PosPlatform.Web.Models.Shifts
 @using PosPlatform.Web.Models.Customers
+
 
 
 <PageTitle>Sales</PageTitle>
@@ -438,6 +441,8 @@
             </div>
         </div>
 
+
+
         @if (_loadingMySales)
         {
             <div class="sales-empty">
@@ -487,7 +492,70 @@
                                         <i class="bi bi-receipt"></i>
                                         Slip
                                     </button>
+
+                                    @if (CanRefundStatus(sale.Status))
+                                    {
+                                        <button class="sales-mini-btn refund" @onclick="() => OpenRefundModalAsync(sale.SaleId)">
+                                            <i class="bi bi-arrow-counterclockwise"></i>
+                                            Refund
+                                        </button>
+                                    }
                                 </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+    <div class="sales-history-panel">
+        <div class="sales-history-header">
+            <div>
+                <h2>Refund / Return History</h2>
+                <p>Refunds, returns and voids processed in the selected period.</p>
+            </div>
+        </div>
+
+        @if (_returnHistory.Count == 0)
+        {
+            <div class="sales-empty">
+                <strong>No refunds found</strong>
+                <span>Refunds and returns will appear here after they are processed.</span>
+            </div>
+        }
+        else
+        {
+            <div class="sales-history-table-wrap">
+                <table class="sales-history-table">
+                    <thead>
+                        <tr>
+                            <th>Return No.</th>
+                            <th>Sale</th>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Method</th>
+                            <th>Processed By</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Reason</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var item in _returnHistory)
+                        {
+                            <tr>
+                                <td>@item.ReturnNumber</td>
+                                <td>@item.SaleNumber</td>
+                                <td>@item.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@item.ReturnType</td>
+                                <td>@item.RefundMethod</td>
+                                <td>@item.ReturnedByName</td>
+                                <td>@Money(item.TotalRefundAmount)</td>
+                                <td>
+                                    <span class="sales-status-pill">@item.Status</span>
+                                </td>
+                                <td>@(string.IsNullOrWhiteSpace(item.Reason) ? "-" : item.Reason)</td>
                             </tr>
                         }
                     </tbody>
@@ -516,6 +584,173 @@
                     Confirm & Complete
                 </button>
             </div>
+        </div>
+    </div>
+}
+
+@if (_showRefundModal)
+{
+    <div class="sales-modal-backdrop">
+        <div class="sales-refund-card">
+            <div class="sales-refund-header">
+                <div>
+                    <span>Refund / Return</span>
+                    <h3>@(_refundableSale?.SaleNumber ?? "Sale")</h3>
+                    <p>Select the items and quantities to refund, return or void.</p>
+                </div>
+
+                <button type="button" class="sales-refund-close" @onclick="CloseRefundModal">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            @if (_loadingRefund)
+            {
+                <div class="sales-empty">
+                    <strong>Loading refundable items...</strong>
+                    <span>Please wait.</span>
+                </div>
+            }
+            else if (_refundableSale == null)
+            {
+                <div class="sales-empty">
+                    <strong>Sale not found</strong>
+                    <span>This sale could not be loaded for refund.</span>
+                </div>
+            }
+            else if (_refundableSale.Items.Count == 0)
+            {
+                <div class="sales-empty">
+                    <strong>No refundable items left</strong>
+                    <span>All items on this sale have already been returned or refunded.</span>
+                </div>
+            }
+            else
+            {
+                <div class="sales-refund-summary">
+                    <div>
+                        <span>Sale Date</span>
+                        <strong>@_refundableSale.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</strong>
+                    </div>
+
+                    <div>
+                        <span>Cashier</span>
+                        <strong>@_refundableSale.CashierName</strong>
+                    </div>
+
+                    <div>
+                        <span>Payment</span>
+                        <strong>@_refundableSale.PaymentMethod</strong>
+                    </div>
+
+                    <div>
+                        <span>Original Total</span>
+                        <strong>@Money(_refundableSale.TotalAmount)</strong>
+                    </div>
+                </div>
+
+                <div class="sales-refund-options">
+                    <div class="sales-form-row">
+                        <label>Type</label>
+                        <select @bind="_refundRequest.ReturnType">
+                            <option value="Refund">Refund</option>
+                            <option value="Return">Return</option>
+                            <option value="Void">Void</option>
+                        </select>
+                    </div>
+
+                    <div class="sales-form-row">
+                        <label>Refund Method</label>
+                        <select @bind="_refundRequest.RefundMethod">
+                            <option value="Original Payment">Original Payment</option>
+                            <option value="Cash">Cash</option>
+                            <option value="Card">Card</option>
+                            <option value="EFT">EFT</option>
+                            <option value="Store Credit">Store Credit</option>
+                        </select>
+                    </div>
+
+                    <label class="sales-check-row">
+                        <input type="checkbox" @bind="_refundRequest.RestockItems" />
+                        <span>
+                            <strong>Return stock to inventory</strong>
+                            <small>Only stock-tracked items will be added back to stock.</small>
+                        </span>
+                    </label>
+
+                    <div class="sales-form-row">
+                        <label>Reason</label>
+                        <textarea @bind="_refundRequest.Reason" placeholder="Example: Customer return, wrong item, cashier mistake..."></textarea>
+                    </div>
+                </div>
+
+                <div class="sales-refund-table-wrap">
+                    <table class="sales-refund-table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Sold</th>
+                                <th>Returned</th>
+                                <th>Remaining</th>
+                                <th>Refund Qty</th>
+                                <th>Amount</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var item in _refundableSale.Items)
+                            {
+                                var selectedQty = GetRefundQuantity(item.SaleItemId);
+                                var lineAmount = selectedQty * item.UnitPrice;
+
+                                <tr>
+                                    <td>
+                                        <strong>@item.ProductName</strong>
+                                        <span>@item.SKU · @item.ProductType</span>
+                                    </td>
+
+                                    <td>@item.QuantitySold.ToString("0.##")</td>
+                                    <td>@item.QuantityAlreadyReturned.ToString("0.##")</td>
+                                    <td>@item.QuantityRemaining.ToString("0.##")</td>
+
+                                    <td>
+                                        <div class="refund-qty-control">
+                                            <input type="number"
+                                                   min="0"
+                                                   step="1"
+                                                   value="@selectedQty"
+                                                   @onchange="(e) => UpdateRefundQuantity(item.SaleItemId, item.QuantityRemaining, e.Value?.ToString())" />
+
+                                            <button type="button" @onclick="() => SetFullRefundQuantity(item.SaleItemId, item.QuantityRemaining)">
+                                                Full
+                                            </button>
+                                        </div>
+                                    </td>
+
+                                    <td>@Money(lineAmount)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="sales-refund-total">
+                    <span>Total Refund</span>
+                    <strong>@Money(RefundSelectedTotal)</strong>
+                </div>
+
+                <div class="sales-modal-actions">
+                    <button type="button" class="sales-ghost-btn" @onclick="CloseRefundModal">Cancel</button>
+
+                    <button type="button"
+                            class="sales-primary-btn"
+                            disabled="@_savingRefund"
+                            @onclick="SaveRefundAsync">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                        @(_savingRefund ? "Processing..." : "Process Refund")
+                    </button>
+                </div>
+            }
         </div>
     </div>
 }
@@ -1653,6 +1888,201 @@
             display: none;
         }
     }
+
+    .sales-mini-btn.refund {
+        color: #7c3aed;
+        background: #f5f3ff;
+        border-color: #ddd6fe;
+    }
+
+    .sales-refund-card {
+        width: 100%;
+        max-width: 980px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+        background: #ffffff;
+        border-radius: 22px;
+        padding: 22px;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, .24);
+    }
+
+    .sales-refund-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding-bottom: 16px;
+        margin-bottom: 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .sales-refund-header span {
+            color: #7c3aed;
+            font-size: .72rem;
+            font-weight: 750;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+        .sales-refund-header h3 {
+            margin: 4px 0 0;
+            color: #0f172a;
+            font-size: 1.1rem;
+            font-weight: 750;
+        }
+
+        .sales-refund-header p {
+            margin: 5px 0 0;
+            color: #64748b;
+            font-size: .84rem;
+        }
+
+    .sales-refund-close {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        color: #64748b;
+    }
+
+    .sales-refund-summary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+        .sales-refund-summary div {
+            padding: 13px;
+            border-radius: 16px;
+            background: #f8fafc;
+            border: 1px solid #e7edf5;
+        }
+
+        .sales-refund-summary span,
+        .sales-refund-summary strong {
+            display: block;
+        }
+
+        .sales-refund-summary span {
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .sales-refund-summary strong {
+            margin-top: 4px;
+            color: #0f172a;
+            font-size: .84rem;
+            font-weight: 720;
+        }
+
+    .sales-refund-options {
+        padding: 14px;
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        display: grid;
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .sales-refund-table-wrap {
+        overflow-x: auto;
+        border: 1px solid #e7edf5;
+        border-radius: 16px;
+    }
+
+    .sales-refund-table {
+        width: 100%;
+        min-width: 760px;
+        border-collapse: collapse;
+    }
+
+        .sales-refund-table th {
+            padding: 12px 14px;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: .7rem;
+            font-weight: 750;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            border-bottom: 1px solid #e7edf5;
+        }
+
+        .sales-refund-table td {
+            padding: 13px 14px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #334155;
+            font-size: .82rem;
+            vertical-align: middle;
+        }
+
+            .sales-refund-table td strong,
+            .sales-refund-table td span {
+                display: block;
+            }
+
+            .sales-refund-table td strong {
+                color: #0f172a;
+                font-size: .84rem;
+            }
+
+            .sales-refund-table td span {
+                margin-top: 2px;
+                color: #64748b;
+                font-size: .72rem;
+            }
+
+    .refund-qty-control {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+        .refund-qty-control input {
+            width: 80px;
+            min-height: 34px;
+            border-radius: 9px;
+            border: 1px solid #e5e7eb;
+            padding: 0 8px;
+        }
+
+        .refund-qty-control button {
+            min-height: 34px;
+            border: 0;
+            border-radius: 9px;
+            padding: 0 10px;
+            background: #eef5ff;
+            color: #2563eb;
+            font-size: .74rem;
+            font-weight: 700;
+        }
+
+    .sales-refund-total {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 0;
+        margin-top: 12px;
+        border-top: 1px solid #edf2f7;
+    }
+
+        .sales-refund-total span {
+            color: #64748b;
+            font-size: .86rem;
+            font-weight: 650;
+        }
+
+        .sales-refund-total strong {
+            color: #0f172a;
+            font-size: 1rem;
+            font-weight: 750;
+        }
+
+    .sales-refund-summary {
+        grid-template-columns: 1fr;
+    }
 </style>
 
 @code {
@@ -1720,6 +2150,7 @@
 
         await LoadProducts();
         await LoadMySalesAsync();
+        await LoadReturnHistoryAsync();
     }
 
     private async Task LoadProducts()
@@ -1735,6 +2166,7 @@
 
         _mySales = await SaleService.GetMySalesAsync(_fromDate, _toDate);
         _salesSummary = await SaleService.GetMySalesSummaryAsync(_fromDate, _toDate);
+        _returnHistory = await RefundService.GetReturnHistoryAsync(_fromDate, _toDate);
 
         _loadingMySales = false;
     }
@@ -2078,5 +2510,138 @@
         _selectedCustomerId = customer.Id;
         _customerName = customer.DisplayName;
         _customerPhone = customer.Phone;
+    }
+
+    private RefundableSaleViewModel? _refundableSale;
+    private CreateRefundRequest _refundRequest = new();
+    private List<SaleReturnHistoryRowViewModel> _returnHistory = new();
+    private Dictionary<int, decimal> _refundQuantities = new();
+
+    private bool _showRefundModal;
+    private bool _loadingRefund;
+    private bool _savingRefund;
+
+    private decimal RefundSelectedTotal =>
+        _refundableSale == null
+            ? 0
+            : _refundableSale.Items.Sum(x => GetRefundQuantity(x.SaleItemId) * x.UnitPrice);
+
+    private async Task LoadReturnHistoryAsync()
+    {
+        _returnHistory = await RefundService.GetReturnHistoryAsync(_fromDate, _toDate);
+    }
+    private bool CanRefundStatus(string status)
+    {
+        return status == "Completed" || status == "Partially Refunded";
+    }
+
+    private async Task OpenRefundModalAsync(int saleId)
+    {
+        _showRefundModal = true;
+        _loadingRefund = true;
+
+        _refundableSale = await RefundService.GetRefundableSaleAsync(saleId);
+
+        _refundRequest = new CreateRefundRequest
+        {
+            SaleId = saleId,
+            ReturnType = "Refund",
+            RefundMethod = "Original Payment",
+            RestockItems = true
+        };
+
+        _refundQuantities = new Dictionary<int, decimal>();
+
+        if (_refundableSale != null)
+        {
+            foreach (var item in _refundableSale.Items)
+            {
+                _refundQuantities[item.SaleItemId] = 0;
+            }
+        }
+
+        _loadingRefund = false;
+    }
+
+    private void CloseRefundModal()
+    {
+        _showRefundModal = false;
+        _refundableSale = null;
+        _refundRequest = new CreateRefundRequest();
+        _refundQuantities.Clear();
+    }
+
+    private decimal GetRefundQuantity(int saleItemId)
+    {
+        return _refundQuantities.TryGetValue(saleItemId, out var qty) ? qty : 0;
+    }
+
+    private void UpdateRefundQuantity(int saleItemId, decimal maxQty, string? value)
+    {
+        if (!decimal.TryParse(value, out var qty))
+        {
+            qty = 0;
+        }
+
+        if (qty < 0)
+        {
+            qty = 0;
+        }
+
+        if (qty > maxQty)
+        {
+            qty = maxQty;
+        }
+
+        _refundQuantities[saleItemId] = qty;
+    }
+
+    private void SetFullRefundQuantity(int saleItemId, decimal maxQty)
+    {
+        _refundQuantities[saleItemId] = maxQty;
+    }
+
+    private async Task SaveRefundAsync()
+    {
+        if (_refundableSale == null)
+        {
+            ShowMessage("Refund sale could not be loaded.", false);
+            return;
+        }
+
+        var items = _refundQuantities
+            .Where(x => x.Value > 0)
+            .Select(x => new CreateRefundItemRequest
+            {
+                SaleItemId = x.Key,
+                Quantity = x.Value
+            })
+            .ToList();
+
+        if (items.Count == 0)
+        {
+            ShowMessage("Select at least one item quantity to refund.", false);
+            return;
+        }
+
+        _savingRefund = true;
+
+        _refundRequest.SaleId = _refundableSale.SaleId;
+        _refundRequest.Items = items;
+
+        var result = await RefundService.CreateRefundAsync(_refundRequest);
+
+        _savingRefund = false;
+
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            CloseRefundModal();
+
+            await LoadProducts();
+            await LoadMySalesAsync();
+            await LoadReturnHistoryAsync();
+        }
     }
 }
