@@ -8,11 +8,14 @@
 @using PosPlatform.Web.Models.Settings
 @using PosPlatform.Web.Services
 @inject SaleService SaleService
+@inject CustomerService CustomerService
 @inject CashierShiftService CashierShiftService
 @inject BusinessSettingsService BusinessSettingsService
 @inject UserAccessService UserAccessService
 @inject NavigationManager NavigationManager
 @using PosPlatform.Web.Models.Shifts
+@using PosPlatform.Web.Models.Customers
+
 
 <PageTitle>Sales</PageTitle>
 
@@ -266,6 +269,27 @@
                 </div>
 
                 <div class="sales-payment-box">
+                    @if (CustomersEnabled)
+                    {
+                        <div class="sales-form-row">
+                            <label>Customer</label>
+                            <select value="@SelectedCustomerValue" @onchange="OnCustomerChanged">
+                                <option value="">Walk-in / No selected customer</option>
+
+                                @foreach (var customer in _customerOptions)
+                                {
+                                    <option value="@customer.Id">
+                                        @customer.DisplayName
+                                        @if (!string.IsNullOrWhiteSpace(customer.Phone))
+                                        {
+                                            @($" · {customer.Phone}")
+                                        }
+                                    </option>
+                                }
+                            </select>
+                        </div>
+                    }
+
                     <div class="sales-form-row">
                         <label>Customer Name @(_settings.RequireCustomerForSale ? "*" : "")</label>
                         <input type="text" @bind="_customerName" placeholder="Customer name" />
@@ -1672,6 +1696,12 @@
     private decimal Change => Math.Max(0, _amountPaid - TotalPreview);
     private bool CartHasAgeRestrictedItems => _cart.Any(x => x.AgeRestricted);
 
+    private List<CustomerOptionViewModel> _customerOptions = new();
+    private int? _selectedCustomerId;
+
+    private bool CustomersEnabled => _settings.CustomersEnabled;
+    private string SelectedCustomerValue => _selectedCustomerId?.ToString() ?? "";
+
     protected override async Task OnInitializedAsync()
     {
         if (!await UserAccessService.CanAccessAsync("sales"))
@@ -1682,6 +1712,11 @@
 
         _settings = await BusinessSettingsService.GetSettingsAsync();
         _openShift = await CashierShiftService.GetOpenShiftAsync();
+
+        if (CustomersEnabled)
+        {
+            _customerOptions = await CustomerService.GetCustomerOptionsAsync();
+        }
 
         await LoadProducts();
         await LoadMySalesAsync();
@@ -1861,6 +1896,7 @@
 
         var request = new CreateSaleRequest
         {
+            CustomerId = _selectedCustomerId,
             PaymentMethod = _paymentMethod,
             CustomerName = _customerName,
             CustomerPhone = _customerPhone,
@@ -1908,6 +1944,7 @@
             _discountAmount = 0;
             _amountPaid = 0;
             _paymentMethod = "Cash";
+            _selectedCustomerId = null;
             _customerName = null;
             _customerPhone = null;
             _saleNotes = null;
@@ -1925,6 +1962,7 @@
         _cart.Clear();
         _discountAmount = 0;
         _amountPaid = 0;
+        _selectedCustomerId = null;
         _customerName = null;
         _customerPhone = null;
         _saleNotes = null;
@@ -2016,5 +2054,29 @@
             .Select(x => x[0].ToString().ToUpper());
 
         return string.Join("", words);
+    }
+    private void OnCustomerChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+
+        if (!int.TryParse(value, out var customerId))
+        {
+            _selectedCustomerId = null;
+            _customerName = null;
+            _customerPhone = null;
+            return;
+        }
+
+        var customer = _customerOptions.FirstOrDefault(x => x.Id == customerId);
+
+        if (customer == null)
+        {
+            _selectedCustomerId = null;
+            return;
+        }
+
+        _selectedCustomerId = customer.Id;
+        _customerName = customer.DisplayName;
+        _customerPhone = customer.Phone;
     }
 }

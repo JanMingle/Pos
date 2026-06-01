@@ -111,6 +111,37 @@ namespace PosPlatform.Web.Services
             var taxEnabled = settings?.TaxEnabled ?? false;
             var taxRate = settings?.TaxRate ?? 0;
 
+            Customer? selectedCustomer = null;
+
+            if (request.CustomerId.HasValue && request.CustomerId.Value > 0)
+            {
+                selectedCustomer = await _db.Customers
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x =>
+                        x.Id == request.CustomerId.Value &&
+                        x.TenantId == tenantId.Value &&
+                        x.IsActive);
+
+                if (selectedCustomer == null)
+                {
+                    return Fail("Selected customer could not be found or is inactive.");
+                }
+            }
+
+            var requestCustomerName = Clean(request.CustomerName);
+            var requestCustomerPhone = Clean(request.CustomerPhone);
+
+            if (requireCustomerForSale && selectedCustomer == null && string.IsNullOrWhiteSpace(requestCustomerName))
+            {
+                return Fail("Customer is required for this business.");
+            }
+
+            var finalCustomerName = selectedCustomer != null
+                ? GetCustomerDisplayName(selectedCustomer)
+                : requestCustomerName;
+
+            var finalCustomerPhone = selectedCustomer?.Phone ?? requestCustomerPhone;
+
             if (request.Items.Count == 0)
             {
                 return Fail("Add at least one item before completing the sale.");
@@ -192,8 +223,10 @@ namespace PosPlatform.Web.Services
                     BranchId = branchId,
                     CashierUserId = cashierUserId,
                     CashierName = cashierName,
-                    CustomerName = Clean(request.CustomerName),
-                    CustomerPhone = Clean(request.CustomerPhone),
+
+                    CustomerId = selectedCustomer?.Id,
+                    CustomerName = finalCustomerName,
+                    CustomerPhone = finalCustomerPhone,
                     Notes = Clean(request.Notes),
                     SaleNumber = $"SALE-{DateTime.UtcNow:yyyyMMddHHmmssfff}",
                     PaymentMethod = string.IsNullOrWhiteSpace(request.PaymentMethod) ? "Cash" : request.PaymentMethod.Trim(),
@@ -350,6 +383,7 @@ namespace PosPlatform.Web.Services
                 SaleNumber = sale.SaleNumber,
                 CreatedAt = sale.CreatedAt,
                 CashierName = sale.CashierName ?? "-",
+                CustomerId = sale.CustomerId,
                 CustomerName = sale.CustomerName,
                 CustomerPhone = sale.CustomerPhone,
                 PaymentMethod = sale.PaymentMethod,
@@ -479,6 +513,22 @@ namespace PosPlatform.Web.Services
                 ?? user?.Identity?.Name
                 ?? user?.FindFirstValue(ClaimTypes.Email)
                 ?? "Cashier";
+        }
+
+        private static string GetCustomerDisplayName(Customer customer)
+        {
+            if (customer.CustomerType == "Business")
+            {
+                return string.IsNullOrWhiteSpace(customer.BusinessName)
+                    ? "Business Customer"
+                    : customer.BusinessName.Trim();
+            }
+
+            var fullName = $"{customer.FirstName} {customer.LastName}".Trim();
+
+            return string.IsNullOrWhiteSpace(fullName)
+                ? "Customer"
+                : fullName;
         }
 
         private static string? Clean(string? value)

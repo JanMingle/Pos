@@ -22,6 +22,8 @@ namespace PosPlatform.Web.Models.Sales
 
     public class CreateSaleRequest
     {
+
+        public int? CustomerId { get; set; }
         public string PaymentMethod { get; set; } = "Cash";
 
         public string? CustomerName { get; set; }
@@ -83,9 +85,13 @@ namespace PosPlatform.Web.Models.Sales
 
     public class SaleReceiptViewModel
     {
+
+
         public int SaleId { get; set; }
         public string SaleNumber { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
+
+        public int? CustomerId { get; set; }
 
         public string CashierName { get; set; } = "-";
         public string? CustomerName { get; set; }
