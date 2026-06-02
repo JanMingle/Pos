@@ -50,6 +50,16 @@ namespace PosPlatform.Web.Services
                 .OrderByDescending(x => x.CreatedAt)
                 .ToListAsync();
 
+            var purchases = await _db.StockPurchases
+    .AsNoTracking()
+    .Include(x => x.Supplier)
+    .Where(x =>
+        x.TenantId == tenantId.Value &&
+        x.PurchaseDate >= from &&
+        x.PurchaseDate < toExclusive)
+    .OrderByDescending(x => x.PurchaseDate)
+    .ToListAsync();
+
             var products = await _db.Products
                 .AsNoTracking()
                 .Where(x =>
@@ -99,6 +109,39 @@ namespace PosPlatform.Web.Services
             var grossSales = sales.Sum(x => x.TotalAmount);
             var totalRefunds = saleReturns.Sum(x => x.TotalRefundAmount);
             var netSales = grossSales - totalRefunds;
+
+            var costOfGoodsSold = sales
+    .SelectMany(x => x.SaleItems)
+    .Sum(x => x.CostTotal);
+
+            var refundedCost = saleReturns
+                .SelectMany(x => x.SaleReturnItems)
+                .Sum(x => x.CostTotal);
+
+            var netCostOfGoodsSold = costOfGoodsSold - refundedCost;
+
+            var grossProfit = netSales - netCostOfGoodsSold;
+
+            var grossProfitMargin = netSales <= 0
+                ? 0
+                : Math.Round((grossProfit / netSales) * 100, 2);
+
+            var purchaseCount = purchases.Count;
+            var purchaseSubtotal = purchases.Sum(x => x.Subtotal);
+            var purchaseTax = purchases.Sum(x => x.TaxAmount);
+            var purchaseTotal = purchases.Sum(x => x.TotalAmount);
+
+            var topSuppliers = purchases
+                .GroupBy(x => x.Supplier != null ? x.Supplier.SupplierName : "Supplier")
+                .Select(g => new ReportSupplierPurchaseRow
+                {
+                    SupplierName = g.Key,
+                    Purchases = g.Count(),
+                    TotalSpent = g.Sum(x => x.TotalAmount)
+                })
+                .OrderByDescending(x => x.TotalSpent)
+                .Take(10)
+                .ToList();
 
             var salesByPayment = sales
                 .GroupBy(x => string.IsNullOrWhiteSpace(x.PaymentMethod) ? "Unknown" : x.PaymentMethod)
@@ -350,7 +393,19 @@ namespace PosPlatform.Web.Services
                 TopCustomers = topCustomers,
                 Shifts = shiftRows,
                 RecentSales = recentSales,
-                RecentRefunds = recentRefunds
+                RecentRefunds = recentRefunds,
+
+                CostOfGoodsSold = costOfGoodsSold,
+                RefundedCost = refundedCost,
+                NetCostOfGoodsSold = netCostOfGoodsSold,
+                GrossProfit = grossProfit,
+                GrossProfitMargin = grossProfitMargin,
+
+                PurchaseCount = purchaseCount,
+                PurchaseSubtotal = purchaseSubtotal,
+                PurchaseTax = purchaseTax,
+                PurchaseTotal = purchaseTotal,
+                TopSuppliers = topSuppliers
             };
         }
 

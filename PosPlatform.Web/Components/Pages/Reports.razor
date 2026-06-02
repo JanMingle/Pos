@@ -73,9 +73,34 @@
                 <strong>@Money(_dashboard.NetSales)</strong>
             </div>
 
+            <div class="reports-summary-card green">
+                <span>Gross Profit</span>
+                <strong>@Money(_dashboard.GrossProfit)</strong>
+            </div>
+
+            <div class="reports-summary-card teal">
+                <span>Profit Margin</span>
+                <strong>@_dashboard.GrossProfitMargin.ToString("0.##")%</strong>
+            </div>
+
+            <div class="reports-summary-card amber">
+                <span>Cost of Goods</span>
+                <strong>@Money(_dashboard.NetCostOfGoodsSold)</strong>
+            </div>
+
             <div class="reports-summary-card">
                 <span>Gross Sales</span>
                 <strong>@Money(_dashboard.GrossSales)</strong>
+            </div>
+
+            <div class="reports-summary-card violet">
+                <span>Purchases</span>
+                <strong>@Money(_dashboard.PurchaseTotal)</strong>
+            </div>
+
+            <div class="reports-summary-card">
+                <span>Purchase Count</span>
+                <strong>@_dashboard.PurchaseCount</strong>
             </div>
 
             <div class="reports-summary-card red">
@@ -129,6 +154,68 @@
             </div>
         </div>
 
+        <div class="reports-panel">
+            <div class="reports-panel-header">
+                <div>
+                    <h2>Profit Breakdown</h2>
+                    <p>Sales minus refunds and item costs.</p>
+                </div>
+            </div>
+
+            <div class="reports-list">
+                <div class="reports-list-row">
+                    <div>
+                        <strong>Gross Sales</strong>
+                        <span>Total sales before refunds.</span>
+                    </div>
+                    <strong>@Money(_dashboard.GrossSales)</strong>
+                </div>
+
+                <div class="reports-list-row">
+                    <div>
+                        <strong>Refunds / Returns</strong>
+                        <span>Refunded sales value.</span>
+                    </div>
+                    <strong class="reports-negative">@Money(_dashboard.TotalRefunds)</strong>
+                </div>
+
+                <div class="reports-list-row">
+                    <div>
+                        <strong>Net Sales</strong>
+                        <span>Gross sales minus refunds.</span>
+                    </div>
+                    <strong>@Money(_dashboard.NetSales)</strong>
+                </div>
+
+                <div class="reports-list-row">
+                    <div>
+                        <strong>Cost of Goods Sold</strong>
+                        <span>Cost of items sold, after returned cost.</span>
+                    </div>
+                    <strong class="reports-negative">@Money(_dashboard.NetCostOfGoodsSold)</strong>
+                </div>
+
+                <div class="reports-list-row">
+                    <div>
+                        <strong>Gross Profit</strong>
+                        <span>Net sales minus net cost.</span>
+                    </div>
+                    <strong class="@( _dashboard.GrossProfit >= 0 ? "difference-good" : "difference-bad" )">
+                        @Money(_dashboard.GrossProfit)
+                    </strong>
+                </div>
+
+
+                <div class="reports-list-row">
+                    <div>
+                        <strong>Profit Margin</strong>
+                        <span>Gross profit as a percentage of net sales.</span>
+                    </div>
+                    <strong>@_dashboard.GrossProfitMargin.ToString("0.##")%</strong>
+                </div>
+            </div>
+        </div>
+
         <div class="reports-grid">
             <div class="reports-panel">
                 <div class="reports-panel-header">
@@ -158,6 +245,36 @@
                                     <span>Refunds: <strong>@Money(item.RefundAmount)</strong></span>
                                     <span>Net: <strong>@Money(item.NetAmount)</strong></span>
                                 </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="reports-panel">
+                <div class="reports-panel-header">
+                    <div>
+                        <h2>Top Suppliers</h2>
+                        <p>Supplier spending in the selected period.</p>
+                    </div>
+                </div>
+
+                @if (_dashboard.TopSuppliers.Count == 0)
+                {
+                    <ReportsEmpty Text="No supplier purchases found." />
+                }
+                else
+                {
+                    <div class="reports-list">
+                        @foreach (var supplier in _dashboard.TopSuppliers)
+                        {
+                            <div class="reports-list-row">
+                                <div>
+                                    <strong>@supplier.SupplierName</strong>
+                                    <span>@supplier.Purchases purchase@(supplier.Purchases == 1 ? "" : "s")</span>
+                                </div>
+
+                                <strong>@Money(supplier.TotalSpent)</strong>
                             </div>
                         }
                     </div>

@@ -292,6 +292,12 @@ namespace PosPlatform.Infrastructure.Data
                       .WithMany()
                       .HasForeignKey(x => x.ProductId)
                       .OnDelete(DeleteBehavior.Restrict);
+
+                entity.Property(x => x.UnitCost)
+      .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.CostTotal)
+                      .HasColumnType("decimal(18,2)");
             });
 
             builder.Entity<StockMovement>(entity =>
@@ -614,6 +620,12 @@ namespace PosPlatform.Infrastructure.Data
                       .WithMany()
                       .HasForeignKey(x => x.ProductId)
                       .OnDelete(DeleteBehavior.Restrict);
+
+                entity.Property(x => x.UnitCost)
+      .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.CostTotal)
+                      .HasColumnType("decimal(18,2)");
             });
             builder.Entity<Supplier>(entity =>
             {
@@ -748,6 +760,7 @@ namespace PosPlatform.Infrastructure.Data
                       .HasForeignKey(x => x.ProductId)
                       .OnDelete(DeleteBehavior.Restrict);
             });
+
         }
     }
 }

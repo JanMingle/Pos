@@ -267,6 +267,9 @@ namespace PosPlatform.Web.Services
                     var unitPrice = product.SellingPrice;
                     var lineTotal = item.Quantity * unitPrice;
 
+                    var unitCost = product.CostPrice;
+                    var costTotal = item.Quantity * unitCost;
+
                     _db.SaleItems.Add(new SaleItem
                     {
                         SaleId = sale.Id,
@@ -276,6 +279,10 @@ namespace PosPlatform.Web.Services
                         Quantity = item.Quantity,
                         UnitPrice = unitPrice,
                         LineTotal = lineTotal,
+
+                        UnitCost = unitCost,
+                        CostTotal = costTotal,
+
                         CreatedAt = DateTime.UtcNow
                     });
 

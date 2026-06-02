@@ -41,6 +41,19 @@
         public List<ReportShiftRow> Shifts { get; set; } = new();
         public List<ReportRecentSaleRow> RecentSales { get; set; } = new();
         public List<ReportRecentRefundRow> RecentRefunds { get; set; } = new();
+
+        public decimal CostOfGoodsSold { get; set; }
+        public decimal RefundedCost { get; set; }
+        public decimal NetCostOfGoodsSold { get; set; }
+        public decimal GrossProfit { get; set; }
+        public decimal GrossProfitMargin { get; set; }
+
+        public int PurchaseCount { get; set; }
+        public decimal PurchaseSubtotal { get; set; }
+        public decimal PurchaseTax { get; set; }
+        public decimal PurchaseTotal { get; set; }
+
+        public List<ReportSupplierPurchaseRow> TopSuppliers { get; set; } = new();
     }
 
     public class ReportPaymentMethodRow
@@ -138,4 +151,11 @@
         public decimal TotalRefundAmount { get; set; }
         public string Status { get; set; } = string.Empty;
     }
+}
+
+public class ReportSupplierPurchaseRow
+{
+    public string SupplierName { get; set; } = string.Empty;
+    public int Purchases { get; set; }
+    public decimal TotalSpent { get; set; }
 }

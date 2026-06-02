@@ -18,5 +18,8 @@
         public decimal LineTotal { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public decimal UnitCost { get; set; }
+        public decimal CostTotal { get; set; }
     }
 }

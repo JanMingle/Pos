@@ -281,6 +281,9 @@ namespace PosPlatform.Web.Services
                     var unitOfMeasure = product?.UnitOfMeasure;
 
                     var lineTotal = requestItem.Quantity * saleItem.UnitPrice;
+                    var unitCost = saleItem.UnitCost;
+                    var costTotal = requestItem.Quantity * unitCost;
+
                     refundTotal += lineTotal;
 
                     _db.SaleReturnItems.Add(new SaleReturnItem
@@ -293,6 +296,10 @@ namespace PosPlatform.Web.Services
                         Quantity = requestItem.Quantity,
                         UnitPrice = saleItem.UnitPrice,
                         LineTotal = lineTotal,
+
+                        UnitCost = unitCost,
+                        CostTotal = costTotal,
+
                         TrackStock = trackStock,
                         ProductType = productType,
                         UnitOfMeasure = unitOfMeasure,
