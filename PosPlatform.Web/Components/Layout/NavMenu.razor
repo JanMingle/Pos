@@ -110,6 +110,14 @@
             </NavLink>
         }
 
+        @if (_canExpenses)
+        {
+            <NavLink href="/expenses" class="pos-nav-link">
+                <span class="pos-nav-icon"><i class="bi bi-wallet2"></i></span>
+                <span class="pos-nav-text">Expenses</span>
+            </NavLink>
+        }
+
         @if (_canSettings)
         {
             <NavLink href="/settings" class="pos-nav-link">
@@ -145,6 +153,7 @@
     private bool _canCustomers;
     private bool _canSuppliers;
     private bool _canStockPurchases;
+    private bool _canExpenses;
 
     protected override async Task OnInitializedAsync()
     {
@@ -161,5 +170,6 @@
         _canCustomers = await UserAccessService.CanAccessAsync("customers");
         _canSuppliers = await UserAccessService.CanAccessAsync("suppliers");
         _canStockPurchases = await UserAccessService.CanAccessAsync("stock-purchases");
+        _canExpenses = await UserAccessService.CanAccessAsync("expenses");
     }
 }

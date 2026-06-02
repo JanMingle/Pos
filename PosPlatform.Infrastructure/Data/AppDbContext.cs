@@ -46,6 +46,9 @@ namespace PosPlatform.Infrastructure.Data
         public DbSet<StockPurchase> StockPurchases => Set<StockPurchase>();
         public DbSet<StockPurchaseItem> StockPurchaseItems => Set<StockPurchaseItem>();
 
+        public DbSet<ExpenseCategory> ExpenseCategories => Set<ExpenseCategory>();
+        public DbSet<Expense> Expenses => Set<Expense>();
+
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -758,6 +761,91 @@ namespace PosPlatform.Infrastructure.Data
                 entity.HasOne(x => x.Product)
                       .WithMany()
                       .HasForeignKey(x => x.ProductId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            builder.Entity<ExpenseCategory>(entity =>
+            {
+                entity.ToTable("ExpenseCategories");
+
+                entity.Property(x => x.CategoryName)
+                      .HasMaxLength(120)
+                      .IsRequired();
+
+                entity.Property(x => x.Description)
+                      .HasMaxLength(300);
+
+                entity.HasIndex(x => new { x.TenantId, x.CategoryName });
+
+                entity.HasOne(x => x.Tenant)
+                      .WithMany()
+                      .HasForeignKey(x => x.TenantId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Branch)
+                      .WithMany()
+                      .HasForeignKey(x => x.BranchId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            builder.Entity<Expense>(entity =>
+            {
+                entity.ToTable("Expenses");
+
+                entity.Property(x => x.ExpenseNumber)
+                      .HasMaxLength(80)
+                      .IsRequired();
+
+                entity.Property(x => x.VendorName)
+                      .HasMaxLength(150);
+
+                entity.Property(x => x.ReferenceNumber)
+                      .HasMaxLength(100);
+
+                entity.Property(x => x.PaymentMethod)
+                      .HasMaxLength(50)
+                      .IsRequired();
+
+                entity.Property(x => x.Status)
+                      .HasMaxLength(40)
+                      .IsRequired();
+
+                entity.Property(x => x.Notes)
+                      .HasMaxLength(500);
+
+                entity.Property(x => x.CreatedByName)
+                      .HasMaxLength(150)
+                      .IsRequired();
+
+                entity.Property(x => x.Subtotal)
+                      .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.TaxAmount)
+                      .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.TotalAmount)
+                      .HasColumnType("decimal(18,2)");
+
+                entity.HasIndex(x => new { x.TenantId, x.ExpenseNumber }).IsUnique();
+
+                entity.HasOne(x => x.Tenant)
+                      .WithMany()
+                      .HasForeignKey(x => x.TenantId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Branch)
+                      .WithMany()
+                      .HasForeignKey(x => x.BranchId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.ExpenseCategory)
+                      .WithMany(x => x.Expenses)
+                      .HasForeignKey(x => x.ExpenseCategoryId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.CreatedByUser)
+                      .WithMany()
+                      .HasForeignKey(x => x.CreatedByUserId)
                       .OnDelete(DeleteBehavior.Restrict);
             });
 

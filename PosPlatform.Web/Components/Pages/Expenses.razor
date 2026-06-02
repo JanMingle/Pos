@@ -1,0 +1,744 @@
+﻿@page "/expenses"
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@layout MainLayout
+@attribute [Authorize]
+@using PosPlatform.Web.Components.Layout
+@using PosPlatform.Web.Models.Settings
+@using PosPlatform.Web.Models.Expenses
+@using PosPlatform.Web.Services
+@inject ExpenseService ExpenseService
+@inject BusinessSettingsService BusinessSettingsService
+@inject UserAccessService UserAccessService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Expenses</PageTitle>
+
+<section class="expenses-page">
+    <div class="expenses-header">
+        <div>
+            <div class="expenses-kicker">
+                <i class="bi bi-wallet2"></i>
+                Business expenses
+            </div>
+            <h1>Expenses</h1>
+            <p>Record rent, salaries, transport, electricity, internet, marketing and other business costs.</p>
+        </div>
+
+        <div class="expenses-header-actions">
+            <button type="button" class="expenses-secondary-btn" @onclick="OpenCategoryModal">
+                <i class="bi bi-tags"></i>
+                Add Category
+            </button>
+
+            <button type="button" class="expenses-primary-btn" @onclick="OpenExpenseModal">
+                <i class="bi bi-plus-lg"></i>
+                Add Expense
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="expenses-alert @(_isSuccess ? "success" : "danger")">
+            <i class="bi @(_isSuccess ? "bi-check-circle" : "bi-exclamation-triangle")"></i>
+            <span>@_message</span>
+            <button type="button" @onclick="ClearMessage">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    }
+
+    <div class="expenses-settings-strip">
+        <div>
+            <span>Business</span>
+            <strong>@_settings.BusinessName</strong>
+        </div>
+
+        <div>
+            <span>Business Type</span>
+            <strong>@_settings.BusinessType</strong>
+        </div>
+
+        <div>
+            <span>Currency</span>
+            <strong>@_settings.CurrencyCode · @_settings.CurrencySymbol</strong>
+        </div>
+
+        <div>
+            <span>Expense Categories</span>
+            <strong>@_categories.Count total</strong>
+        </div>
+    </div>
+
+    <div class="expenses-summary-grid">
+        <div class="expenses-summary-card dark">
+            <span>Total Expenses</span>
+            <strong>@Money(TotalExpenses)</strong>
+        </div>
+
+        <div class="expenses-summary-card">
+            <span>Expense Count</span>
+            <strong>@_expenses.Count</strong>
+        </div>
+
+        <div class="expenses-summary-card amber">
+            <span>Tax Amount</span>
+            <strong>@Money(TotalTax)</strong>
+        </div>
+
+        <div class="expenses-summary-card green">
+            <span>Active Categories</span>
+            <strong>@_categories.Count(x => x.IsActive)</strong>
+        </div>
+    </div>
+
+    <div class="expenses-grid">
+        <div class="expenses-panel">
+            <div class="expenses-panel-header">
+                <div>
+                    <h2>Expense Records</h2>
+                    <p>Filter and manage recorded business expenses.</p>
+                </div>
+
+                <div class="expenses-date-filters">
+                    <input type="date" @bind="_fromDate" />
+                    <input type="date" @bind="_toDate" />
+
+                    <div class="expenses-search small-search">
+                        <i class="bi bi-search"></i>
+                        <input @bind="_expenseSearch"
+                               @bind:event="oninput"
+                               placeholder="Search expense" />
+                    </div>
+
+                    <button type="button" class="expenses-secondary-btn" @onclick="LoadExpensesAsync">
+                        Filter
+                    </button>
+                </div>
+            </div>
+
+            @if (_loadingExpenses)
+            {
+                <div class="expenses-empty">
+                    <strong>Loading expenses...</strong>
+                    <span>Please wait.</span>
+                </div>
+            }
+            else if (_expenses.Count == 0)
+            {
+                <div class="expenses-empty">
+                    <strong>No expenses found</strong>
+                    <span>Add your first expense or change the selected date range.</span>
+                </div>
+            }
+            else
+            {
+                <div class="expenses-table-wrap">
+                    <table class="expenses-table">
+                        <thead>
+                            <tr>
+                                <th>Expense No.</th>
+                                <th>Date</th>
+                                <th>Category</th>
+                                <th>Vendor</th>
+                                <th>Reference</th>
+                                <th>Payment</th>
+                                <th>Subtotal</th>
+                                <th>Tax</th>
+                                <th>Total</th>
+                                <th>Created By</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var expense in _expenses)
+                            {
+                                <tr>
+                                    <td>@expense.ExpenseNumber</td>
+                                    <td>@expense.ExpenseDate.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                                    <td>@expense.CategoryName</td>
+                                    <td>@(string.IsNullOrWhiteSpace(expense.VendorName) ? "-" : expense.VendorName)</td>
+                                    <td>@(string.IsNullOrWhiteSpace(expense.ReferenceNumber) ? "-" : expense.ReferenceNumber)</td>
+                                    <td>@expense.PaymentMethod</td>
+                                    <td>@Money(expense.Subtotal)</td>
+                                    <td>@Money(expense.TaxAmount)</td>
+                                    <td class="expenses-strong">@Money(expense.TotalAmount)</td>
+                                    <td>@expense.CreatedByName</td>
+                                    <td class="text-end">
+                                        <div class="expenses-actions">
+                                            <button type="button" class="expenses-mini-btn edit" @onclick="() => EditExpenseAsync(expense.Id)">
+                                                <i class="bi bi-pencil"></i>
+                                                Edit
+                                            </button>
+
+                                            <button type="button" class="expenses-mini-btn delete" @onclick="() => DeleteExpenseAsync(expense.Id)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <div class="expenses-panel">
+            <div class="expenses-panel-header">
+                <div>
+                    <h2>Categories</h2>
+                    <p>Organise expenses for cleaner reports.</p>
+                </div>
+            </div>
+
+            <div class="expenses-category-filters">
+                <div class="expenses-search">
+                    <i class="bi bi-search"></i>
+                    <input @bind="_categorySearch"
+                           @bind:event="oninput"
+                           placeholder="Search category" />
+                </div>
+
+                <select class="expenses-input" @bind="_categoryStatus">
+                    <option value="all">All</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                </select>
+
+                <button type="button" class="expenses-secondary-btn" @onclick="LoadCategoriesAsync">
+                    Apply
+                </button>
+            </div>
+
+            @if (_loadingCategories)
+            {
+                <div class="expenses-empty">
+                    <strong>Loading categories...</strong>
+                    <span>Please wait.</span>
+                </div>
+            }
+            else if (_categories.Count == 0)
+            {
+                <div class="expenses-empty">
+                    <strong>No categories found</strong>
+                    <span>Create categories such as Rent, Salaries, Internet and Transport.</span>
+                </div>
+            }
+            else
+            {
+                <div class="expenses-category-list">
+                    @foreach (var category in _categories)
+                    {
+                        <div class="expenses-category-card">
+                            <div>
+                                <strong>@category.CategoryName</strong>
+                                <span>@(string.IsNullOrWhiteSpace(category.Description) ? "No description" : category.Description)</span>
+                                <small>@category.ExpenseCount expense@(category.ExpenseCount == 1 ? "" : "s") · @Money(category.TotalSpent)</small>
+                            </div>
+
+                            <div class="expenses-category-actions">
+                                <span class="expenses-status-pill @(category.IsActive ? "active" : "inactive")">
+                                    @(category.IsActive ? "Active" : "Inactive")
+                                </span>
+
+                                <button type="button" @onclick="() => EditCategoryAsync(category.Id)">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+
+                                <button type="button" @onclick="() => ToggleCategoryAsync(category.Id)">
+                                    <i class="bi @(category.IsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
+                                </button>
+
+                                <button type="button" class="danger" @onclick="() => DeleteCategoryAsync(category.Id)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</section>
+
+@if (_showExpenseModal)
+{
+    <div class="expenses-modal-backdrop">
+        <div class="expenses-modal">
+            <div class="expenses-modal-header">
+                <div>
+                    <span>Expense record</span>
+                    <h4>@(_expenseForm.Id.HasValue ? "Edit Expense" : "Add Expense")</h4>
+                    <p>Capture real business costs so reports can calculate net profit.</p>
+                </div>
+
+                <button type="button" class="expenses-close-btn" @onclick="CloseExpenseModal">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <EditForm Model="_expenseForm" OnValidSubmit="SaveExpenseAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="expenses-validation" />
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="expenses-label">Category</label>
+                        <InputSelect class="expenses-input" @bind-Value="_expenseForm.ExpenseCategoryId">
+                            <option value="0">Select category</option>
+                            @foreach (var category in _categoryOptions)
+                            {
+                                <option value="@category.Id">@category.CategoryName</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="expenses-label">Expense Date</label>
+                        <InputDate class="expenses-input" @bind-Value="_expenseForm.ExpenseDate" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="expenses-label">Vendor / Paid To</label>
+                        <InputText class="expenses-input" @bind-Value="_expenseForm.VendorName" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="expenses-label">Reference Number</label>
+                        <InputText class="expenses-input" @bind-Value="_expenseForm.ReferenceNumber" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="expenses-label">Payment Method</label>
+                        <InputSelect class="expenses-input" @bind-Value="_expenseForm.PaymentMethod">
+                            <option value="Cash">Cash</option>
+                            <option value="Card">Card</option>
+                            <option value="EFT">EFT</option>
+                            <option value="Bank Transfer">Bank Transfer</option>
+                            <option value="Debit Order">Debit Order</option>
+                        </InputSelect>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="expenses-label">Subtotal (@CurrencyLabel)</label>
+                        <InputNumber class="expenses-input" @bind-Value="_expenseForm.Subtotal" />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="expenses-label">Tax (@CurrencyLabel)</label>
+                        <InputNumber class="expenses-input" @bind-Value="_expenseForm.TaxAmount" />
+                    </div>
+
+                    <div class="col-12">
+                        <div class="expenses-total-preview">
+                            <span>Total Expense</span>
+                            <strong>@Money(_expenseForm.Subtotal + _expenseForm.TaxAmount)</strong>
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="expenses-label">Notes</label>
+                        <InputTextArea class="expenses-input expenses-textarea" @bind-Value="_expenseForm.Notes" />
+                    </div>
+                </div>
+
+                <div class="expenses-modal-actions">
+                    <button type="button" class="expenses-ghost-btn" @onclick="CloseExpenseModal">Cancel</button>
+                    <button type="submit" class="expenses-primary-btn" disabled="@_savingExpense">
+                        <i class="bi bi-check2-circle"></i>
+                        @(_savingExpense ? "Saving..." : "Save Expense")
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@if (_showCategoryModal)
+{
+    <div class="expenses-modal-backdrop">
+        <div class="expenses-modal small">
+            <div class="expenses-modal-header">
+                <div>
+                    <span>Expense category</span>
+                    <h4>@(_categoryForm.Id.HasValue ? "Edit Category" : "Add Category")</h4>
+                    <p>Create categories such as Rent, Salaries, Internet, Transport and Marketing.</p>
+                </div>
+
+                <button type="button" class="expenses-close-btn" @onclick="CloseCategoryModal">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <EditForm Model="_categoryForm" OnValidSubmit="SaveCategoryAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="expenses-validation" />
+
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="expenses-label">Category Name</label>
+                        <InputText class="expenses-input" @bind-Value="_categoryForm.CategoryName" />
+                    </div>
+
+                    <div class="col-12">
+                        <label class="expenses-label">Description</label>
+                        <InputTextArea class="expenses-input expenses-textarea" @bind-Value="_categoryForm.Description" />
+                    </div>
+
+                    <div class="col-12">
+                        <label class="expenses-check">
+                            <InputCheckbox @bind-Value="_categoryForm.IsActive" />
+                            <span>
+                                <strong>Active category</strong>
+                                <small>Allow this category to be selected for new expenses.</small>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="expenses-modal-actions">
+                    <button type="button" class="expenses-ghost-btn" @onclick="CloseCategoryModal">Cancel</button>
+                    <button type="submit" class="expenses-primary-btn" disabled="@_savingCategory">
+                        <i class="bi bi-check2-circle"></i>
+                        @(_savingCategory ? "Saving..." : "Save Category")
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+<style>
+    .expenses-page { animation: expensesIn .22s ease both; }
+    .expenses-header { display:flex; justify-content:space-between; align-items:flex-end; gap:18px; margin-bottom:18px; }
+    .expenses-kicker { display:inline-flex; align-items:center; gap:8px; color:#2563eb; font-size:.74rem; font-weight:750; letter-spacing:.06em; text-transform:uppercase; margin-bottom:8px; }
+    .expenses-header h1 { margin:0; color:#0f172a; font-size:1.45rem; font-weight:680; letter-spacing:-.03em; }
+    .expenses-header p { margin:6px 0 0; color:#64748b; font-size:.88rem; }
+    .expenses-header-actions { display:flex; gap:10px; flex-wrap:wrap; }
+
+    .expenses-primary-btn,.expenses-secondary-btn,.expenses-ghost-btn,.expenses-mini-btn {
+        min-height:38px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; gap:8px;
+        padding:0 14px; font-size:.8rem; font-weight:650; border:0; white-space:nowrap;
+    }
+    .expenses-primary-btn { color:#fff; background:#111827; box-shadow:0 12px 24px rgba(15,23,42,.14); }
+    .expenses-secondary-btn { color:#2563eb; background:#eef5ff; }
+    .expenses-ghost-btn { color:#475569; background:#fff; border:1px solid #e5e7eb; }
+    .expenses-mini-btn { min-height:30px; padding:0 10px; border:1px solid; font-size:.74rem; }
+    .expenses-mini-btn.edit { color:#2563eb; background:#eff6ff; border-color:#bfdbfe; }
+    .expenses-mini-btn.delete { color:#dc2626; background:#fef2f2; border-color:#fecaca; }
+
+    .expenses-alert { display:flex; align-items:center; gap:10px; padding:12px 14px; margin-bottom:16px; border-radius:14px; font-size:.84rem; font-weight:600; border:1px solid; }
+    .expenses-alert.success { color:#166534; background:#f0fdf4; border-color:#bbf7d0; }
+    .expenses-alert.danger { color:#991b1b; background:#fef2f2; border-color:#fecaca; }
+    .expenses-alert span { flex:1; }
+    .expenses-alert button { border:0; background:transparent; color:inherit; }
+
+    .expenses-settings-strip,.expenses-summary-grid { display:grid; gap:10px; margin-bottom:16px; }
+    .expenses-settings-strip { grid-template-columns:repeat(4,minmax(0,1fr)); }
+    .expenses-summary-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+    .expenses-settings-strip div,.expenses-summary-card {
+        padding:13px; border-radius:16px; background:#fff; border:1px solid #e7edf5; box-shadow:0 12px 28px rgba(15,23,42,.04);
+    }
+    .expenses-summary-card { padding:16px; }
+    .expenses-settings-strip span,.expenses-settings-strip strong,.expenses-summary-card span,.expenses-summary-card strong { display:block; }
+    .expenses-settings-strip span,.expenses-summary-card span { color:#64748b; font-size:.72rem; font-weight:650; }
+    .expenses-settings-strip strong,.expenses-summary-card strong { margin-top:4px; color:#0f172a; font-size:.88rem; font-weight:720; }
+    .expenses-summary-card strong { font-size:1.08rem; }
+    .expenses-summary-card.dark { background:#111827; border-color:#111827; }
+    .expenses-summary-card.dark span,.expenses-summary-card.dark strong { color:#fff; }
+    .expenses-summary-card.green strong { color:#16a34a; }
+    .expenses-summary-card.amber strong { color:#d97706; }
+
+    .expenses-grid { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(320px,.6fr); gap:16px; align-items:start; }
+    .expenses-panel { background:#fff; border:1px solid #e7edf5; border-radius:20px; box-shadow:0 16px 34px rgba(15,23,42,.055); overflow:hidden; }
+    .expenses-panel-header { padding:17px 18px; border-bottom:1px solid #edf2f7; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    .expenses-panel-header h2 { margin:0; color:#0f172a; font-size:.92rem; font-weight:720; }
+    .expenses-panel-header p { margin:4px 0 0; color:#94a3b8; font-size:.76rem; }
+
+    .expenses-date-filters,.expenses-category-filters { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:0; }
+    .expenses-category-filters { padding:14px 18px; border-bottom:1px solid #edf2f7; }
+    .expenses-date-filters input[type="date"] { min-height:38px; border-radius:10px; border:1px solid #e5e7eb; padding:0 10px; font-size:.82rem; }
+    .expenses-search { min-height:38px; display:flex; align-items:center; gap:10px; padding:0 12px; border-radius:10px; background:#f8fafc; border:1px solid #e5e7eb; color:#94a3b8; }
+    .expenses-search input { border:0; outline:none; background:transparent; color:#0f172a; font-size:.84rem; }
+    .small-search { width:230px; }
+
+    .expenses-input { width:100%; min-height:40px; border-radius:12px; border:1px solid #e5e7eb; background:#fff; color:#0f172a; padding:0 12px; font-size:.84rem; outline:none; }
+    .expenses-textarea { min-height:86px; padding-top:10px; resize:vertical; }
+    .expenses-label { display:block; margin-bottom:6px; color:#475569; font-size:.77rem; font-weight:700; }
+
+    .expenses-table-wrap { overflow-x:auto; }
+    .expenses-table { width:100%; min-width:1050px; border-collapse:collapse; }
+    .expenses-table th { padding:12px 16px; background:#f8fafc; color:#64748b; font-size:.7rem; font-weight:750; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #e7edf5; white-space:nowrap; }
+    .expenses-table td { padding:14px 16px; color:#334155; font-size:.82rem; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+    .expenses-strong { color:#0f172a!important; font-weight:750; }
+    .expenses-actions { display:flex; justify-content:flex-end; gap:6px; flex-wrap:wrap; }
+
+    .expenses-empty { margin:18px; padding:34px 20px; border-radius:16px; background:#f8fafc; border:1px dashed #dbe3ef; text-align:center; }
+    .expenses-empty strong,.expenses-empty span { display:block; }
+    .expenses-empty strong { color:#0f172a; font-size:.9rem; }
+    .expenses-empty span { margin-top:4px; color:#64748b; font-size:.78rem; }
+
+    .expenses-category-list { padding:14px 18px; display:grid; gap:10px; }
+    .expenses-category-card { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; padding:13px; border-radius:16px; background:#f8fafc; border:1px solid #e7edf5; }
+    .expenses-category-card strong,.expenses-category-card span,.expenses-category-card small { display:block; }
+    .expenses-category-card strong { color:#0f172a; font-size:.86rem; }
+    .expenses-category-card span { margin-top:3px; color:#64748b; font-size:.74rem; }
+    .expenses-category-card small { margin-top:4px; color:#94a3b8; font-size:.72rem; }
+    .expenses-category-actions { display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+    .expenses-category-actions button { width:30px; height:30px; border-radius:9px; border:1px solid #e5e7eb; background:#fff; color:#475569; }
+    .expenses-category-actions button.danger { color:#dc2626; background:#fef2f2; border-color:#fecaca; }
+    .expenses-status-pill { display:inline-flex; min-height:26px; align-items:center; padding:0 9px; border-radius:999px; font-size:.72rem; font-weight:750; }
+    .expenses-status-pill.active { color:#15803d; background:#ecfdf5; }
+    .expenses-status-pill.inactive { color:#64748b; background:#f1f5f9; }
+
+    .expenses-modal-backdrop { position:fixed; inset:0; z-index:1100; padding:20px; background:rgba(15,23,42,.45); display:flex; align-items:center; justify-content:center; }
+    .expenses-modal { width:100%; max-width:760px; max-height:calc(100vh - 40px); overflow-y:auto; background:#fff; border-radius:22px; padding:22px; box-shadow:0 24px 60px rgba(15,23,42,.24); }
+    .expenses-modal.small { max-width:520px; }
+    .expenses-modal-header { display:flex; justify-content:space-between; gap:18px; padding-bottom:16px; margin-bottom:18px; border-bottom:1px solid #edf2f7; }
+    .expenses-modal-header span { color:#2563eb; font-size:.72rem; font-weight:750; letter-spacing:.06em; text-transform:uppercase; }
+    .expenses-modal-header h4 { margin:3px 0 0; color:#0f172a; font-size:1.08rem; font-weight:720; }
+    .expenses-modal-header p { margin:5px 0 0; color:#64748b; font-size:.84rem; line-height:1.5; }
+    .expenses-close-btn { width:34px; height:34px; border-radius:10px; border:1px solid #e5e7eb; background:#fff; color:#64748b; }
+    .expenses-validation { padding:12px 14px; margin-bottom:16px; border-radius:14px; background:#fef2f2; color:#991b1b; font-size:.82rem; }
+    .expenses-modal-actions { display:flex; justify-content:flex-end; gap:10px; padding-top:16px; margin-top:20px; border-top:1px solid #edf2f7; }
+
+    .expenses-total-preview { display:flex; justify-content:space-between; padding:13px; border-radius:16px; background:#f8fafc; border:1px solid #e7edf5; }
+    .expenses-total-preview span { color:#64748b; font-size:.8rem; font-weight:650; }
+    .expenses-total-preview strong { color:#0f172a; font-weight:750; }
+
+    .expenses-check { display:flex; align-items:flex-start; gap:10px; padding:12px; border-radius:14px; background:#f8fafc; border:1px solid #e7edf5; }
+    .expenses-check input { margin-top:4px; }
+    .expenses-check strong,.expenses-check small { display:block; }
+    .expenses-check strong { color:#0f172a; font-size:.85rem; }
+    .expenses-check small { color:#64748b; font-size:.76rem; margin-top:2px; }
+
+    @@keyframes expensesIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+    @@media (max-width:1199px) {
+        .expenses-grid { grid-template-columns:1fr; }
+        .expenses-settings-strip,.expenses-summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    }
+
+    @@media (max-width:768px) {
+        .expenses-header,.expenses-panel-header { flex-direction:column; align-items:flex-start; }
+        .expenses-header-actions,.expenses-header-actions button { width:100%; }
+        .expenses-settings-strip,.expenses-summary-grid { grid-template-columns:1fr; }
+        .expenses-date-filters,.expenses-date-filters input,.expenses-date-filters button,.small-search { width:100%; }
+        .expenses-search input { width:100%; }
+        .expenses-modal-actions { flex-direction:column-reverse; }
+        .expenses-modal-actions button { width:100%; }
+        .expenses-category-card { flex-direction:column; }
+    }
+</style>
+@code {
+    private BusinessSettingsFormModel _settings = new();
+
+    private List<ExpenseListItemViewModel> _expenses = new();
+    private List<ExpenseCategoryListItemViewModel> _categories = new();
+    private List<ExpenseCategoryOptionViewModel> _categoryOptions = new();
+
+    private ExpenseFormModel _expenseForm = new();
+    private ExpenseCategoryFormModel _categoryForm = new();
+
+    private bool _loadingExpenses = true;
+    private bool _loadingCategories = true;
+    private bool _savingExpense;
+    private bool _savingCategory;
+    private bool _showExpenseModal;
+    private bool _showCategoryModal;
+
+    private DateTime? _fromDate = DateTime.Today.AddDays(-30);
+    private DateTime? _toDate = DateTime.Today;
+
+    private string? _expenseSearch;
+    private string? _categorySearch;
+    private string _categoryStatus = "all";
+
+    private string? _message;
+    private bool _isSuccess;
+
+    private decimal TotalExpenses => _expenses.Sum(x => x.TotalAmount);
+    private decimal TotalTax => _expenses.Sum(x => x.TaxAmount);
+
+    private string CurrencyLabel =>
+        string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
+            ? "R"
+            : _settings.CurrencySymbol;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserAccessService.CanAccessAsync("expenses"))
+        {
+            NavigationManager.NavigateTo("/dashboard");
+            return;
+        }
+
+        _settings = await BusinessSettingsService.GetSettingsAsync();
+
+        await LoadCategoriesAsync();
+        await LoadExpensesAsync();
+    }
+
+    private async Task LoadCategoriesAsync()
+    {
+        _loadingCategories = true;
+
+        _categories = await ExpenseService.GetCategoriesAsync(_categorySearch, _categoryStatus);
+        _categoryOptions = await ExpenseService.GetCategoryOptionsAsync();
+
+        _loadingCategories = false;
+    }
+
+    private async Task LoadExpensesAsync()
+    {
+        _loadingExpenses = true;
+        _expenses = await ExpenseService.GetExpensesAsync(_fromDate, _toDate, _expenseSearch);
+        _loadingExpenses = false;
+    }
+
+    private void OpenExpenseModal()
+    {
+        _expenseForm = new ExpenseFormModel
+        {
+            ExpenseDate = DateTime.Today,
+            PaymentMethod = "Cash"
+        };
+
+        _showExpenseModal = true;
+    }
+
+    private async Task EditExpenseAsync(int id)
+    {
+        var model = await ExpenseService.GetExpenseByIdAsync(id);
+
+        if (model == null)
+        {
+            ShowMessage("Expense not found.", false);
+            return;
+        }
+
+        _expenseForm = model;
+        _showExpenseModal = true;
+    }
+
+    private void CloseExpenseModal()
+    {
+        _showExpenseModal = false;
+        _expenseForm = new ExpenseFormModel();
+    }
+
+    private async Task SaveExpenseAsync()
+    {
+        _savingExpense = true;
+
+        var result = await ExpenseService.SaveExpenseAsync(_expenseForm);
+
+        _savingExpense = false;
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            CloseExpenseModal();
+            await LoadExpensesAsync();
+            await LoadCategoriesAsync();
+        }
+    }
+
+    private async Task DeleteExpenseAsync(int id)
+    {
+        var result = await ExpenseService.DeleteExpenseAsync(id);
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            await LoadExpensesAsync();
+            await LoadCategoriesAsync();
+        }
+    }
+
+    private void OpenCategoryModal()
+    {
+        _categoryForm = new ExpenseCategoryFormModel
+        {
+            IsActive = true
+        };
+
+        _showCategoryModal = true;
+    }
+
+    private async Task EditCategoryAsync(int id)
+    {
+        var model = await ExpenseService.GetCategoryByIdAsync(id);
+
+        if (model == null)
+        {
+            ShowMessage("Expense category not found.", false);
+            return;
+        }
+
+        _categoryForm = model;
+        _showCategoryModal = true;
+    }
+
+    private void CloseCategoryModal()
+    {
+        _showCategoryModal = false;
+        _categoryForm = new ExpenseCategoryFormModel();
+    }
+
+    private async Task SaveCategoryAsync()
+    {
+        _savingCategory = true;
+
+        var result = await ExpenseService.SaveCategoryAsync(_categoryForm);
+
+        _savingCategory = false;
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            CloseCategoryModal();
+            await LoadCategoriesAsync();
+        }
+    }
+
+    private async Task ToggleCategoryAsync(int id)
+    {
+        var result = await ExpenseService.ToggleCategoryStatusAsync(id);
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            await LoadCategoriesAsync();
+        }
+    }
+
+    private async Task DeleteCategoryAsync(int id)
+    {
+        var result = await ExpenseService.DeleteCategoryAsync(id);
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            await LoadCategoriesAsync();
+        }
+    }
+
+    private string Money(decimal value)
+    {
+        return $"{CurrencyLabel} {value:0.00}";
+    }
+
+    private void ShowMessage(string message, bool success)
+    {
+        _message = message;
+        _isSuccess = success;
+    }
+
+    private void ClearMessage()
+    {
+        _message = null;
+    }
+}
