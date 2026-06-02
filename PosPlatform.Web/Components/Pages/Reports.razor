@@ -73,6 +73,26 @@
                 <strong>@Money(_dashboard.NetSales)</strong>
             </div>
 
+            <div class="reports-summary-card dark">
+                <span>Net Profit</span>
+                <strong>@Money(_dashboard.NetProfit)</strong>
+            </div>
+
+            <div class="reports-summary-card teal">
+                <span>Net Profit Margin</span>
+                <strong>@_dashboard.NetProfitMargin.ToString("0.##")%</strong>
+            </div>
+
+            <div class="reports-summary-card red">
+                <span>Total Expenses</span>
+                <strong>@Money(_dashboard.TotalExpenses)</strong>
+            </div>
+
+            <div class="reports-summary-card amber">
+                <span>Expense Count</span>
+                <strong>@_dashboard.ExpenseCount</strong>
+            </div>
+
             <div class="reports-summary-card green">
                 <span>Gross Profit</span>
                 <strong>@Money(_dashboard.GrossProfit)</strong>
@@ -205,6 +225,31 @@
                     </strong>
                 </div>
 
+                <div class="reports-list-row">
+                    <div>
+                        <strong>Expenses</strong>
+                        <span>Business operating expenses in this period.</span>
+                    </div>
+                    <strong class="reports-negative">@Money(_dashboard.TotalExpenses)</strong>
+                </div>
+
+                <div class="reports-list-row">
+                    <div>
+                        <strong>Net Profit</strong>
+                        <span>Gross profit minus expenses.</span>
+                    </div>
+                    <strong class="@GetProfitTextClass(_dashboard.NetProfit)">
+                        @Money(_dashboard.NetProfit)
+                    </strong>
+                </div>
+
+                <div class="reports-list-row">
+                    <div>
+                        <strong>Net Profit Margin</strong>
+                        <span>Net profit as a percentage of net sales.</span>
+                    </div>
+                    <strong>@_dashboard.NetProfitMargin.ToString("0.##")%</strong>
+                </div>
 
                 <div class="reports-list-row">
                     <div>
@@ -247,6 +292,87 @@
                                 </div>
                             </div>
                         }
+                    </div>
+                }
+            </div>
+
+            <div class="reports-panel">
+                <div class="reports-panel-header">
+                    <div>
+                        <h2>Expenses by Category</h2>
+                        <p>Where money was spent in the selected period.</p>
+                    </div>
+                </div>
+
+                @if (_dashboard.ExpensesByCategory.Count == 0)
+                {
+                    <ReportsEmpty Text="No expenses found." />
+                }
+                else
+                {
+                    <div class="reports-list">
+                        @foreach (var item in _dashboard.ExpensesByCategory)
+                        {
+                            <div class="reports-list-row">
+                                <div>
+                                    <strong>@item.CategoryName</strong>
+                                    <span>@item.ExpenseCount expense@(item.ExpenseCount == 1 ? "" : "s")</span>
+                                </div>
+
+                                <strong class="reports-negative">@Money(item.TotalAmount)</strong>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="reports-panel reports-panel-wide">
+                <div class="reports-panel-header">
+                    <div>
+                        <h2>Recent Expenses</h2>
+                        <p>Latest recorded business costs.</p>
+                    </div>
+                </div>
+
+                @if (_dashboard.RecentExpenses.Count == 0)
+                {
+                    <ReportsEmpty Text="No recent expenses found." />
+                }
+                else
+                {
+                    <div class="reports-table-wrap">
+                        <table class="reports-table">
+                            <thead>
+                                <tr>
+                                    <th>Expense No.</th>
+                                    <th>Date</th>
+                                    <th>Category</th>
+                                    <th>Vendor</th>
+                                    <th>Payment</th>
+                                    <th>Subtotal</th>
+                                    <th>Tax</th>
+                                    <th>Total</th>
+                                    <th>Created By</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var item in _dashboard.RecentExpenses)
+                                {
+                                    <tr>
+                                        <td>@item.ExpenseNumber</td>
+                                        <td>@item.ExpenseDate.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                                        <td>@item.CategoryName</td>
+                                        <td>@(string.IsNullOrWhiteSpace(item.VendorName) ? "-" : item.VendorName)</td>
+                                        <td>@item.PaymentMethod</td>
+                                        <td>@Money(item.Subtotal)</td>
+                                        <td>@Money(item.TaxAmount)</td>
+                                        <td class="reports-negative">@Money(item.TotalAmount)</td>
+                                        <td>@item.CreatedByName</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
                     </div>
                 }
             </div>
@@ -1133,5 +1259,9 @@
         }
 
         return "difference-neutral";
+    }
+    private string GetProfitTextClass(decimal value)
+    {
+        return value >= 0 ? "difference-good" : "difference-bad";
     }
 }

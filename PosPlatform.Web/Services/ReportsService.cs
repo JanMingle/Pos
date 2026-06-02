@@ -60,6 +60,17 @@ namespace PosPlatform.Web.Services
     .OrderByDescending(x => x.PurchaseDate)
     .ToListAsync();
 
+            var expenses = await _db.Expenses
+    .AsNoTracking()
+    .Include(x => x.ExpenseCategory)
+    .Where(x =>
+        x.TenantId == tenantId.Value &&
+        x.Status == "Recorded" &&
+        x.ExpenseDate >= from &&
+        x.ExpenseDate < toExclusive)
+    .OrderByDescending(x => x.ExpenseDate)
+    .ToListAsync();
+
             var products = await _db.Products
                 .AsNoTracking()
                 .Where(x =>
@@ -125,6 +136,44 @@ namespace PosPlatform.Web.Services
             var grossProfitMargin = netSales <= 0
                 ? 0
                 : Math.Round((grossProfit / netSales) * 100, 2);
+
+            var totalExpenses = expenses.Sum(x => x.TotalAmount);
+            var expenseTax = expenses.Sum(x => x.TaxAmount);
+            var expenseCount = expenses.Count;
+
+            var netProfit = grossProfit - totalExpenses;
+
+            var netProfitMargin = netSales <= 0
+                ? 0
+                : Math.Round((netProfit / netSales) * 100, 2);
+
+            var expensesByCategory = expenses
+                .GroupBy(x => x.ExpenseCategory != null ? x.ExpenseCategory.CategoryName : "Uncategorised")
+                .Select(g => new ReportExpenseCategoryRow
+                {
+                    CategoryName = g.Key,
+                    ExpenseCount = g.Count(),
+                    TotalAmount = g.Sum(x => x.TotalAmount)
+                })
+                .OrderByDescending(x => x.TotalAmount)
+                .Take(10)
+                .ToList();
+
+            var recentExpenses = expenses
+                .Take(12)
+                .Select(x => new ReportRecentExpenseRow
+                {
+                    ExpenseNumber = x.ExpenseNumber,
+                    ExpenseDate = x.ExpenseDate,
+                    CategoryName = x.ExpenseCategory != null ? x.ExpenseCategory.CategoryName : "-",
+                    VendorName = x.VendorName,
+                    PaymentMethod = x.PaymentMethod,
+                    Subtotal = x.Subtotal,
+                    TaxAmount = x.TaxAmount,
+                    TotalAmount = x.TotalAmount,
+                    CreatedByName = x.CreatedByName
+                })
+                .ToList();
 
             var purchaseCount = purchases.Count;
             var purchaseSubtotal = purchases.Sum(x => x.Subtotal);
@@ -405,7 +454,16 @@ namespace PosPlatform.Web.Services
                 PurchaseSubtotal = purchaseSubtotal,
                 PurchaseTax = purchaseTax,
                 PurchaseTotal = purchaseTotal,
-                TopSuppliers = topSuppliers
+                TopSuppliers = topSuppliers,
+
+                TotalExpenses = totalExpenses,
+                ExpenseTax = expenseTax,
+                ExpenseCount = expenseCount,
+                NetProfit = netProfit,
+                NetProfitMargin = netProfitMargin,
+
+                ExpensesByCategory = expensesByCategory,
+                RecentExpenses = recentExpenses
             };
         }
 

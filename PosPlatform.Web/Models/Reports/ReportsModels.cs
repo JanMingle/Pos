@@ -54,7 +54,18 @@
         public decimal PurchaseTotal { get; set; }
 
         public List<ReportSupplierPurchaseRow> TopSuppliers { get; set; } = new();
+
+        public decimal TotalExpenses { get; set; }
+        public decimal ExpenseTax { get; set; }
+        public decimal NetProfit { get; set; }
+        public decimal NetProfitMargin { get; set; }
+        public int ExpenseCount { get; set; }
+
+        public List<ReportExpenseCategoryRow> ExpensesByCategory { get; set; } = new();
+        public List<ReportRecentExpenseRow> RecentExpenses { get; set; } = new();
     }
+
+
 
     public class ReportPaymentMethodRow
     {
@@ -158,4 +169,24 @@ public class ReportSupplierPurchaseRow
     public string SupplierName { get; set; } = string.Empty;
     public int Purchases { get; set; }
     public decimal TotalSpent { get; set; }
+}
+
+public class ReportExpenseCategoryRow
+{
+    public string CategoryName { get; set; } = string.Empty;
+    public int ExpenseCount { get; set; }
+    public decimal TotalAmount { get; set; }
+}
+
+public class ReportRecentExpenseRow
+{
+    public string ExpenseNumber { get; set; } = string.Empty;
+    public DateTime ExpenseDate { get; set; }
+    public string CategoryName { get; set; } = string.Empty;
+    public string? VendorName { get; set; }
+    public string PaymentMethod { get; set; } = string.Empty;
+    public decimal Subtotal { get; set; }
+    public decimal TaxAmount { get; set; }
+    public decimal TotalAmount { get; set; }
+    public string CreatedByName { get; set; } = string.Empty;
 }
