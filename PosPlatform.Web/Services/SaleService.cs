@@ -25,6 +25,7 @@ namespace PosPlatform.Web.Services
         public async Task<List<SaleProductOptionViewModel>> SearchProductsAsync(string? search = null)
         {
             var tenantId = await _tenantContext.GetTenantIdAsync();
+            var currentBranchId = await _tenantContext.GetBranchIdAsync();
 
             if (tenantId == null)
             {
@@ -33,7 +34,10 @@ namespace PosPlatform.Web.Services
 
             var query = _db.Products
                 .AsNoTracking()
-                .Where(x => x.TenantId == tenantId.Value && x.IsActive);
+                .Where(x =>
+                    x.TenantId == tenantId.Value &&
+                    x.IsActive &&
+                    (!currentBranchId.HasValue || x.BranchId == null || x.BranchId == currentBranchId.Value));
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -67,6 +71,7 @@ namespace PosPlatform.Web.Services
                     IsActive = x.IsActive
                 })
                 .ToListAsync();
+        
         }
 
         public async Task<SaleResult> CompleteSaleAsync(CreateSaleRequest request)
@@ -414,7 +419,7 @@ namespace PosPlatform.Web.Services
             };
         }
 
-        public async Task<List<SaleHistoryRowViewModel>> GetMySalesAsync(DateTime? fromDate, DateTime? toDate)
+        public async Task<List<SaleHistoryRowViewModel>> GetMySalesAsync(DateTime? fromDate, DateTime? toDate, int? branchId = null)
         {
             var tenantId = await _tenantContext.GetTenantIdAsync();
             var cashierUserId = GetCurrentUserId();
@@ -429,7 +434,8 @@ namespace PosPlatform.Web.Services
                 .Include(x => x.SaleItems)
                 .Where(x =>
                     x.TenantId == tenantId.Value &&
-                    x.CashierUserId == cashierUserId.Value);
+                    x.CashierUserId == cashierUserId.Value &&
+                    (!branchId.HasValue || x.BranchId == branchId.Value));
 
             query = ApplyDateFilter(query, fromDate, toDate);
 
@@ -450,7 +456,7 @@ namespace PosPlatform.Web.Services
                 .ToListAsync();
         }
 
-        public async Task<SalesSummaryViewModel> GetMySalesSummaryAsync(DateTime? fromDate, DateTime? toDate)
+        public async Task<SalesSummaryViewModel> GetMySalesSummaryAsync(DateTime? fromDate, DateTime? toDate, int? branchId = null)
         {
             var tenantId = await _tenantContext.GetTenantIdAsync();
             var cashierUserId = GetCurrentUserId();
@@ -465,7 +471,8 @@ namespace PosPlatform.Web.Services
                 .Where(x =>
                     x.TenantId == tenantId.Value &&
                     x.CashierUserId == cashierUserId.Value &&
-                    x.Status == "Completed");
+                    x.Status == "Completed" &&
+                    (!branchId.HasValue || x.BranchId == branchId.Value));
 
             query = ApplyDateFilter(query, fromDate, toDate);
 

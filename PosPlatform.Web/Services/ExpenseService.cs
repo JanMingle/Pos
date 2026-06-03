@@ -22,7 +22,7 @@ namespace PosPlatform.Web.Services
             _httpContextAccessor = httpContextAccessor;
         }
 
-        public async Task<List<ExpenseCategoryListItemViewModel>> GetCategoriesAsync(string? search, string statusFilter)
+        public async Task<List<ExpenseCategoryListItemViewModel>> GetCategoriesAsync(string? search, string statusFilter, int? branchId = null)
         {
             var tenantId = await _tenantContext.GetTenantIdAsync();
 
@@ -73,7 +73,8 @@ namespace PosPlatform.Web.Services
                     .Where(x =>
                         x.TenantId == tenantId.Value &&
                         categoryIds.Contains(x.ExpenseCategoryId) &&
-                        x.Status == "Recorded")
+                        x.Status == "Recorded" &&
+                        (!branchId.HasValue || x.BranchId == branchId.Value))
                     .GroupBy(x => x.ExpenseCategoryId)
                     .Select(g => new
                     {
@@ -260,7 +261,7 @@ namespace PosPlatform.Web.Services
             return (true, "Expense category deleted successfully.");
         }
 
-        public async Task<List<ExpenseListItemViewModel>> GetExpensesAsync(DateTime? fromDate, DateTime? toDate, string? search)
+        public async Task<List<ExpenseListItemViewModel>> GetExpensesAsync(DateTime? fromDate, DateTime? toDate, string? search, int? branchId = null)
         {
             var tenantId = await _tenantContext.GetTenantIdAsync();
 
@@ -272,7 +273,9 @@ namespace PosPlatform.Web.Services
             var query = _db.Expenses
                 .AsNoTracking()
                 .Include(x => x.ExpenseCategory)
-                .Where(x => x.TenantId == tenantId.Value);
+                .Where(x =>
+                    x.TenantId == tenantId.Value &&
+                    (!branchId.HasValue || x.BranchId == branchId.Value));
 
             if (fromDate.HasValue)
             {

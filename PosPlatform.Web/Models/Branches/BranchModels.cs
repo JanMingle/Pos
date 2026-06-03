@@ -59,5 +59,6 @@ namespace PosPlatform.Web.Models.Branches
     {
         public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
+        public bool IsMainBranch { get; set; }
     }
 }

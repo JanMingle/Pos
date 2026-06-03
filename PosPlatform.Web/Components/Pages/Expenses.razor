@@ -11,6 +11,8 @@
 @inject BusinessSettingsService BusinessSettingsService
 @inject UserAccessService UserAccessService
 @inject NavigationManager NavigationManager
+@using PosPlatform.Web.Models.Branches
+@inject BranchService BranchService
 
 <PageTitle>Expenses</PageTitle>
 
@@ -105,6 +107,20 @@
                     <input type="date" @bind="_fromDate" />
                     <input type="date" @bind="_toDate" />
 
+                    <select class="expenses-filter-select" @bind="_branchFilter">
+                        <option value="">All branches</option>
+                        @foreach (var branch in _branches)
+                        {
+                            <option value="@branch.Id">
+                                @branch.Name
+                                @if (branch.IsMainBranch)
+                                {
+                                    @(" · Main")
+                                }
+                            </option>
+                        }
+                    </select>
+
                     <div class="expenses-search small-search">
                         <i class="bi bi-search"></i>
                         <input @bind="_expenseSearch"
@@ -112,7 +128,7 @@
                                placeholder="Search expense" />
                     </div>
 
-                    <button type="button" class="expenses-secondary-btn" @onclick="LoadExpensesAsync">
+                    <button type="button" class="expenses-secondary-btn" @onclick="ApplyExpenseFiltersAsync">
                         Filter
                     </button>
                 </div>
@@ -459,8 +475,30 @@
 
     .expenses-date-filters,.expenses-category-filters { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:0; }
     .expenses-category-filters { padding:14px 18px; border-bottom:1px solid #edf2f7; }
-    .expenses-date-filters input[type="date"] { min-height:38px; border-radius:10px; border:1px solid #e5e7eb; padding:0 10px; font-size:.82rem; }
-    .expenses-search { min-height:38px; display:flex; align-items:center; gap:10px; padding:0 12px; border-radius:10px; background:#f8fafc; border:1px solid #e5e7eb; color:#94a3b8; }
+    .expenses-date-filters input[type="date"],
+    .expenses-filter-select {
+        min-height: 38px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        padding: 0 10px;
+        font-size: .82rem;
+        background: #ffffff;
+        color: #0f172a;
+        outline: none;
+    }
+
+    .expenses-search {
+        min-height: 38px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 12px;
+        border-radius: 10px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        color: #94a3b8;
+    }
+
     .expenses-search input { border:0; outline:none; background:transparent; color:#0f172a; font-size:.84rem; }
     .small-search { width:230px; }
 
@@ -525,8 +563,18 @@
         .expenses-header,.expenses-panel-header { flex-direction:column; align-items:flex-start; }
         .expenses-header-actions,.expenses-header-actions button { width:100%; }
         .expenses-settings-strip,.expenses-summary-grid { grid-template-columns:1fr; }
-        .expenses-date-filters,.expenses-date-filters input,.expenses-date-filters button,.small-search { width:100%; }
-        .expenses-search input { width:100%; }
+
+        .expenses-date-filters,
+        .expenses-date-filters input,
+        .expenses-filter-select,
+        .expenses-date-filters button,
+        .small-search {
+            width: 100%;
+        }
+
+        .expenses-search input {
+            width: 100%;
+        }
         .expenses-modal-actions { flex-direction:column-reverse; }
         .expenses-modal-actions button { width:100%; }
         .expenses-category-card { flex-direction:column; }
@@ -538,6 +586,8 @@
     private List<ExpenseListItemViewModel> _expenses = new();
     private List<ExpenseCategoryListItemViewModel> _categories = new();
     private List<ExpenseCategoryOptionViewModel> _categoryOptions = new();
+    private List<BranchOptionViewModel> _branches = new();
+    private int? _branchFilter;
 
     private ExpenseFormModel _expenseForm = new();
     private ExpenseCategoryFormModel _categoryForm = new();
@@ -576,6 +626,7 @@
         }
 
         _settings = await BusinessSettingsService.GetSettingsAsync();
+        _branches = await BranchService.GetBranchOptionsAsync();
 
         await LoadCategoriesAsync();
         await LoadExpensesAsync();
@@ -585,7 +636,7 @@
     {
         _loadingCategories = true;
 
-        _categories = await ExpenseService.GetCategoriesAsync(_categorySearch, _categoryStatus);
+        _categories = await ExpenseService.GetCategoriesAsync(_categorySearch, _categoryStatus, _branchFilter);
         _categoryOptions = await ExpenseService.GetCategoryOptionsAsync();
 
         _loadingCategories = false;
@@ -594,8 +645,15 @@
     private async Task LoadExpensesAsync()
     {
         _loadingExpenses = true;
-        _expenses = await ExpenseService.GetExpensesAsync(_fromDate, _toDate, _expenseSearch);
+        _expenses = await ExpenseService.GetExpensesAsync(_fromDate, _toDate, _expenseSearch, _branchFilter);
         _loadingExpenses = false;
+    }
+
+    private async Task ApplyExpenseFiltersAsync()
+    {
+        await LoadExpensesAsync();
+        await LoadCategoriesAsync();
+        await LoadCategoriesAsync();
     }
 
     private void OpenExpenseModal()

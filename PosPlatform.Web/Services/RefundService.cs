@@ -91,7 +91,7 @@ namespace PosPlatform.Web.Services
             };
         }
 
-        public async Task<List<SaleReturnHistoryRowViewModel>> GetReturnHistoryAsync(DateTime? fromDate, DateTime? toDate)
+        public async Task<List<SaleReturnHistoryRowViewModel>> GetReturnHistoryAsync(DateTime? fromDate, DateTime? toDate, int? branchId = null)
         {
             var tenantId = await _tenantContext.GetTenantIdAsync();
 
@@ -101,9 +101,11 @@ namespace PosPlatform.Web.Services
             }
 
             var query = _db.SaleReturns
-                .AsNoTracking()
-                .Include(x => x.Sale)
-                .Where(x => x.TenantId == tenantId.Value);
+     .AsNoTracking()
+     .Include(x => x.Sale)
+     .Where(x =>
+         x.TenantId == tenantId.Value &&
+         (!branchId.HasValue || x.BranchId == branchId.Value));
 
             if (fromDate.HasValue)
             {

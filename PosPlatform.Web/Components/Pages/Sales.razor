@@ -1,6 +1,7 @@
 ﻿@page "/sales"
 @using static Microsoft.AspNetCore.Components.Web.RenderMode
 @using PosPlatform.Web.Models.Refunds
+@using PosPlatform.Web.Models.Branches
 @rendermode InteractiveServer
 @layout MainLayout
 @attribute [Authorize]
@@ -17,6 +18,8 @@
 @inject NavigationManager NavigationManager
 @using PosPlatform.Web.Models.Shifts
 @using PosPlatform.Web.Models.Customers
+@inject BranchService BranchService
+
 
 
 
@@ -401,6 +404,20 @@
             <div class="sales-date-filters">
                 <input type="date" @bind="_fromDate" />
                 <input type="date" @bind="_toDate" />
+
+                <select class="sales-filter-select" @bind="_branchFilter">
+                    <option value="">All branches</option>
+                    @foreach (var branch in _branches)
+                    {
+                        <option value="@branch.Id">
+                            @branch.Name
+                            @if (branch.IsMainBranch)
+                            {
+                                @(" · Main")
+                            }
+                        </option>
+                    }
+                </select>
 
                 <button type="button" class="sales-primary-btn" @onclick="LoadMySalesAsync">
                     <i class="bi bi-filter"></i>
@@ -1443,12 +1460,16 @@
         flex-wrap: wrap;
     }
 
-        .sales-date-filters input {
+        .sales-date-filters input,
+        .sales-filter-select {
             min-height: 38px;
             border-radius: 10px;
             border: 1px solid #e5e7eb;
             padding: 0 10px;
             font-size: .82rem;
+            background: #ffffff;
+            color: #0f172a;
+            outline: none;
         }
 
     .sales-summary-grid {
@@ -1844,6 +1865,7 @@
 
         .sales-date-filters,
         .sales-date-filters input,
+        .sales-filter-select,
         .sales-date-filters button {
             width: 100%;
         }
@@ -2095,6 +2117,8 @@
     private SaleReceiptViewModel? _receipt;
     private List<SaleHistoryRowViewModel> _mySales = new();
     private SalesSummaryViewModel _salesSummary = new();
+    private List<BranchOptionViewModel> _branches = new();
+    private int? _branchFilter;
 
     private bool _loadingProducts = true;
     private bool _savingSale;
@@ -2142,6 +2166,7 @@
 
         _settings = await BusinessSettingsService.GetSettingsAsync();
         _openShift = await CashierShiftService.GetOpenShiftAsync();
+        _branches = await BranchService.GetBranchOptionsAsync();
 
         if (CustomersEnabled)
         {
@@ -2164,9 +2189,11 @@
     {
         _loadingMySales = true;
 
-        _mySales = await SaleService.GetMySalesAsync(_fromDate, _toDate);
-        _salesSummary = await SaleService.GetMySalesSummaryAsync(_fromDate, _toDate);
-        _returnHistory = await RefundService.GetReturnHistoryAsync(_fromDate, _toDate);
+        _mySales = await SaleService.GetMySalesAsync(_fromDate, _toDate, _branchFilter);
+        _salesSummary = await SaleService.GetMySalesSummaryAsync(_fromDate, _toDate, _branchFilter);
+
+        // Refund history will be made branch-aware when we update RefundService next.
+        _returnHistory = await RefundService.GetReturnHistoryAsync(_fromDate, _toDate, _branchFilter);
 
         _loadingMySales = false;
     }
@@ -2528,7 +2555,7 @@
 
     private async Task LoadReturnHistoryAsync()
     {
-        _returnHistory = await RefundService.GetReturnHistoryAsync(_fromDate, _toDate);
+        _returnHistory = await RefundService.GetReturnHistoryAsync(_fromDate, _toDate, _branchFilter);
     }
     private bool CanRefundStatus(string status)
     {

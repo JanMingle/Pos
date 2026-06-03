@@ -165,11 +165,12 @@ namespace PosPlatform.Web.Services
                 .Where(x => x.TenantId == tenantId.Value && x.IsActive)
                 .OrderByDescending(x => x.IsMainBranch)
                 .ThenBy(x => x.Name)
-                .Select(x => new BranchOptionViewModel
-                {
-                    Id = x.Id,
-                    Name = x.Name
-                })
+            .Select(x => new BranchOptionViewModel
+            {
+                Id = x.Id,
+                Name = x.Name,
+                IsMainBranch = x.IsMainBranch
+            })
                 .ToListAsync();
         }
 
