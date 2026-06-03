@@ -1,0 +1,1102 @@
+﻿@page "/branches"
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@layout MainLayout
+@attribute [Authorize]
+@using PosPlatform.Web.Components.Layout
+@using PosPlatform.Web.Models.Branches
+@using PosPlatform.Web.Models.Settings
+@using PosPlatform.Web.Services
+@inject BranchService BranchService
+@inject BusinessSettingsService BusinessSettingsService
+@inject UserAccessService UserAccessService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Branches</PageTitle>
+
+<section class="branches-page">
+    <div class="branches-header">
+        <div>
+            <div class="branches-kicker">
+                <i class="bi bi-shop"></i>
+                Branch management
+            </div>
+            <h1>Branches</h1>
+            <p>Manage business locations, outlets, salons, warehouses and branch-level activity.</p>
+        </div>
+
+        <button type="button" class="branches-primary-btn" @onclick="OpenAddModal">
+            <i class="bi bi-plus-lg"></i>
+            Add Branch
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="branches-alert @(_isSuccess ? "success" : "danger")">
+            <i class="bi @(_isSuccess ? "bi-check-circle" : "bi-exclamation-triangle")"></i>
+            <span>@_message</span>
+            <button type="button" @onclick="ClearMessage">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    }
+
+    <div class="branches-settings-strip">
+        <div>
+            <span>Business</span>
+            <strong>@_settings.BusinessName</strong>
+        </div>
+
+        <div>
+            <span>Business Type</span>
+            <strong>@_settings.BusinessType</strong>
+        </div>
+
+        <div>
+            <span>Total Branches</span>
+            <strong>@_branches.Count</strong>
+        </div>
+
+        <div>
+            <span>Active Branches</span>
+            <strong>@_branches.Count(x => x.IsActive)</strong>
+        </div>
+    </div>
+
+    <div class="branches-summary-grid">
+        <div class="branches-summary-card dark">
+            <span>Total Sales</span>
+            <strong>@Money(_branches.Sum(x => x.SalesTotal))</strong>
+        </div>
+
+        <div class="branches-summary-card blue">
+            <span>Sales Count</span>
+            <strong>@_branches.Sum(x => x.SalesCount)</strong>
+        </div>
+
+        <div class="branches-summary-card amber">
+            <span>Purchases</span>
+            <strong>@Money(_branches.Sum(x => x.PurchaseTotal))</strong>
+        </div>
+
+        <div class="branches-summary-card red">
+            <span>Expenses</span>
+            <strong>@Money(_branches.Sum(x => x.ExpenseTotal))</strong>
+        </div>
+    </div>
+
+    <div class="branches-control-panel">
+        <div class="branches-search">
+            <i class="bi bi-search"></i>
+            <input @bind="_searchTerm"
+                   @bind:event="oninput"
+                   placeholder="Search branch name, code, phone, email or address" />
+        </div>
+
+        <select class="branches-filter" @bind="_statusFilter">
+            <option value="all">All branches</option>
+            <option value="active">Active only</option>
+            <option value="inactive">Inactive only</option>
+            <option value="main">Main branch</option>
+        </select>
+
+        <button type="button" class="branches-secondary-btn" @onclick="LoadBranchesAsync">
+            <i class="bi bi-filter"></i>
+            Apply
+        </button>
+
+        <button type="button" class="branches-ghost-btn" @onclick="ResetFiltersAsync">
+            <i class="bi bi-arrow-counterclockwise"></i>
+            Reset
+        </button>
+    </div>
+
+    <div class="branches-panel">
+        <div class="branches-panel-header">
+            <div>
+                <h2>Branch List</h2>
+                <p>@_branches.Count branch@(_branches.Count == 1 ? "" : "es") showing.</p>
+            </div>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="branches-empty">
+                <strong>Loading branches...</strong>
+                <span>Please wait while we fetch branch records.</span>
+            </div>
+        }
+        else if (_branches.Count == 0)
+        {
+            <div class="branches-empty">
+                <strong>No branches found</strong>
+                <span>Add your first branch to start tracking business locations.</span>
+            </div>
+        }
+        else
+        {
+            <div class="branches-table-wrap">
+                <table class="branches-table">
+                    <thead>
+                        <tr>
+                            <th>Branch</th>
+                            <th>Contact</th>
+                            <th>Sales</th>
+                            <th>Purchases</th>
+                            <th>Expenses</th>
+                            <th>Status</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var branch in _branches)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="branches-cell">
+                                        <div class="branches-avatar">@GetInitials(branch.Name)</div>
+                                        <div>
+                                            <strong>
+                                                @branch.Name
+                                                @if (branch.IsMainBranch)
+                                                {
+                                                    <span class="branches-main-tag">Main</span>
+                                                }
+                                            </strong>
+                                            <span>@(string.IsNullOrWhiteSpace(branch.BranchCode) ? "No branch code" : branch.BranchCode)</span>
+                                            <small>@(string.IsNullOrWhiteSpace(branch.Address) ? "No address" : branch.Address)</small>
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <div class="branches-contact">
+                                        <strong>@(string.IsNullOrWhiteSpace(branch.Phone) ? "-" : branch.Phone)</strong>
+                                        <span>@(string.IsNullOrWhiteSpace(branch.Email) ? "No email" : branch.Email)</span>
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <strong>@Money(branch.SalesTotal)</strong>
+                                    <span class="branches-muted">@branch.SalesCount sale@(branch.SalesCount == 1 ? "" : "s")</span>
+                                </td>
+
+                                <td>
+                                    <strong>@Money(branch.PurchaseTotal)</strong>
+                                    <span class="branches-muted">@branch.PurchaseCount purchase@(branch.PurchaseCount == 1 ? "" : "s")</span>
+                                </td>
+
+                                <td>
+                                    <strong>@Money(branch.ExpenseTotal)</strong>
+                                    <span class="branches-muted">@branch.ExpenseCount expense@(branch.ExpenseCount == 1 ? "" : "s")</span>
+                                </td>
+
+                                <td>
+                                    <span class="branches-status-pill @(branch.IsActive ? "active" : "inactive")">
+                                        @(branch.IsActive ? "Active" : "Inactive")
+                                    </span>
+                                </td>
+
+                                <td class="text-end">
+                                    <div class="branches-actions">
+                                        <button type="button" class="branches-mini-btn edit" @onclick="() => OpenEditModal(branch.Id)">
+                                            <i class="bi bi-pencil"></i>
+                                            Edit
+                                        </button>
+
+                                        <button type="button" class="branches-mini-btn status" @onclick="() => ToggleStatusAsync(branch.Id)">
+                                            <i class="bi @(branch.IsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
+                                            @(branch.IsActive ? "Pause" : "Activate")
+                                        </button>
+
+                                        <button type="button" class="branches-mini-btn delete" @onclick="() => ConfirmDelete(branch.Id, branch.Name)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>
+
+@if (_showModal)
+{
+    <div class="branches-modal-backdrop">
+        <div class="branches-modal">
+            <div class="branches-modal-header">
+                <div>
+                    <span>Branch setup</span>
+                    <h4>@(_form.Id.HasValue ? "Edit Branch" : "Add Branch")</h4>
+                    <p>Create and manage business locations such as stores, salons, outlets and warehouses.</p>
+                </div>
+
+                <button type="button" class="branches-close-btn" @onclick="CloseModal">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <EditForm Model="_form" OnValidSubmit="SaveBranchAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="branches-validation" />
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="branches-label">Branch Name</label>
+                        <InputText class="branches-input" @bind-Value="_form.Name" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="branches-label">Branch Code</label>
+                        <InputText class="branches-input" @bind-Value="_form.BranchCode" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="branches-label">Phone</label>
+                        <InputText class="branches-input" @bind-Value="_form.Phone" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="branches-label">Email</label>
+                        <InputText class="branches-input" @bind-Value="_form.Email" />
+                    </div>
+
+                    <div class="col-12">
+                        <label class="branches-label">Address</label>
+                        <InputText class="branches-input" @bind-Value="_form.Address" />
+                    </div>
+
+                    <div class="col-12">
+                        <label class="branches-label">Notes</label>
+                        <InputTextArea class="branches-input branches-textarea" @bind-Value="_form.Notes" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="branches-check">
+                            <InputCheckbox @bind-Value="_form.IsMainBranch" />
+                            <span>
+                                <strong>Main branch</strong>
+                                <small>Set this as the main/default business branch.</small>
+                            </span>
+                        </label>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="branches-check">
+                            <InputCheckbox @bind-Value="_form.IsActive" />
+                            <span>
+                                <strong>Active branch</strong>
+                                <small>Allow this branch to be used in operations.</small>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="branches-modal-actions">
+                    <button type="button" class="branches-ghost-btn" @onclick="CloseModal">Cancel</button>
+                    <button type="submit" class="branches-primary-btn" disabled="@_saving">
+                        <i class="bi bi-check2-circle"></i>
+                        @(_saving ? "Saving..." : "Save Branch")
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@if (_showDeleteConfirm)
+{
+    <div class="branches-modal-backdrop">
+        <div class="branches-modal branches-delete-modal">
+            <div class="branches-delete-icon">
+                <i class="bi bi-trash"></i>
+            </div>
+
+            <h4>Delete Branch</h4>
+            <p>
+                Are you sure you want to delete <strong>@_deleteBranchName</strong>?
+                If this branch has linked records, it will be deactivated instead.
+            </p>
+
+            <div class="branches-modal-actions">
+                <button type="button" class="branches-ghost-btn" @onclick="CancelDelete">Cancel</button>
+                <button type="button" class="branches-danger-btn" @onclick="DeleteConfirmedAsync">
+                    <i class="bi bi-trash"></i>
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+}
+<style>
+    .branches-page {
+        animation: branchesIn .22s ease both;
+    }
+
+    .branches-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 18px;
+        margin-bottom: 18px;
+    }
+
+    .branches-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 750;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+
+    .branches-header h1 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 1.45rem;
+        font-weight: 680;
+        letter-spacing: -.03em;
+    }
+
+    .branches-header p {
+        margin: 6px 0 0;
+        color: #64748b;
+        font-size: .88rem;
+    }
+
+    .branches-primary-btn, .branches-secondary-btn, .branches-ghost-btn, .branches-danger-btn, .branches-mini-btn {
+        min-height: 38px;
+        border-radius: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 650;
+        border: 0;
+        white-space: nowrap;
+    }
+
+    .branches-primary-btn {
+        color: #fff;
+        background: #111827;
+        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+    }
+
+    .branches-secondary-btn {
+        color: #2563eb;
+        background: #eef5ff;
+    }
+
+    .branches-ghost-btn {
+        color: #475569;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+    }
+
+    .branches-danger-btn {
+        color: #fff;
+        background: #dc2626;
+    }
+
+    .branches-alert {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        font-size: .84rem;
+        font-weight: 600;
+        border: 1px solid;
+    }
+
+        .branches-alert.success {
+            color: #166534;
+            background: #f0fdf4;
+            border-color: #bbf7d0;
+        }
+
+        .branches-alert.danger {
+            color: #991b1b;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+        .branches-alert span {
+            flex: 1;
+        }
+
+        .branches-alert button {
+            border: 0;
+            background: transparent;
+            color: inherit;
+        }
+
+    .branches-settings-strip, .branches-summary-grid {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+    .branches-settings-strip {
+        grid-template-columns: repeat(4,minmax(0,1fr));
+    }
+
+    .branches-summary-grid {
+        grid-template-columns: repeat(4,minmax(0,1fr));
+    }
+
+    .branches-settings-strip div, .branches-summary-card {
+        padding: 13px;
+        border-radius: 16px;
+        background: #fff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 12px 28px rgba(15,23,42,.04);
+    }
+
+    .branches-summary-card {
+        padding: 16px;
+    }
+
+        .branches-settings-strip span, .branches-settings-strip strong, .branches-summary-card span, .branches-summary-card strong {
+            display: block;
+        }
+
+        .branches-settings-strip span, .branches-summary-card span {
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .branches-settings-strip strong, .branches-summary-card strong {
+            margin-top: 4px;
+            color: #0f172a;
+            font-size: .88rem;
+            font-weight: 720;
+        }
+
+        .branches-summary-card strong {
+            font-size: 1.08rem;
+        }
+
+        .branches-summary-card.dark {
+            background: #111827;
+            border-color: #111827;
+        }
+
+            .branches-summary-card.dark span, .branches-summary-card.dark strong {
+                color: #fff;
+            }
+
+        .branches-summary-card.blue strong {
+            color: #2563eb;
+        }
+
+        .branches-summary-card.amber strong {
+            color: #d97706;
+        }
+
+        .branches-summary-card.red strong {
+            color: #dc2626;
+        }
+
+    .branches-control-panel {
+        display: grid;
+        grid-template-columns: minmax(260px,1fr) 180px auto auto;
+        gap: 10px;
+        padding: 14px;
+        margin-bottom: 16px;
+        border-radius: 18px;
+        background: #fff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+    }
+
+    .branches-search {
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 13px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        color: #94a3b8;
+    }
+
+        .branches-search input, .branches-filter, .branches-input {
+            width: 100%;
+            min-height: 40px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            color: #0f172a;
+            padding: 0 12px;
+            font-size: .84rem;
+            outline: none;
+        }
+
+        .branches-search input {
+            border: 0;
+            background: transparent;
+            padding: 0;
+        }
+
+    .branches-panel {
+        background: #fff;
+        border: 1px solid #e7edf5;
+        border-radius: 20px;
+        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        overflow: hidden;
+    }
+
+    .branches-panel-header {
+        padding: 17px 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .branches-panel-header h2 {
+            margin: 0;
+            color: #0f172a;
+            font-size: .92rem;
+            font-weight: 720;
+        }
+
+        .branches-panel-header p {
+            margin: 4px 0 0;
+            color: #94a3b8;
+            font-size: .76rem;
+        }
+
+    .branches-table-wrap {
+        overflow-x: auto;
+    }
+
+    .branches-table {
+        width: 100%;
+        min-width: 1050px;
+        border-collapse: collapse;
+    }
+
+        .branches-table th {
+            padding: 12px 16px;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: .7rem;
+            font-weight: 750;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            border-bottom: 1px solid #e7edf5;
+            white-space: nowrap;
+        }
+
+        .branches-table td {
+            padding: 14px 16px;
+            color: #334155;
+            font-size: .82rem;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+
+    .branches-cell {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+    }
+
+    .branches-avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 14px;
+        background: #eef5ff;
+        color: #2563eb;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .78rem;
+        font-weight: 750;
+    }
+
+    .branches-cell strong, .branches-contact strong {
+        display: block;
+        color: #0f172a;
+        font-size: .85rem;
+        font-weight: 720;
+    }
+
+    .branches-cell span, .branches-contact span, .branches-muted {
+        display: block;
+        margin-top: 2px;
+        color: #94a3b8;
+        font-size: .72rem;
+    }
+
+    .branches-cell small {
+        display: block;
+        margin-top: 2px;
+        color: #64748b;
+        font-size: .72rem;
+    }
+
+    .branches-main-tag {
+        display: inline-flex !important;
+        margin-left: 6px !important;
+        min-height: 20px;
+        align-items: center;
+        padding: 0 7px;
+        border-radius: 999px;
+        background: #f5f3ff;
+        color: #7c3aed !important;
+        font-size: .68rem !important;
+        font-weight: 750;
+    }
+
+    .branches-status-pill {
+        display: inline-flex;
+        min-height: 26px;
+        align-items: center;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 750;
+    }
+
+        .branches-status-pill.active {
+            color: #15803d;
+            background: #ecfdf5;
+        }
+
+        .branches-status-pill.inactive {
+            color: #64748b;
+            background: #f1f5f9;
+        }
+
+    .branches-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .branches-mini-btn {
+        min-height: 30px;
+        padding: 0 10px;
+        border: 1px solid;
+        font-size: .74rem;
+    }
+
+        .branches-mini-btn.edit {
+            color: #2563eb;
+            background: #eff6ff;
+            border-color: #bfdbfe;
+        }
+
+        .branches-mini-btn.status {
+            color: #b45309;
+            background: #fffbeb;
+            border-color: #fde68a;
+        }
+
+        .branches-mini-btn.delete {
+            color: #dc2626;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+    .branches-empty {
+        margin: 18px;
+        padding: 34px 20px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px dashed #dbe3ef;
+        text-align: center;
+    }
+
+        .branches-empty strong, .branches-empty span {
+            display: block;
+        }
+
+        .branches-empty strong {
+            color: #0f172a;
+            font-size: .9rem;
+        }
+
+        .branches-empty span {
+            margin-top: 4px;
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+    .branches-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1100;
+        padding: 20px;
+        background: rgba(15,23,42,.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .branches-modal {
+        width: 100%;
+        max-width: 760px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+        background: #fff;
+        border-radius: 22px;
+        padding: 22px;
+        box-shadow: 0 24px 60px rgba(15,23,42,.24);
+    }
+
+    .branches-delete-modal {
+        max-width: 440px;
+        text-align: center;
+    }
+
+    .branches-modal-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding-bottom: 16px;
+        margin-bottom: 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .branches-modal-header span {
+            color: #2563eb;
+            font-size: .72rem;
+            font-weight: 750;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+        .branches-modal-header h4, .branches-delete-modal h4 {
+            margin: 3px 0 0;
+            color: #0f172a;
+            font-size: 1.08rem;
+            font-weight: 720;
+        }
+
+        .branches-modal-header p, .branches-delete-modal p {
+            margin: 5px 0 0;
+            color: #64748b;
+            font-size: .84rem;
+            line-height: 1.5;
+        }
+
+    .branches-close-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        color: #64748b;
+    }
+
+    .branches-label {
+        display: block;
+        margin-bottom: 6px;
+        color: #475569;
+        font-size: .77rem;
+        font-weight: 700;
+    }
+
+    .branches-textarea {
+        min-height: 86px;
+        padding-top: 10px;
+        resize: vertical;
+    }
+
+    .branches-check {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px;
+        border-radius: 14px;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+    }
+
+        .branches-check input {
+            margin-top: 4px;
+        }
+
+        .branches-check strong, .branches-check small {
+            display: block;
+        }
+
+        .branches-check strong {
+            color: #0f172a;
+            font-size: .85rem;
+        }
+
+        .branches-check small {
+            margin-top: 2px;
+            color: #64748b;
+            font-size: .76rem;
+        }
+
+    .branches-validation {
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        background: #fef2f2;
+        color: #991b1b;
+        font-size: .82rem;
+    }
+
+    .branches-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding-top: 16px;
+        margin-top: 20px;
+        border-top: 1px solid #edf2f7;
+    }
+
+    .branches-delete-icon {
+        width: 52px;
+        height: 52px;
+        margin: 0 auto 14px;
+        border-radius: 18px;
+        color: #dc2626;
+        background: #fef2f2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+    }
+
+    @@keyframes branchesIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width:1199px) {
+        .branches-settings-strip, .branches-summary-grid {
+            grid-template-columns: repeat(2,minmax(0,1fr));
+        }
+
+        .branches-control-panel {
+            grid-template-columns: 1fr 180px;
+        }
+    }
+
+    @@media (max-width:768px) {
+        .branches-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+            .branches-header .branches-primary-btn {
+                width: 100%;
+            }
+
+        .branches-settings-strip, .branches-summary-grid, .branches-control-panel {
+            grid-template-columns: 1fr;
+        }
+
+        .branches-modal-actions {
+            flex-direction: column-reverse;
+        }
+
+            .branches-modal-actions button {
+                width: 100%;
+            }
+    }
+</style>
+
+@code {
+    private BusinessSettingsFormModel _settings = new();
+    private List<BranchListItemViewModel> _branches = new();
+
+    private BranchFormModel _form = new();
+
+    private bool _loading = true;
+    private bool _saving;
+    private bool _showModal;
+    private bool _showDeleteConfirm;
+
+    private string? _searchTerm;
+    private string _statusFilter = "all";
+
+    private int _deleteId;
+    private string _deleteBranchName = string.Empty;
+
+    private string? _message;
+    private bool _isSuccess;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserAccessService.CanAccessAsync("branches"))
+        {
+            NavigationManager.NavigateTo("/dashboard");
+            return;
+        }
+
+        _settings = await BusinessSettingsService.GetSettingsAsync();
+
+        await BranchService.EnsureMainBranchExistsAsync();
+        await LoadBranchesAsync();
+    }
+
+    private async Task LoadBranchesAsync()
+    {
+        _loading = true;
+        _branches = await BranchService.GetBranchesAsync(_searchTerm, _statusFilter);
+        _loading = false;
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        _searchTerm = null;
+        _statusFilter = "all";
+        await LoadBranchesAsync();
+    }
+
+    private void OpenAddModal()
+    {
+        _form = new BranchFormModel
+        {
+            IsActive = true
+        };
+
+        if (!_branches.Any())
+        {
+            _form.IsMainBranch = true;
+        }
+
+        _showModal = true;
+    }
+
+    private async Task OpenEditModal(int id)
+    {
+        var model = await BranchService.GetByIdAsync(id);
+
+        if (model == null)
+        {
+            ShowMessage("Branch not found.", false);
+            return;
+        }
+
+        _form = model;
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _form = new BranchFormModel();
+    }
+
+    private async Task SaveBranchAsync()
+    {
+        _saving = true;
+
+        var result = await BranchService.SaveAsync(_form);
+
+        _saving = false;
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            _showModal = false;
+            _form = new BranchFormModel();
+            await LoadBranchesAsync();
+        }
+    }
+
+    private async Task ToggleStatusAsync(int id)
+    {
+        var result = await BranchService.ToggleStatusAsync(id);
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            await LoadBranchesAsync();
+        }
+    }
+
+    private void ConfirmDelete(int id, string name)
+    {
+        _deleteId = id;
+        _deleteBranchName = name;
+        _showDeleteConfirm = true;
+    }
+
+    private void CancelDelete()
+    {
+        _deleteId = 0;
+        _deleteBranchName = string.Empty;
+        _showDeleteConfirm = false;
+    }
+
+    private async Task DeleteConfirmedAsync()
+    {
+        var result = await BranchService.DeleteAsync(_deleteId);
+
+        ShowMessage(result.Message, result.Success);
+
+        _deleteId = 0;
+        _deleteBranchName = string.Empty;
+        _showDeleteConfirm = false;
+
+        if (result.Success)
+        {
+            await LoadBranchesAsync();
+        }
+    }
+
+    private string Money(decimal value)
+    {
+        var symbol = string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
+            ? "R"
+            : _settings.CurrencySymbol;
+
+        return $"{symbol} {value:0.00}";
+    }
+
+    private string GetInitials(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "B";
+        }
+
+        var words = value
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Take(2)
+            .Select(x => x[0].ToString().ToUpper());
+
+        return string.Join("", words);
+    }
+
+    private void ShowMessage(string message, bool success)
+    {
+        _message = message;
+        _isSuccess = success;
+    }
+
+    private void ClearMessage()
+    {
+        _message = null;
+    }
+}

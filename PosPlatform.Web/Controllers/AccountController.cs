@@ -138,12 +138,17 @@ namespace PosPlatform.Web.Controllers
                     Name = string.IsNullOrWhiteSpace(model.BranchName)
                         ? "Main Branch"
                         : model.BranchName.Trim(),
-                    Code = string.IsNullOrWhiteSpace(model.BranchCode)
+
+                    BranchCode = string.IsNullOrWhiteSpace(model.BranchCode)
                         ? "MAIN"
                         : model.BranchCode.Trim().ToUpperInvariant(),
+
                     Address = Clean(model.BusinessAddress),
                     Phone = Clean(model.BusinessPhone),
-                    IsActive = true
+                    IsMainBranch = true,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
                 };
 
                 _db.Branches.Add(branch);

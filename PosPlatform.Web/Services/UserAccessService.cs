@@ -57,17 +57,19 @@ namespace PosPlatform.Web.Services
 
                 "products" => role is "Inventory User" or "Manager",
                 "stock" => role is "Inventory User" or "Manager",
+                "stock-purchases" => role is "Manager" or "Inventory User" or "Accounting User",
+                "suppliers" => role is "Manager" or "Inventory User" or "Accounting User",
+
                 "sales" => role is "Sales User" or "Manager",
                 "cashier-shift" => role is "Sales User" or "Manager",
-                "branches" => role is "Manager",
-                "users" => false,
-                "reports" => role is "Accounting User" or "Manager" or "Viewer",
-                "settings" => false,
                 "customers" => role is "Sales User" or "Manager" or "Accounting User",
-                "suppliers" => role is "Manager" or "Inventory User" or "Accounting User",
-                "stock-purchases" => role is "Manager" or "Inventory User" or "Accounting User",
+
+                "branches" => role is "Manager" or "Accounting User",
+                "reports" => role is "Accounting User" or "Manager" or "Viewer",
                 "expenses" => role is "Manager" or "Accounting User",
 
+                "users" => false,
+                "settings" => false,
 
                 _ => false
             };

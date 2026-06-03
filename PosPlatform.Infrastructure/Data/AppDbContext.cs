@@ -50,6 +50,7 @@ namespace PosPlatform.Infrastructure.Data
         public DbSet<Expense> Expenses => Set<Expense>();
 
 
+
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
@@ -159,15 +160,32 @@ namespace PosPlatform.Infrastructure.Data
             builder.Entity<Branch>(entity =>
             {
                 entity.ToTable("Branches");
-                entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
-                entity.Property(x => x.Code).HasMaxLength(50).IsRequired();
+
+                entity.Property(x => x.Name)
+                      .HasMaxLength(150)
+                      .IsRequired();
+
+                entity.Property(x => x.BranchCode)
+                      .HasMaxLength(50);
+
+                entity.Property(x => x.Phone)
+                      .HasMaxLength(50);
+
+                entity.Property(x => x.Email)
+                      .HasMaxLength(150);
+
+                entity.Property(x => x.Address)
+                      .HasMaxLength(300);
+
+                entity.Property(x => x.Notes)
+                      .HasMaxLength(500);
+
+                entity.HasIndex(x => new { x.TenantId, x.Name });
 
                 entity.HasOne(x => x.Tenant)
-                      .WithMany(x => x.Branches)
+                      .WithMany()
                       .HasForeignKey(x => x.TenantId)
-                      .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasIndex(x => new { x.TenantId, x.Code }).IsUnique();
+                      .OnDelete(DeleteBehavior.Restrict);
             });
 
             builder.Entity<Permission>(entity =>
