@@ -25,6 +25,7 @@ namespace PosPlatform.Web.Services
         public async Task<List<PurchaseProductOptionViewModel>> GetStockProductOptionsAsync()
         {
             var tenantId = await _tenantContext.GetTenantIdAsync();
+            var branchId = await _tenantContext.GetBranchIdAsync();
 
             if (tenantId == null)
             {
@@ -36,7 +37,8 @@ namespace PosPlatform.Web.Services
                 .Where(x =>
                     x.TenantId == tenantId.Value &&
                     x.IsActive &&
-                    x.TrackStock)
+                    x.TrackStock &&
+                    (!branchId.HasValue || x.BranchId == null || x.BranchId == branchId.Value))
                 .OrderBy(x => x.ProductName)
                 .Select(x => new PurchaseProductOptionViewModel
                 {
@@ -50,7 +52,11 @@ namespace PosPlatform.Web.Services
                 .ToListAsync();
         }
 
-        public async Task<List<StockPurchaseListItemViewModel>> GetPurchasesAsync(DateTime? fromDate, DateTime? toDate, string? search)
+        public async Task<List<StockPurchaseListItemViewModel>> GetPurchasesAsync(
+            DateTime? fromDate,
+            DateTime? toDate,
+            string? search,
+            int? branchId = null)
         {
             var tenantId = await _tenantContext.GetTenantIdAsync();
 
@@ -63,7 +69,9 @@ namespace PosPlatform.Web.Services
                 .AsNoTracking()
                 .Include(x => x.Supplier)
                 .Include(x => x.StockPurchaseItems)
-                .Where(x => x.TenantId == tenantId.Value);
+                .Where(x =>
+                    x.TenantId == tenantId.Value &&
+                    (!branchId.HasValue || x.BranchId == branchId.Value));
 
             if (fromDate.HasValue)
             {
@@ -299,4 +307,4 @@ namespace PosPlatform.Web.Services
             return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         }
     }
-}
+} 

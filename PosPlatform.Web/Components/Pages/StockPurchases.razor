@@ -7,11 +7,13 @@
 @using PosPlatform.Web.Models.Settings
 @using PosPlatform.Web.Models.Suppliers
 @using PosPlatform.Web.Models.Purchases
+@using PosPlatform.Web.Models.Branches
 @using PosPlatform.Web.Services
 @inject StockPurchaseService StockPurchaseService
 @inject SupplierService SupplierService
 @inject BusinessSettingsService BusinessSettingsService
 @inject UserAccessService UserAccessService
+@inject BranchService BranchService
 @inject NavigationManager NavigationManager
 
 <PageTitle>Stock Purchases</PageTitle>
@@ -248,6 +250,20 @@
                 <input type="date" @bind="_fromDate" />
                 <input type="date" @bind="_toDate" />
 
+                <select class="purchase-filter-select" @bind="_branchFilter">
+                    <option value="">All branches</option>
+                    @foreach (var branch in _branches)
+                    {
+                        <option value="@branch.Id">
+                            @branch.Name
+                            @if (branch.IsMainBranch)
+                            {
+                                @(" · Main")
+                            }
+                        </option>
+                    }
+                </select>
+
                 <div class="purchase-search small-search">
                     <i class="bi bi-search"></i>
                     <input @bind="_searchTerm"
@@ -258,6 +274,28 @@
                 <button type="button" class="purchase-secondary-btn" @onclick="LoadPurchasesAsync">
                     Filter
                 </button>
+            </div>
+        </div>
+
+        <div class="purchase-summary-grid">
+            <div class="purchase-summary-card dark">
+                <span>Total Purchases</span>
+                <strong>@Money(FilteredPurchaseTotal)</strong>
+            </div>
+
+            <div class="purchase-summary-card">
+                <span>Purchase Count</span>
+                <strong>@_purchases.Count</strong>
+            </div>
+
+            <div class="purchase-summary-card amber">
+                <span>Total Tax</span>
+                <strong>@Money(FilteredPurchaseTax)</strong>
+            </div>
+
+            <div class="purchase-summary-card blue">
+                <span>Quantity Received</span>
+                <strong>@FilteredPurchaseQuantity.ToString("0.##")</strong>
             </div>
         </div>
 
@@ -696,12 +734,16 @@
         flex-wrap: wrap;
     }
 
-        .purchase-date-filters input[type="date"] {
+        .purchase-date-filters input[type="date"],
+        .purchase-filter-select {
             min-height: 38px;
             border-radius: 10px;
             border: 1px solid #e5e7eb;
             padding: 0 10px;
             font-size: .82rem;
+            background: #ffffff;
+            color: #0f172a;
+            outline: none;
         }
 
     .purchase-search {
@@ -727,6 +769,57 @@
     .small-search {
         width: 260px;
     }
+
+    .purchase-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        padding: 14px 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+    .purchase-summary-card {
+        padding: 13px;
+        border-radius: 15px;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+    }
+
+        .purchase-summary-card span,
+        .purchase-summary-card strong {
+            display: block;
+        }
+
+        .purchase-summary-card span {
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .purchase-summary-card strong {
+            margin-top: 4px;
+            color: #0f172a;
+            font-size: .95rem;
+            font-weight: 720;
+        }
+
+        .purchase-summary-card.dark {
+            background: #111827;
+            border-color: #111827;
+        }
+
+            .purchase-summary-card.dark span,
+            .purchase-summary-card.dark strong {
+                color: #ffffff;
+            }
+
+        .purchase-summary-card.amber strong {
+            color: #d97706;
+        }
+
+        .purchase-summary-card.blue strong {
+            color: #2563eb;
+        }
 
     .purchase-table-wrap {
         overflow-x: auto;
@@ -844,7 +937,8 @@
 
         .purchase-settings-strip,
         .purchase-form-grid,
-        .purchase-line {
+        .purchase-line,
+        .purchase-summary-grid {
             grid-template-columns: 1fr;
         }
 
@@ -859,6 +953,7 @@
 
         .purchase-date-filters,
         .purchase-date-filters input,
+        .purchase-filter-select,
         .purchase-date-filters button,
         .small-search {
             width: 100%;
@@ -876,6 +971,7 @@
     private List<SupplierOptionViewModel> _suppliers = new();
     private List<PurchaseProductOptionViewModel> _products = new();
     private List<StockPurchaseListItemViewModel> _purchases = new();
+    private List<BranchOptionViewModel> _branches = new();
 
     private CreateStockPurchaseModel _purchase = new();
 
@@ -886,6 +982,7 @@
     private DateTime? _fromDate = DateTime.Today.AddDays(-30);
     private DateTime? _toDate = DateTime.Today;
     private string? _searchTerm;
+    private int? _branchFilter;
 
     private string? _message;
     private bool _isSuccess;
@@ -901,6 +998,11 @@
     private decimal PurchaseTotal =>
         PurchaseSubtotal + _purchase.TaxAmount;
 
+    private decimal FilteredPurchaseSubtotal => _purchases.Sum(x => x.Subtotal);
+    private decimal FilteredPurchaseTax => _purchases.Sum(x => x.TaxAmount);
+    private decimal FilteredPurchaseTotal => _purchases.Sum(x => x.TotalAmount);
+    private decimal FilteredPurchaseQuantity => _purchases.Sum(x => x.TotalQuantity);
+
     protected override async Task OnInitializedAsync()
     {
         if (!await UserAccessService.CanAccessAsync("stock-purchases"))
@@ -911,6 +1013,7 @@
 
         _settings = await BusinessSettingsService.GetSettingsAsync();
 
+        _branches = await BranchService.GetBranchOptionsAsync();
         _suppliers = await SupplierService.GetSupplierOptionsAsync();
         _products = await StockPurchaseService.GetStockProductOptionsAsync();
 
@@ -921,7 +1024,7 @@
     private async Task LoadPurchasesAsync()
     {
         _loadingPurchases = true;
-        _purchases = await StockPurchaseService.GetPurchasesAsync(_fromDate, _toDate, _searchTerm);
+        _purchases = await StockPurchaseService.GetPurchasesAsync(_fromDate, _toDate, _searchTerm, _branchFilter);
         _loadingPurchases = false;
     }
 
