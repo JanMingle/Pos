@@ -6,10 +6,12 @@
 @using PosPlatform.Web.Components.Layout
 @using PosPlatform.Web.Models.Stock
 @using PosPlatform.Web.Models.Settings
+@using PosPlatform.Web.Models.Branches
 @using PosPlatform.Web.Services
 @inject StockService StockService
 @inject BusinessSettingsService BusinessSettingsService
 @inject UserAccessService UserAccessService
+@inject BranchService BranchService
 @inject NavigationManager NavigationManager
 
 <PageTitle>Stock</PageTitle>
@@ -22,7 +24,7 @@
                 Inventory control
             </div>
             <h1>Stock Management</h1>
-            <p>Monitor stock-tracked items only. Services and digital products are excluded from stock control.</p>
+            <p>Monitor stock-tracked items by branch. Services and digital products are excluded from stock control.</p>
         </div>
 
         @if (StockEnabled)
@@ -126,7 +128,21 @@
                 <option value="inactive">Inactive items</option>
             </select>
 
-            <button type="button" class="stock-secondary-btn" @onclick="LoadStockAsync">
+            <select class="stock-branch-filter" @bind="_branchFilter">
+                <option value="">All branches</option>
+                @foreach (var branch in _branches)
+                {
+                    <option value="@branch.Id">
+                        @branch.Name
+                        @if (branch.IsMainBranch)
+                        {
+                            @(" · Main")
+                        }
+                    </option>
+                }
+            </select>
+
+            <button type="button" class="stock-secondary-btn" @onclick="ApplyStockFiltersAsync">
                 <i class="bi bi-filter"></i>
                 Apply
             </button>
@@ -239,7 +255,7 @@
                 <div class="stock-panel-header">
                     <div>
                         <h2>Manual Adjustment</h2>
-                        <p>Only stock-tracked items can be adjusted here.</p>
+                        <p>Only stock-tracked items available to your branch can be adjusted here.</p>
                     </div>
                 </div>
 
@@ -307,12 +323,26 @@
         <div class="stock-panel-header stock-history-header">
             <div>
                 <h2>Stock Movement History</h2>
-                <p>Sales deductions and manual stock adjustments.</p>
+                <p>Sales deductions, purchases and manual stock adjustments.</p>
             </div>
 
             <div class="stock-date-filters">
                 <input type="date" @bind="_fromDate" />
                 <input type="date" @bind="_toDate" />
+
+                <select class="stock-branch-filter" @bind="_branchFilter">
+                    <option value="">All branches</option>
+                    @foreach (var branch in _branches)
+                    {
+                        <option value="@branch.Id">
+                            @branch.Name
+                            @if (branch.IsMainBranch)
+                            {
+                                @(" · Main")
+                            }
+                        </option>
+                    }
+                </select>
 
                 <button type="button" class="stock-secondary-btn" @onclick="LoadMovementsAsync">
                     Filter
@@ -331,7 +361,7 @@
         {
             <div class="stock-empty">
                 <strong>No movements found</strong>
-                <span>Stock changes will appear here after sales or manual adjustments.</span>
+                <span>Stock changes will appear here after sales, purchases or manual adjustments.</span>
             </div>
         }
         else
@@ -626,7 +656,7 @@
 
     .stock-control-panel {
         display: grid;
-        grid-template-columns: minmax(260px, 1fr) 170px auto auto;
+        grid-template-columns: minmax(260px, 1fr) 170px 190px auto auto;
         gap: 10px;
         padding: 14px;
         margin-bottom: 16px;
@@ -650,6 +680,7 @@
 
         .stock-search input,
         .stock-filter,
+        .stock-branch-filter,
         .stock-input,
         .stock-date-filters input {
             width: 100%;
@@ -948,6 +979,7 @@
 
         .stock-date-filters,
         .stock-date-filters input,
+        .stock-branch-filter,
         .stock-date-filters button {
             width: 100%;
         }
@@ -962,6 +994,8 @@
 @code {
     private List<StockProductRowViewModel> _products = new();
     private List<StockMovementRowViewModel> _movements = new();
+    private List<BranchOptionViewModel> _branches = new();
+
     private StockSummaryViewModel _summary = new();
     private BusinessSettingsFormModel _settings = new();
 
@@ -977,6 +1011,7 @@
 
     private string? _searchTerm;
     private string _statusFilter = "all";
+    private int? _branchFilter;
 
     private DateTime? _fromDate = DateTime.Today;
     private DateTime? _toDate = DateTime.Today;
@@ -995,6 +1030,7 @@
         }
 
         _settings = await BusinessSettingsService.GetSettingsAsync();
+        _branches = await BranchService.GetBranchOptionsAsync();
 
         await LoadAllAsync();
     }
@@ -1019,8 +1055,8 @@
     {
         _loadingStock = true;
 
-        _products = await StockService.GetStockProductsAsync(_searchTerm, _statusFilter);
-        _summary = await StockService.GetStockSummaryAsync();
+        _products = await StockService.GetStockProductsAsync(_searchTerm, _statusFilter, _branchFilter);
+        _summary = await StockService.GetStockSummaryAsync(_branchFilter);
 
         _loadingStock = false;
     }
@@ -1029,9 +1065,15 @@
     {
         _loadingMovements = true;
 
-        _movements = await StockService.GetMovementsAsync(_fromDate, _toDate, _searchTerm);
+        _movements = await StockService.GetMovementsAsync(_fromDate, _toDate, _searchTerm, _branchFilter);
 
         _loadingMovements = false;
+    }
+
+    private async Task ApplyStockFiltersAsync()
+    {
+        await LoadStockAsync();
+        await LoadMovementsAsync();
     }
 
     private void OpenAdjustment()
@@ -1078,6 +1120,8 @@
     {
         _searchTerm = null;
         _statusFilter = "all";
+        _branchFilter = null;
+
         await LoadAllAsync();
     }
 
@@ -1107,6 +1151,7 @@
         return movementType switch
         {
             "Sale" => "blue",
+            "Purchase" => "success",
             "Stock In" => "success",
             "Stock Out" => "warning",
             "Correction" => "gray",

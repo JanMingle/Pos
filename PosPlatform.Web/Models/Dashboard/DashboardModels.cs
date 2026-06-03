@@ -2,6 +2,10 @@
 {
     public class DashboardViewModel
     {
+        public int? SelectedBranchId { get; set; }
+        public string SelectedBranchName { get; set; } = "All Branches";
+        public List<DashboardBranchOptionRow> Branches { get; set; } = new();
+
         public decimal TodayGrossSales { get; set; }
         public decimal TodayRefunds { get; set; }
         public decimal TodayNetSales { get; set; }
@@ -25,6 +29,13 @@
         public List<DashboardRecentRefundRow> RecentRefunds { get; set; } = new();
         public List<DashboardRecentExpenseRow> RecentExpenses { get; set; } = new();
         public List<DashboardLowStockRow> LowStockItems { get; set; } = new();
+    }
+
+    public class DashboardBranchOptionRow
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public bool IsMainBranch { get; set; }
     }
 
     public class DashboardShiftViewModel

@@ -21,13 +21,33 @@ namespace PosPlatform.Web.Services
             _httpContextAccessor = httpContextAccessor;
         }
 
-        public async Task<DashboardViewModel> GetDashboardAsync()
+        public async Task<DashboardViewModel> GetDashboardAsync(int? branchId = null)
         {
             var tenantId = await _tenantContext.GetTenantIdAsync();
 
             if (tenantId == null)
             {
                 return new DashboardViewModel();
+            }
+
+            var branches = await _db.Branches
+                .AsNoTracking()
+                .Where(x => x.TenantId == tenantId.Value && x.IsActive)
+                .OrderByDescending(x => x.IsMainBranch)
+                .ThenBy(x => x.Name)
+                .Select(x => new DashboardBranchOptionRow
+                {
+                    Id = x.Id,
+                    Name = x.Name,
+                    IsMainBranch = x.IsMainBranch
+                })
+                .ToListAsync();
+
+            var selectedBranchName = "All Branches";
+
+            if (branchId.HasValue)
+            {
+                selectedBranchName = branches.FirstOrDefault(x => x.Id == branchId.Value)?.Name ?? "Selected Branch";
             }
 
             var today = DateTime.Today;
@@ -40,7 +60,8 @@ namespace PosPlatform.Web.Services
                     x.TenantId == tenantId.Value &&
                     x.Status != "Voided" &&
                     x.CreatedAt >= today &&
-                    x.CreatedAt < tomorrow)
+                    x.CreatedAt < tomorrow &&
+                    (!branchId.HasValue || x.BranchId == branchId.Value))
                 .OrderByDescending(x => x.CreatedAt)
                 .ToListAsync();
 
@@ -52,7 +73,8 @@ namespace PosPlatform.Web.Services
                     x.TenantId == tenantId.Value &&
                     x.Status == "Completed" &&
                     x.CreatedAt >= today &&
-                    x.CreatedAt < tomorrow)
+                    x.CreatedAt < tomorrow &&
+                    (!branchId.HasValue || x.BranchId == branchId.Value))
                 .OrderByDescending(x => x.CreatedAt)
                 .ToListAsync();
 
@@ -63,7 +85,8 @@ namespace PosPlatform.Web.Services
                     x.TenantId == tenantId.Value &&
                     x.Status == "Recorded" &&
                     x.ExpenseDate >= today &&
-                    x.ExpenseDate < tomorrow)
+                    x.ExpenseDate < tomorrow &&
+                    (!branchId.HasValue || x.BranchId == branchId.Value))
                 .OrderByDescending(x => x.ExpenseDate)
                 .ThenByDescending(x => x.Id)
                 .ToListAsync();
@@ -74,7 +97,8 @@ namespace PosPlatform.Web.Services
                     x.TenantId == tenantId.Value &&
                     x.IsActive &&
                     x.TrackStock &&
-                    x.QuantityInStock <= x.ReorderLevel)
+                    x.QuantityInStock <= x.ReorderLevel &&
+                    (!branchId.HasValue || x.BranchId == null || x.BranchId == branchId.Value))
                 .OrderBy(x => x.QuantityInStock)
                 .ThenBy(x => x.ProductName)
                 .Take(8)
@@ -92,7 +116,8 @@ namespace PosPlatform.Web.Services
                 .Where(x =>
                     x.TenantId == tenantId.Value &&
                     x.IsActive &&
-                    x.TrackStock)
+                    x.TrackStock &&
+                    (!branchId.HasValue || x.BranchId == null || x.BranchId == branchId.Value))
                 .Select(x => new
                 {
                     x.QuantityInStock,
@@ -120,6 +145,10 @@ namespace PosPlatform.Web.Services
 
             return new DashboardViewModel
             {
+                SelectedBranchId = branchId,
+                SelectedBranchName = selectedBranchName,
+                Branches = branches,
+
                 TodayGrossSales = grossSales,
                 TodayRefunds = totalRefunds,
                 TodayNetSales = netSales,
@@ -137,7 +166,7 @@ namespace PosPlatform.Web.Services
                 LowStockCount = allStockProducts.Count(x => x.QuantityInStock > 0 && x.QuantityInStock <= x.ReorderLevel),
                 OutOfStockCount = allStockProducts.Count(x => x.QuantityInStock <= 0),
 
-                OpenShift = await GetOpenShiftAsync(tenantId.Value),
+                OpenShift = await GetOpenShiftAsync(tenantId.Value, branchId),
 
                 RecentSales = sales
                     .Take(6)
@@ -181,7 +210,7 @@ namespace PosPlatform.Web.Services
             };
         }
 
-        private async Task<DashboardShiftViewModel?> GetOpenShiftAsync(int tenantId)
+        private async Task<DashboardShiftViewModel?> GetOpenShiftAsync(int tenantId, int? branchId)
         {
             var userId = GetCurrentUserId();
 
@@ -195,7 +224,8 @@ namespace PosPlatform.Web.Services
                 .FirstOrDefaultAsync(x =>
                     x.TenantId == tenantId &&
                     x.CashierUserId == userId.Value &&
-                    x.Status == "Open");
+                    x.Status == "Open" &&
+                    (!branchId.HasValue || x.BranchId == branchId.Value));
 
             if (shift == null)
             {
@@ -211,7 +241,8 @@ namespace PosPlatform.Web.Services
                     x.CashierUserId == userId.Value &&
                     x.Status != "Voided" &&
                     x.CreatedAt >= shift.OpenedAt &&
-                    x.CreatedAt <= now)
+                    x.CreatedAt <= now &&
+                    (!branchId.HasValue || x.BranchId == branchId.Value))
                 .Select(x => new
                 {
                     x.PaymentMethod,
