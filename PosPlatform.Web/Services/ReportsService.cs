@@ -15,13 +15,33 @@ namespace PosPlatform.Web.Services
             _tenantContext = tenantContext;
         }
 
-        public async Task<ReportsDashboardViewModel> GetDashboardAsync(DateTime? fromDate, DateTime? toDate)
+        public async Task<ReportsDashboardViewModel> GetDashboardAsync(DateTime? fromDate, DateTime? toDate, int? branchId = null)
         {
             var tenantId = await _tenantContext.GetTenantIdAsync();
 
             if (tenantId == null)
             {
                 return new ReportsDashboardViewModel();
+            }
+
+            var branches = await _db.Branches
+                .AsNoTracking()
+                .Where(x => x.TenantId == tenantId.Value && x.IsActive)
+                .OrderByDescending(x => x.IsMainBranch)
+                .ThenBy(x => x.Name)
+                .Select(x => new ReportBranchOptionRow
+                {
+                    Id = x.Id,
+                    Name = x.Name,
+                    IsMainBranch = x.IsMainBranch
+                })
+                .ToListAsync();
+
+            var selectedBranchName = "All Branches";
+
+            if (branchId.HasValue)
+            {
+                selectedBranchName = branches.FirstOrDefault(x => x.Id == branchId.Value)?.Name ?? "Selected Branch";
             }
 
             var from = fromDate?.Date ?? DateTime.Today;
@@ -34,7 +54,8 @@ namespace PosPlatform.Web.Services
                     x.TenantId == tenantId.Value &&
                     x.Status != "Voided" &&
                     x.CreatedAt >= from &&
-                    x.CreatedAt < toExclusive)
+                    x.CreatedAt < toExclusive &&
+                    (!branchId.HasValue || x.BranchId == branchId.Value))
                 .OrderByDescending(x => x.CreatedAt)
                 .ToListAsync();
 
@@ -46,36 +67,17 @@ namespace PosPlatform.Web.Services
                     x.TenantId == tenantId.Value &&
                     x.Status == "Completed" &&
                     x.CreatedAt >= from &&
-                    x.CreatedAt < toExclusive)
+                    x.CreatedAt < toExclusive &&
+                    (!branchId.HasValue || x.BranchId == branchId.Value))
                 .OrderByDescending(x => x.CreatedAt)
                 .ToListAsync();
-
-            var purchases = await _db.StockPurchases
-    .AsNoTracking()
-    .Include(x => x.Supplier)
-    .Where(x =>
-        x.TenantId == tenantId.Value &&
-        x.PurchaseDate >= from &&
-        x.PurchaseDate < toExclusive)
-    .OrderByDescending(x => x.PurchaseDate)
-    .ToListAsync();
-
-            var expenses = await _db.Expenses
-    .AsNoTracking()
-    .Include(x => x.ExpenseCategory)
-    .Where(x =>
-        x.TenantId == tenantId.Value &&
-        x.Status == "Recorded" &&
-        x.ExpenseDate >= from &&
-        x.ExpenseDate < toExclusive)
-    .OrderByDescending(x => x.ExpenseDate)
-    .ToListAsync();
 
             var products = await _db.Products
                 .AsNoTracking()
                 .Where(x =>
                     x.TenantId == tenantId.Value &&
-                    x.TrackStock)
+                    x.TrackStock &&
+                    (!branchId.HasValue || x.BranchId == branchId.Value))
                 .Select(x => new
                 {
                     x.ProductName,
@@ -99,15 +101,40 @@ namespace PosPlatform.Web.Services
                 })
                 .ToListAsync();
 
+            var purchases = await _db.StockPurchases
+                .AsNoTracking()
+                .Include(x => x.Supplier)
+                .Where(x =>
+                    x.TenantId == tenantId.Value &&
+                    x.PurchaseDate >= from &&
+                    x.PurchaseDate < toExclusive &&
+                    (!branchId.HasValue || x.BranchId == branchId.Value))
+                .OrderByDescending(x => x.PurchaseDate)
+                .ToListAsync();
+
+            var expenses = await _db.Expenses
+                .AsNoTracking()
+                .Include(x => x.ExpenseCategory)
+                .Where(x =>
+                    x.TenantId == tenantId.Value &&
+                    x.Status == "Recorded" &&
+                    x.ExpenseDate >= from &&
+                    x.ExpenseDate < toExclusive &&
+                    (!branchId.HasValue || x.BranchId == branchId.Value))
+                .OrderByDescending(x => x.ExpenseDate)
+                .ToListAsync();
+
             var shifts = await _db.CashierShifts
                 .AsNoTracking()
                 .Where(x =>
                     x.TenantId == tenantId.Value &&
                     x.OpenedAt >= from &&
-                    x.OpenedAt < toExclusive)
+                    x.OpenedAt < toExclusive &&
+                    (!branchId.HasValue || x.BranchId == branchId.Value))
                 .OrderByDescending(x => x.OpenedAt)
                 .Take(20)
                 .ToListAsync();
+
 
             var allItems = sales
                 .SelectMany(s => s.SaleItems)
@@ -398,6 +425,9 @@ namespace PosPlatform.Web.Services
 
             return new ReportsDashboardViewModel
             {
+                SelectedBranchId = branchId,
+                SelectedBranchName = selectedBranchName,
+                Branches = branches,
                 GrossSales = grossSales,
                 TotalRefunds = totalRefunds,
                 NetSales = netSales,

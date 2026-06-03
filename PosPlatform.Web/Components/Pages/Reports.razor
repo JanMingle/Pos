@@ -24,10 +24,28 @@
             <h1>Reports Dashboard</h1>
             <p>View sales, payment methods, cashiers, stock, customers and till differences.</p>
         </div>
+        <div class="reports-branch-badge">
+            <i class="bi bi-shop"></i>
+            Showing: @_dashboard.SelectedBranchName
+        </div>
 
         <div class="reports-date-filters">
             <input type="date" @bind="_fromDate" />
             <input type="date" @bind="_toDate" />
+            <select class="reports-filter-input" @bind="_branchFilter">
+                <option value="">All branches</option>
+                @foreach (var branch in _dashboard.Branches)
+                {
+                    <option value="@branch.Id">
+                        @branch.Name
+                        @if (branch.IsMainBranch)
+                        {
+                            @(" · Main")
+                        }
+                    </option>
+                }
+            </select>
+
 
             <button type="button" class="reports-primary-btn" @onclick="LoadReportsAsync">
                 <i class="bi bi-filter"></i>
@@ -1192,6 +1210,31 @@
     .reports-payment-row {
         align-items: flex-start;
     }
+
+    .reports-branch-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        min-height: 30px;
+        padding: 0 11px;
+        margin-top: 8px;
+        border-radius: 999px;
+        background: #eef5ff;
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 700;
+    }
+
+    .reports-filter-input {
+        min-height: 38px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        padding: 0 10px;
+        color: #0f172a;
+        background: #ffffff;
+        font-size: .82rem;
+        outline: none;
+    }
 </style>
 
 @code {
@@ -1199,6 +1242,8 @@
     private ReportsDashboardViewModel _dashboard = new();
 
     private bool _loading = true;
+    private int? _branchFilter;
+
 
     private DateTime? _fromDate = DateTime.Today;
     private DateTime? _toDate = DateTime.Today;
@@ -1218,7 +1263,7 @@
     private async Task LoadReportsAsync()
     {
         _loading = true;
-        _dashboard = await ReportsService.GetDashboardAsync(_fromDate, _toDate);
+        _dashboard = await ReportsService.GetDashboardAsync(_fromDate, _toDate, _branchFilter);
         _loading = false;
     }
 

@@ -13,17 +13,17 @@ namespace PosPlatform.Web.Services
         private readonly IPasswordHasher<ApplicationUser> _passwordHasher;
 
         private static readonly List<RoleOptionViewModel> DefaultRoles = new()
-{
-    new RoleOptionViewModel
-    {
-        Name = "Owner",
-        Description = "Main business owner with full access to the entire platform."
-    },
-    new RoleOptionViewModel
-    {
-        Name = "Admin",
-        Description = "Full access to manage users, products, stock, sales and reports."
-    },
+        {
+            new RoleOptionViewModel
+            {
+                Name = "Owner",
+                Description = "Main business owner with full access to the entire platform."
+            },
+            new RoleOptionViewModel
+            {
+                Name = "Admin",
+                Description = "Full access to manage users, products, stock, sales and reports."
+            },
             new RoleOptionViewModel
             {
                 Name = "Sales User",
@@ -83,6 +83,7 @@ namespace PosPlatform.Web.Services
                         TenantId = tenantId.Value,
                         Name = roleOption.Name,
                         NormalizedName = NormalizeRoleName(tenantId.Value, roleOption.Name),
+                        Description = roleOption.Description,
                         ConcurrencyStamp = Guid.NewGuid().ToString()
                     });
                 }
@@ -106,19 +107,23 @@ namespace PosPlatform.Web.Services
                 return new List<BranchOptionViewModel>();
             }
 
+            await EnsureMainBranchExistsAsync(tenantId.Value);
+
             return await _db.Branches
                 .AsNoTracking()
-                .Where(x => x.TenantId == tenantId.Value)
-                .OrderBy(x => x.Name)
+                .Where(x => x.TenantId == tenantId.Value && x.IsActive)
+                .OrderByDescending(x => x.IsMainBranch)
+                .ThenBy(x => x.Name)
                 .Select(x => new BranchOptionViewModel
                 {
                     Id = x.Id,
-                    Name = x.Name
+                    Name = x.Name,
+                    IsMainBranch = x.IsMainBranch
                 })
                 .ToListAsync();
         }
 
-        public async Task<List<UserListItemViewModel>> GetUsersAsync(string? search, string? roleFilter)
+        public async Task<List<UserListItemViewModel>> GetUsersAsync(string? search, string? roleFilter, int? branchFilter)
         {
             var tenantId = await _tenantContext.GetTenantIdAsync();
 
@@ -149,6 +154,11 @@ namespace PosPlatform.Web.Services
             if (!string.IsNullOrWhiteSpace(roleFilter) && roleFilter != "all")
             {
                 query = query.Where(x => x.UserRoles.Any(r => r.Role != null && r.Role.Name == roleFilter));
+            }
+
+            if (branchFilter.HasValue && branchFilter.Value > 0)
+            {
+                query = query.Where(x => x.BranchId == branchFilter.Value);
             }
 
             var now = DateTimeOffset.UtcNow;
@@ -205,7 +215,6 @@ namespace PosPlatform.Web.Services
         public async Task<(bool Success, string Message)> SaveUserAsync(UserFormModel model)
         {
             var tenantId = await _tenantContext.GetTenantIdAsync();
-            var defaultBranchId = await _tenantContext.GetBranchIdAsync();
 
             if (tenantId == null)
             {
@@ -213,6 +222,7 @@ namespace PosPlatform.Web.Services
             }
 
             await EnsureDefaultRolesAsync();
+            await EnsureMainBranchExistsAsync(tenantId.Value);
 
             var email = model.Email.Trim();
             var normalizedEmail = email.ToUpperInvariant();
@@ -236,23 +246,26 @@ namespace PosPlatform.Web.Services
                 return (false, "Selected role was not found.");
             }
 
-            var branchId = model.BranchId ?? defaultBranchId;
+            var branchId = model.BranchId ?? await GetDefaultBranchIdAsync(tenantId.Value);
 
-            if (branchId.HasValue)
+            if (!branchId.HasValue)
             {
-                var branchExists = await _db.Branches.AnyAsync(x =>
-                    x.Id == branchId.Value &&
-                    x.TenantId == tenantId.Value);
+                return (false, "No active branch found. Please create a branch first.");
+            }
 
-                if (!branchExists)
-                {
-                    return (false, "Selected branch was not found.");
-                }
+            var branchExists = await _db.Branches.AnyAsync(x =>
+                x.Id == branchId.Value &&
+                x.TenantId == tenantId.Value &&
+                x.IsActive);
+
+            if (!branchExists)
+            {
+                return (false, "Selected branch was not found or is inactive.");
             }
 
             if (model.Id.HasValue && model.Id.Value > 0)
             {
-                return await UpdateUserAsync(model, tenantId.Value, role.Id, branchId);
+                return await UpdateUserAsync(model, tenantId.Value, role.Id, branchId.Value);
             }
 
             if (string.IsNullOrWhiteSpace(model.Password))
@@ -263,7 +276,7 @@ namespace PosPlatform.Web.Services
             var user = new ApplicationUser
             {
                 TenantId = tenantId.Value,
-                BranchId = branchId,
+                BranchId = branchId.Value,
                 UserName = email,
                 NormalizedUserName = normalizedEmail,
                 Email = email,
@@ -287,6 +300,8 @@ namespace PosPlatform.Web.Services
                 RoleId = role.Id
             });
 
+            await SyncUserClaimsAsync(user.Id, tenantId.Value, branchId.Value);
+
             await _db.SaveChangesAsync();
 
             return (true, "User created successfully.");
@@ -296,7 +311,7 @@ namespace PosPlatform.Web.Services
             UserFormModel model,
             int tenantId,
             int roleId,
-            int? branchId)
+            int branchId)
         {
             var user = await _db.Users
                 .Include(x => x.UserRoles)
@@ -331,6 +346,8 @@ namespace PosPlatform.Web.Services
                 UserId = user.Id,
                 RoleId = roleId
             });
+
+            await SyncUserClaimsAsync(user.Id, tenantId, branchId);
 
             await _db.SaveChangesAsync();
 
@@ -374,6 +391,68 @@ namespace PosPlatform.Web.Services
             await _db.SaveChangesAsync();
 
             return (true, isDisabled ? "User activated successfully." : "User disabled successfully.");
+        }
+
+        private async Task EnsureMainBranchExistsAsync(int tenantId)
+        {
+            var hasBranch = await _db.Branches.AnyAsync(x => x.TenantId == tenantId);
+
+            if (hasBranch)
+            {
+                return;
+            }
+
+            _db.Branches.Add(new Branch
+            {
+                TenantId = tenantId,
+                Name = "Main Branch",
+                BranchCode = "MAIN",
+                IsMainBranch = true,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+
+            await _db.SaveChangesAsync();
+        }
+
+        private async Task<int?> GetDefaultBranchIdAsync(int tenantId)
+        {
+            var branchId = await _db.Branches
+                .Where(x => x.TenantId == tenantId && x.IsActive)
+                .OrderByDescending(x => x.IsMainBranch)
+                .ThenBy(x => x.Name)
+                .Select(x => (int?)x.Id)
+                .FirstOrDefaultAsync();
+
+            return branchId;
+        }
+
+        private async Task SyncUserClaimsAsync(int userId, int tenantId, int branchId)
+        {
+            await UpsertClaimAsync(userId, "tenant_id", tenantId.ToString());
+            await UpsertClaimAsync(userId, "branch_id", branchId.ToString());
+        }
+
+        private async Task UpsertClaimAsync(int userId, string claimType, string claimValue)
+        {
+            var claim = await _db.UserClaims.FirstOrDefaultAsync(x =>
+                x.UserId == userId &&
+                x.ClaimType == claimType);
+
+            if (claim == null)
+            {
+                _db.UserClaims.Add(new IdentityUserClaim<int>
+                {
+                    UserId = userId,
+                    ClaimType = claimType,
+                    ClaimValue = claimValue
+                });
+
+                return;
+            }
+
+            claim.ClaimValue = claimValue;
         }
 
         private static string NormalizeRoleName(int tenantId, string roleName)

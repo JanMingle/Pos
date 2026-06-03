@@ -63,6 +63,10 @@
 
         public List<ReportExpenseCategoryRow> ExpensesByCategory { get; set; } = new();
         public List<ReportRecentExpenseRow> RecentExpenses { get; set; } = new();
+
+        public int? SelectedBranchId { get; set; }
+        public string SelectedBranchName { get; set; } = "All Branches";
+        public List<ReportBranchOptionRow> Branches { get; set; } = new();
     }
 
 
@@ -189,4 +193,11 @@ public class ReportRecentExpenseRow
     public decimal TaxAmount { get; set; }
     public decimal TotalAmount { get; set; }
     public string CreatedByName { get; set; } = string.Empty;
+}
+
+public class ReportBranchOptionRow
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public bool IsMainBranch { get; set; }
 }

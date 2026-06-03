@@ -72,6 +72,20 @@
             }
         </select>
 
+        <select class="users-filter" @bind="_branchFilter">
+            <option value="">All branches</option>
+            @foreach (var branch in _branches)
+            {
+                <option value="@branch.Id">
+                    @branch.Name
+                    @if (branch.IsMainBranch)
+                    {
+                        @(" · Main")
+                    }
+                </option>
+            }
+        </select>
+
         <button type="button" class="users-secondary-btn" @onclick="LoadUsersAsync">
             <i class="bi bi-filter"></i>
             Apply
@@ -372,7 +386,7 @@
 
     .users-role-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: minmax(260px, 1fr) 180px 180px auto auto;
         gap: 12px;
         margin-bottom: 16px;
     }
@@ -833,6 +847,7 @@
 
     private string? _searchTerm;
     private string _roleFilter = "all";
+    private int? _branchFilter;
 
     private string? _message;
     private bool _isSuccess;
@@ -854,7 +869,7 @@
     private async Task LoadUsersAsync()
     {
         _loading = true;
-        _users = await UserManagementService.GetUsersAsync(_searchTerm, _roleFilter);
+        _users = await UserManagementService.GetUsersAsync(_searchTerm, _roleFilter, _branchFilter);
         _loading = false;
     }
 
@@ -862,6 +877,7 @@
     {
         _searchTerm = null;
         _roleFilter = "all";
+        _branchFilter = null;
         await LoadUsersAsync();
     }
 
@@ -869,7 +885,9 @@
     {
         _form = new UserFormModel
         {
-            RoleName = "Sales User"
+            RoleName = "Sales User",
+            BranchId = _branches.FirstOrDefault(x => x.IsMainBranch)?.Id
+                ?? _branches.FirstOrDefault()?.Id
         };
 
         _showModal = true;
