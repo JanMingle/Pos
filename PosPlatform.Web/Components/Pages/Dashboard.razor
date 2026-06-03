@@ -1,846 +1,758 @@
 ﻿@page "/dashboard"
 @using static Microsoft.AspNetCore.Components.Web.RenderMode
 @rendermode InteractiveServer
-@attribute [Authorize]
-@using Microsoft.AspNetCore.Components.Authorization
-@using System.Security.Claims
-@inject AuthenticationStateProvider AuthStateProvider
 @layout MainLayout
+@attribute [Authorize]
 @using PosPlatform.Web.Components.Layout
+@using PosPlatform.Web.Models.Dashboard
+@using PosPlatform.Web.Models.Settings
+@using PosPlatform.Web.Services
+@inject DashboardService DashboardService
+@inject BusinessSettingsService BusinessSettingsService
 
 <PageTitle>Dashboard</PageTitle>
 
-@if (_user is null)
-{
-    <div class="opsdash-loading">
-        <div class="opsdash-loading-dot"></div>
+<section class="dash-page">
+    <div class="dash-hero">
         <div>
-            <strong>Loading dashboard</strong>
-            <span>Preparing your business workspace...</span>
+            <div class="dash-kicker">
+                <i class="bi bi-speedometer2"></i>
+                Control centre
+            </div>
+
+            <h1>@Greeting, @_settings.BusinessName</h1>
+            <p>Today’s business health, cashier status, low stock alerts and recent activity in one place.</p>
+        </div>
+
+        <div class="dash-actions">
+            <a href="/sales" class="dash-primary-action">
+                <i class="bi bi-cart-check"></i>
+                New Sale
+            </a>
+
+            <a href="/reports" class="dash-secondary-action">
+                <i class="bi bi-bar-chart"></i>
+                Reports
+            </a>
         </div>
     </div>
-}
-else
-{
-    <section class="opsdash-page">
-        <div class="opsdash-header">
-            <div>
-                <div class="opsdash-kicker">
-                    <i class="bi bi-speedometer2"></i>
-                    Business overview
-                </div>
 
-                <h1>Welcome back, @DisplayName</h1>
-                <p>
-                    Track sales, products, stock activity and workspace setup from your POS control center.
-                </p>
+    @if (_loading)
+    {
+        <div class="dash-empty">
+            <strong>Loading dashboard...</strong>
+            <span>Please wait while we prepare your business summary.</span>
+        </div>
+    }
+    else
+    {
+        <div class="dash-summary-grid">
+            <div class="dash-summary-card dark">
+                <span>Net Profit Today</span>
+                <strong>@Money(_dashboard.TodayNetProfit)</strong>
+                <small>After stock cost and expenses</small>
             </div>
 
-            <div class="opsdash-header-actions">
-                <a href="/sales" class="opsdash-primary-btn">
-                    <i class="bi bi-cart-check"></i>
-                    Start Sale
-                </a>
+            <div class="dash-summary-card">
+                <span>Net Sales</span>
+                <strong>@Money(_dashboard.TodayNetSales)</strong>
+                <small>@_dashboard.TodayTransactionCount transaction@(_dashboard.TodayTransactionCount == 1 ? "" : "s")</small>
+            </div>
 
-                <a href="/products" class="opsdash-secondary-btn">
-                    <i class="bi bi-box-seam"></i>
-                    Products
-                </a>
+            <div class="dash-summary-card green">
+                <span>Gross Profit</span>
+                <strong>@Money(_dashboard.TodayGrossProfit)</strong>
+                <small>Sales minus item cost</small>
+            </div>
+
+            <div class="dash-summary-card red">
+                <span>Expenses</span>
+                <strong>@Money(_dashboard.TodayExpenses)</strong>
+                <small>@_dashboard.TodayExpenseCount recorded today</small>
+            </div>
+
+            <div class="dash-summary-card amber">
+                <span>Refunds</span>
+                <strong>@Money(_dashboard.TodayRefunds)</strong>
+                <small>@_dashboard.TodayRefundCount refund@(_dashboard.TodayRefundCount == 1 ? "" : "s")</small>
+            </div>
+
+            <div class="dash-summary-card blue">
+                <span>Low Stock</span>
+                <strong>@_dashboard.LowStockCount</strong>
+                <small>@_dashboard.OutOfStockCount out of stock</small>
             </div>
         </div>
 
-        <div class="opsdash-overview-grid">
-            <div class="opsdash-metric-card dark">
-                <div class="opsdash-metric-top">
-                    <span>Total Orders</span>
-                    <i class="bi bi-receipt"></i>
-                </div>
-                <strong>0</strong>
-                <small>Today’s transactions</small>
-            </div>
-
-            <div class="opsdash-metric-card blue">
-                <div class="opsdash-metric-top">
-                    <span>Revenue</span>
-                    <i class="bi bi-cash-stack"></i>
-                </div>
-                <strong>R 0</strong>
-                <small>Current sales value</small>
-            </div>
-
-            <div class="opsdash-metric-card green">
-                <div class="opsdash-metric-top">
-                    <span>Stock Items</span>
-                    <i class="bi bi-boxes"></i>
-                </div>
-                <strong>0</strong>
-                <small>Products in catalog</small>
-            </div>
-
-            <div class="opsdash-metric-card violet">
-                <div class="opsdash-metric-top">
-                    <span>Users</span>
-                    <i class="bi bi-people"></i>
-                </div>
-                <strong>1</strong>
-                <small>Active workspace users</small>
-            </div>
-        </div>
-
-        <div class="opsdash-grid">
-            <div class="opsdash-panel opsdash-panel-large">
-                <div class="opsdash-panel-header">
+        <div class="dash-grid">
+            <div class="dash-panel dash-shift-panel">
+                <div class="dash-panel-header">
                     <div>
-                        <h2>Sales Performance</h2>
-                        <p>Monthly performance snapshot</p>
+                        <h2>Cashier Shift</h2>
+                        <p>Your current till session status.</p>
                     </div>
 
-                    <div class="opsdash-period-pill">
-                        <i class="bi bi-calendar3"></i>
-                        This year
-                    </div>
+                    <a href="/cashier-shift" class="dash-small-link">
+                        Open Shifts
+                    </a>
                 </div>
 
-                <div class="opsdash-chart-area">
-                    <div class="opsdash-chart-lines">
-                        <span></span>
-                        <span></span>
-                        <span></span>
-                        <span></span>
-                    </div>
-
-                    <div class="opsdash-bars">
-                        <div class="opsdash-bar-item">
-                            <div class="opsdash-bar" style="height: 44%"></div>
-                            <small>Jan</small>
+                @if (_dashboard.OpenShift == null)
+                {
+                    <div class="dash-shift-empty">
+                        <div>
+                            <strong>No open shift</strong>
+                            <span>Open a cashier shift before making sales.</span>
                         </div>
 
-                        <div class="opsdash-bar-item">
-                            <div class="opsdash-bar" style="height: 58%"></div>
-                            <small>Feb</small>
+                        <a href="/cashier-shift">Open Shift</a>
+                    </div>
+                }
+                else
+                {
+                    <div class="dash-shift-card">
+                        <div class="dash-shift-status">
+                            <span>Open since</span>
+                            <strong>@_dashboard.OpenShift.OpenedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</strong>
                         </div>
 
-                        <div class="opsdash-bar-item">
-                            <div class="opsdash-bar" style="height: 38%"></div>
-                            <small>Mar</small>
-                        </div>
+                        <div class="dash-shift-metrics">
+                            <div>
+                                <span>Opening Cash</span>
+                                <strong>@Money(_dashboard.OpenShift.OpeningCash)</strong>
+                            </div>
 
-                        <div class="opsdash-bar-item">
-                            <div class="opsdash-bar" style="height: 72%"></div>
-                            <small>Apr</small>
-                        </div>
+                            <div>
+                                <span>Cash Sales</span>
+                                <strong>@Money(_dashboard.OpenShift.CashSales)</strong>
+                            </div>
 
-                        <div class="opsdash-bar-item">
-                            <div class="opsdash-bar" style="height: 64%"></div>
-                            <small>May</small>
-                        </div>
+                            <div>
+                                <span>Card Sales</span>
+                                <strong>@Money(_dashboard.OpenShift.CardSales)</strong>
+                            </div>
 
-                        <div class="opsdash-bar-item">
-                            <div class="opsdash-bar" style="height: 84%"></div>
-                            <small>Jun</small>
+                            <div>
+                                <span>EFT Sales</span>
+                                <strong>@Money(_dashboard.OpenShift.EftSales)</strong>
+                            </div>
+
+                            <div>
+                                <span>Total Sales</span>
+                                <strong>@Money(_dashboard.OpenShift.TotalSales)</strong>
+                            </div>
+
+                            <div>
+                                <span>Expected Cash</span>
+                                <strong>@Money(_dashboard.OpenShift.ExpectedCash)</strong>
+                            </div>
                         </div>
                     </div>
-                </div>
-
-                <div class="opsdash-insight-row">
-                    <div>
-                        <span>Best performing period</span>
-                        <strong>June</strong>
-                    </div>
-
-                    <div>
-                        <span>Average activity</span>
-                        <strong>Medium</strong>
-                    </div>
-
-                    <div>
-                        <span>Sales status</span>
-                        <strong class="positive">Ready</strong>
-                    </div>
-                </div>
+                }
             </div>
 
-            <div class="opsdash-panel">
-                <div class="opsdash-panel-header">
-                    <div>
-                        <h2>Workspace</h2>
-                        <p>Account and system details</p>
-                    </div>
-                </div>
-
-                <div class="opsdash-profile-card">
-                    <div class="opsdash-profile-avatar">@UserInitial</div>
-
-                    <div>
-                        <strong>@DisplayName</strong>
-                        <span>@_user.FindFirstValue(ClaimTypes.Email)</span>
-                    </div>
-                </div>
-
-                <div class="opsdash-summary-list">
-                    <div class="opsdash-summary-item">
-                        <span>Tenant ID</span>
-                        <strong>@GetClaim("tenant_id")</strong>
-                    </div>
-
-                    <div class="opsdash-summary-item">
-                        <span>Branch ID</span>
-                        <strong>@GetClaim("branch_id")</strong>
-                    </div>
-
-                    <div class="opsdash-summary-item">
-                        <span>Plan</span>
-                        <strong>Lite POS</strong>
-                    </div>
-
-                    <div class="opsdash-summary-item">
-                        <span>Role</span>
-                        <strong>Owner</strong>
-                    </div>
-
-                    <div class="opsdash-summary-item">
-                        <span>Status</span>
-                        <strong class="opsdash-status">Active</strong>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="opsdash-bottom-grid">
-            <div class="opsdash-panel">
-                <div class="opsdash-panel-header">
+            <div class="dash-panel">
+                <div class="dash-panel-header">
                     <div>
                         <h2>Quick Actions</h2>
-                        <p>Common shortcuts for daily operations</p>
+                        <p>Common actions for daily operations.</p>
                     </div>
                 </div>
 
-                <div class="opsdash-actions-grid">
-                    <a href="/products" class="opsdash-action-card">
-                        <div class="opsdash-action-icon blue">
-                            <i class="bi bi-box-seam"></i>
-                        </div>
-
-                        <div>
-                            <strong>Manage Products</strong>
-                            <span>Add products, update pricing and organize your catalog.</span>
-                        </div>
-
-                        <i class="bi bi-arrow-right-short"></i>
+                <div class="dash-quick-actions">
+                    <a href="/sales">
+                        <i class="bi bi-cart-plus"></i>
+                        <span>Make Sale</span>
                     </a>
 
-                    <a href="/sales" class="opsdash-action-card">
-                        <div class="opsdash-action-icon green">
-                            <i class="bi bi-cart-check"></i>
-                        </div>
-
-                        <div>
-                            <strong>Start Selling</strong>
-                            <span>Open the sales screen and process transactions.</span>
-                        </div>
-
-                        <i class="bi bi-arrow-right-short"></i>
+                    <a href="/stock-purchases">
+                        <i class="bi bi-box-arrow-in-down"></i>
+                        <span>Receive Stock</span>
                     </a>
 
-                    <a href="/stock" class="opsdash-action-card">
-                        <div class="opsdash-action-icon amber">
-                            <i class="bi bi-graph-up-arrow"></i>
-                        </div>
-
-                        <div>
-                            <strong>Stock Management</strong>
-                            <span>Track movements, quantities and reorder needs.</span>
-                        </div>
-
-                        <i class="bi bi-arrow-right-short"></i>
+                    <a href="/expenses">
+                        <i class="bi bi-wallet2"></i>
+                        <span>Add Expense</span>
                     </a>
 
-                    <a href="/users" class="opsdash-action-card">
-                        <div class="opsdash-action-icon violet">
-                            <i class="bi bi-people"></i>
-                        </div>
+                    <a href="/customers">
+                        <i class="bi bi-person-plus"></i>
+                        <span>Add Customer</span>
+                    </a>
 
-                        <div>
-                            <strong>User Management</strong>
-                            <span>Create users, manage access and assign roles.</span>
-                        </div>
+                    <a href="/products">
+                        <i class="bi bi-box-seam"></i>
+                        <span>Products</span>
+                    </a>
 
-                        <i class="bi bi-arrow-right-short"></i>
+                    <a href="/reports">
+                        <i class="bi bi-bar-chart"></i>
+                        <span>Reports</span>
                     </a>
                 </div>
             </div>
 
-            <div class="opsdash-panel">
-                <div class="opsdash-panel-header">
+            <div class="dash-panel">
+                <div class="dash-panel-header">
                     <div>
-                        <h2>Setup Progress</h2>
-                        <p>Keep your workspace ready for operations</p>
+                        <h2>Recent Sales</h2>
+                        <p>Latest transactions recorded today.</p>
                     </div>
+
+                    <a href="/sales" class="dash-small-link">View Sales</a>
                 </div>
 
-                <div class="opsdash-progress-list">
-                    <div class="opsdash-progress-item">
-                        <div>
-                            <strong>Products configured</strong>
-                            <span>Catalog setup</span>
-                        </div>
-                        <div class="opsdash-progress-track">
-                            <span style="width: 45%"></span>
-                        </div>
+                @if (_dashboard.RecentSales.Count == 0)
+                {
+                    <DashboardEmpty Text="No sales yet today." />
+                }
+                else
+                {
+                    <div class="dash-list">
+                        @foreach (var sale in _dashboard.RecentSales)
+                        {
+                            <div class="dash-list-row">
+                                <div>
+                                    <strong>@sale.SaleNumber</strong>
+                                    <span>@sale.CreatedAt.ToLocalTime().ToString("HH:mm") · @sale.PaymentMethod · @(string.IsNullOrWhiteSpace(sale.CustomerName) ? "Walk-in" : sale.CustomerName)</span>
+                                </div>
+
+                                <div class="dash-row-money">
+                                    <strong>@Money(sale.TotalAmount)</strong>
+                                    <span>@sale.Status</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="dash-panel">
+                <div class="dash-panel-header">
+                    <div>
+                        <h2>Low Stock Alerts</h2>
+                        <p>Items that need attention.</p>
                     </div>
 
-                    <div class="opsdash-progress-item">
-                        <div>
-                            <strong>Branch ready</strong>
-                            <span>Main branch linked</span>
-                        </div>
-                        <div class="opsdash-progress-track green">
-                            <span style="width: 65%"></span>
-                        </div>
-                    </div>
-
-                    <div class="opsdash-progress-item">
-                        <div>
-                            <strong>Users configured</strong>
-                            <span>Team access</span>
-                        </div>
-                        <div class="opsdash-progress-track amber">
-                            <span style="width: 35%"></span>
-                        </div>
-                    </div>
+                    <a href="/stock" class="dash-small-link">View Stock</a>
                 </div>
+
+                @if (_dashboard.LowStockItems.Count == 0)
+                {
+                    <DashboardEmpty Text="No low stock alerts." />
+                }
+                else
+                {
+                    <div class="dash-list">
+                        @foreach (var item in _dashboard.LowStockItems)
+                        {
+                            <div class="dash-list-row">
+                                <div>
+                                    <strong>@item.ProductName</strong>
+                                    <span>@item.SKU · Reorder at @item.ReorderLevel.ToString("0.##")</span>
+                                </div>
+
+                                <div class="dash-stock-count @(item.QuantityInStock <= 0 ? "danger" : "warning")">
+                                    @item.QuantityInStock.ToString("0.##")
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="dash-panel">
+                <div class="dash-panel-header">
+                    <div>
+                        <h2>Recent Expenses</h2>
+                        <p>Latest expenses recorded today.</p>
+                    </div>
+
+                    <a href="/expenses" class="dash-small-link">View Expenses</a>
+                </div>
+
+                @if (_dashboard.RecentExpenses.Count == 0)
+                {
+                    <DashboardEmpty Text="No expenses recorded today." />
+                }
+                else
+                {
+                    <div class="dash-list">
+                        @foreach (var expense in _dashboard.RecentExpenses)
+                        {
+                            <div class="dash-list-row">
+                                <div>
+                                    <strong>@expense.CategoryName</strong>
+                                    <span>@expense.ExpenseNumber · @(string.IsNullOrWhiteSpace(expense.VendorName) ? "No vendor" : expense.VendorName)</span>
+                                </div>
+
+                                <div class="dash-row-money negative">
+                                    <strong>@Money(expense.TotalAmount)</strong>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="dash-panel">
+                <div class="dash-panel-header">
+                    <div>
+                        <h2>Recent Refunds</h2>
+                        <p>Refunds, returns and voids processed today.</p>
+                    </div>
+
+                    <a href="/sales" class="dash-small-link">View Refunds</a>
+                </div>
+
+                @if (_dashboard.RecentRefunds.Count == 0)
+                {
+                    <DashboardEmpty Text="No refunds processed today." />
+                }
+                else
+                {
+                    <div class="dash-list">
+                        @foreach (var refund in _dashboard.RecentRefunds)
+                        {
+                            <div class="dash-list-row">
+                                <div>
+                                    <strong>@refund.ReturnNumber</strong>
+                                    <span>@refund.CreatedAt.ToLocalTime().ToString("HH:mm") · @refund.ReturnType · @refund.SaleNumber</span>
+                                </div>
+
+                                <div class="dash-row-money negative">
+                                    <strong>@Money(refund.TotalRefundAmount)</strong>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
             </div>
         </div>
-    </section>
-}
+    }
+</section>
 
 <style>
-    .opsdash-page {
-        animation: opsdashIn .22s ease both;
+    .dash-page {
+        animation: dashIn .22s ease both;
     }
 
-    .opsdash-header {
+    .dash-hero {
         display: flex;
         justify-content: space-between;
         align-items: flex-end;
         gap: 18px;
+        padding: 22px;
         margin-bottom: 18px;
+        border-radius: 24px;
+        background:
+            radial-gradient(circle at top right, rgba(37,99,235,.16), transparent 32%),
+            linear-gradient(135deg, #111827, #1f2937);
+        box-shadow: 0 18px 40px rgba(15,23,42,.16);
+        color: #ffffff;
     }
 
-    .opsdash-kicker {
+    .dash-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        margin-bottom: 8px;
-        color: #2563eb;
+        color: rgba(255,255,255,.78);
         font-size: .74rem;
         font-weight: 750;
         letter-spacing: .06em;
         text-transform: uppercase;
+        margin-bottom: 8px;
     }
 
-    .opsdash-header h1 {
+    .dash-hero h1 {
         margin: 0;
-        color: #0f172a;
-        font-size: 1.5rem;
-        font-weight: 680;
+        font-size: 1.55rem;
+        font-weight: 700;
         letter-spacing: -.03em;
     }
 
-    .opsdash-header p {
-        margin: 6px 0 0;
-        color: #64748b;
-        font-size: .9rem;
-        line-height: 1.5;
+    .dash-hero p {
+        margin: 7px 0 0;
+        color: rgba(255,255,255,.72);
+        font-size: .88rem;
+        max-width: 680px;
     }
 
-    .opsdash-header-actions {
+    .dash-actions {
         display: flex;
         gap: 10px;
         flex-wrap: wrap;
     }
 
-    .opsdash-primary-btn,
-    .opsdash-secondary-btn {
-        min-height: 38px;
+    .dash-primary-action,
+    .dash-secondary-action {
+        min-height: 40px;
+        border-radius: 12px;
+        padding: 0 14px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
-        padding: 0 14px;
-        border-radius: 11px;
-        font-size: .8rem;
-        font-weight: 650;
+        font-size: .82rem;
+        font-weight: 700;
         text-decoration: none;
-        transition: all .18s ease;
         white-space: nowrap;
     }
 
-    .opsdash-primary-btn {
+    .dash-primary-action {
+        background: #ffffff;
+        color: #111827;
+    }
+
+    .dash-secondary-action {
+        background: rgba(255,255,255,.12);
         color: #ffffff;
-        background: #111827;
-        box-shadow: 0 12px 24px rgba(15, 23, 42, .14);
+        border: 1px solid rgba(255,255,255,.18);
     }
 
-    .opsdash-secondary-btn {
-        color: #2563eb;
-        background: #eef5ff;
-        border: 1px solid #dbeafe;
-    }
-
-        .opsdash-primary-btn:hover,
-        .opsdash-secondary-btn:hover {
-            transform: translateY(-1px);
-        }
-
-    .opsdash-overview-grid {
+    .dash-summary-grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 14px;
-        margin-bottom: 16px;
-    }
-
-    .opsdash-metric-card {
-        min-height: 116px;
-        padding: 16px;
-        border-radius: 20px;
-        position: relative;
-        overflow: hidden;
-        color: #ffffff;
-        box-shadow: 0 16px 34px rgba(15, 23, 42, .11);
-    }
-
-        .opsdash-metric-card::after {
-            content: "";
-            position: absolute;
-            width: 120px;
-            height: 120px;
-            right: -45px;
-            top: -45px;
-            border-radius: 999px;
-            background: rgba(255,255,255,.14);
-        }
-
-        .opsdash-metric-card.dark {
-            background: linear-gradient(135deg, #111827, #334155);
-        }
-
-        .opsdash-metric-card.blue {
-            background: linear-gradient(135deg, #2563eb, #38bdf8);
-        }
-
-        .opsdash-metric-card.green {
-            background: linear-gradient(135deg, #16a34a, #34d399);
-        }
-
-        .opsdash-metric-card.violet {
-            background: linear-gradient(135deg, #7c3aed, #a78bfa);
-        }
-
-    .opsdash-metric-top {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
         gap: 12px;
-        position: relative;
-        z-index: 1;
-    }
-
-        .opsdash-metric-top span {
-            font-size: .78rem;
-            font-weight: 700;
-        }
-
-        .opsdash-metric-top i {
-            opacity: .9;
-        }
-
-    .opsdash-metric-card strong {
-        display: block;
-        margin-top: 16px;
-        font-size: 1.55rem;
-        font-weight: 720;
-        letter-spacing: -.03em;
-        position: relative;
-        z-index: 1;
-    }
-
-    .opsdash-metric-card small {
-        display: block;
-        margin-top: 4px;
-        color: rgba(255,255,255,.78);
-        font-size: .74rem;
-        position: relative;
-        z-index: 1;
-    }
-
-    .opsdash-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1.45fr) minmax(320px, .75fr);
-        gap: 16px;
-        align-items: start;
         margin-bottom: 16px;
     }
 
-    .opsdash-bottom-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr);
-        gap: 16px;
-        align-items: start;
-    }
-
-    .opsdash-panel {
-        border-radius: 20px;
+    .dash-summary-card {
+        padding: 16px;
+        border-radius: 18px;
         background: #ffffff;
         border: 1px solid #e7edf5;
-        box-shadow: 0 16px 34px rgba(15, 23, 42, .055);
-        overflow: hidden;
+        box-shadow: 0 12px 28px rgba(15,23,42,.045);
     }
 
-    .opsdash-panel-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+    .dash-summary-card span,
+    .dash-summary-card strong,
+    .dash-summary-card small {
+        display: block;
     }
 
-        .opsdash-panel-header h2 {
-            margin: 0;
-            color: #0f172a;
-            font-size: .92rem;
-            font-weight: 720;
-        }
-
-        .opsdash-panel-header p {
-            margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .76rem;
-        }
-
-    .opsdash-period-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        padding: 7px 10px;
-        border-radius: 999px;
-        color: #2563eb;
-        background: #eef5ff;
-        font-size: .74rem;
-        font-weight: 700;
-    }
-
-    .opsdash-chart-area {
-        position: relative;
-        min-height: 260px;
-        padding: 22px 18px 16px;
-    }
-
-    .opsdash-chart-lines {
-        position: absolute;
-        inset: 22px 18px 52px;
-        display: grid;
-        grid-template-rows: repeat(4, 1fr);
-    }
-
-        .opsdash-chart-lines span {
-            border-top: 1px solid #edf2f7;
-        }
-
-    .opsdash-bars {
-        position: relative;
-        z-index: 1;
-        min-height: 210px;
-        display: grid;
-        grid-template-columns: repeat(6, 1fr);
-        gap: 14px;
-        align-items: end;
-    }
-
-    .opsdash-bar-item {
-        height: 210px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 9px;
-    }
-
-    .opsdash-bar {
-        width: 34px;
-        border-radius: 999px 999px 8px 8px;
-        background: linear-gradient(180deg, #2563eb, #38bdf8);
-        box-shadow: 0 10px 20px rgba(37, 99, 235, .16);
-    }
-
-    .opsdash-bar-item small {
+    .dash-summary-card span {
         color: #64748b;
         font-size: .72rem;
         font-weight: 650;
     }
 
-    .opsdash-insight-row {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        border-top: 1px solid #edf2f7;
-    }
-
-        .opsdash-insight-row div {
-            padding: 14px 16px;
-            border-right: 1px solid #edf2f7;
-        }
-
-            .opsdash-insight-row div:last-child {
-                border-right: 0;
-            }
-
-        .opsdash-insight-row span {
-            display: block;
-            color: #94a3b8;
-            font-size: .72rem;
-            font-weight: 650;
-        }
-
-        .opsdash-insight-row strong {
-            display: block;
-            margin-top: 3px;
-            color: #0f172a;
-            font-size: .88rem;
-            font-weight: 720;
-        }
-
-        .opsdash-insight-row .positive {
-            color: #16a34a;
-        }
-
-    .opsdash-profile-card {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin: 18px;
-        padding: 14px;
-        border-radius: 18px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
-    }
-
-    .opsdash-profile-avatar {
-        width: 46px;
-        height: 46px;
-        border-radius: 16px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #2563eb;
-        background: #eef5ff;
-        font-size: .95rem;
-        font-weight: 750;
-    }
-
-    .opsdash-profile-card strong {
-        display: block;
+    .dash-summary-card strong {
+        margin-top: 6px;
         color: #0f172a;
-        font-size: .9rem;
-        font-weight: 720;
+        font-size: 1.02rem;
+        font-weight: 760;
     }
 
-    .opsdash-profile-card span {
-        display: block;
-        margin-top: 3px;
-        color: #64748b;
-        font-size: .76rem;
-        word-break: break-word;
+    .dash-summary-card small {
+        margin-top: 4px;
+        color: #94a3b8;
+        font-size: .72rem;
     }
 
-    .opsdash-summary-list {
-        padding: 0 18px 18px;
+    .dash-summary-card.dark {
+        background: #111827;
+        border-color: #111827;
     }
 
-    .opsdash-summary-item {
-        display: flex;
-        justify-content: space-between;
-        gap: 14px;
-        padding: 12px 0;
-        border-bottom: 1px solid #edf2f7;
+    .dash-summary-card.dark span,
+    .dash-summary-card.dark strong,
+    .dash-summary-card.dark small {
+        color: #ffffff;
     }
 
-        .opsdash-summary-item:last-child {
-            border-bottom: 0;
-        }
-
-        .opsdash-summary-item span {
-            color: #64748b;
-            font-size: .8rem;
-        }
-
-        .opsdash-summary-item strong {
-            color: #0f172a;
-            font-size: .8rem;
-            font-weight: 700;
-            text-align: right;
-            word-break: break-word;
-        }
-
-    .opsdash-status {
-        color: #16a34a !important;
+    .dash-summary-card.green strong {
+        color: #16a34a;
     }
 
-    .opsdash-actions-grid {
+    .dash-summary-card.red strong {
+        color: #dc2626;
+    }
+
+    .dash-summary-card.amber strong {
+        color: #d97706;
+    }
+
+    .dash-summary-card.blue strong {
+        color: #2563eb;
+    }
+
+    .dash-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
-        padding: 18px;
-    }
-
-    .opsdash-action-card {
-        display: grid;
-        grid-template-columns: 42px minmax(0, 1fr) 22px;
-        align-items: center;
-        gap: 12px;
-        padding: 14px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
-        text-decoration: none;
-        color: inherit;
-        transition: all .18s ease;
-    }
-
-        .opsdash-action-card:hover {
-            background: #ffffff;
-            transform: translateY(-2px);
-            box-shadow: 0 12px 24px rgba(15,23,42,.07);
-        }
-
-    .opsdash-action-icon {
-        width: 42px;
-        height: 42px;
-        border-radius: 14px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-        .opsdash-action-icon.blue {
-            color: #2563eb;
-            background: #eff6ff;
-        }
-
-        .opsdash-action-icon.green {
-            color: #16a34a;
-            background: #ecfdf5;
-        }
-
-        .opsdash-action-icon.amber {
-            color: #d97706;
-            background: #fffbeb;
-        }
-
-        .opsdash-action-icon.violet {
-            color: #7c3aed;
-            background: #f5f3ff;
-        }
-
-    .opsdash-action-card strong {
-        display: block;
-        color: #0f172a;
-        font-size: .84rem;
-        font-weight: 720;
-    }
-
-    .opsdash-action-card span {
-        display: block;
-        margin-top: 3px;
-        color: #64748b;
-        font-size: .74rem;
-        line-height: 1.35;
-    }
-
-    .opsdash-action-card > i {
-        color: #cbd5e1;
-        font-size: 1.15rem;
-    }
-
-    .opsdash-progress-list {
-        padding: 18px;
-        display: grid;
         gap: 16px;
+        align-items: start;
     }
 
-    .opsdash-progress-item strong {
-        display: block;
-        color: #0f172a;
-        font-size: .84rem;
-        font-weight: 720;
-    }
-
-    .opsdash-progress-item span {
-        display: block;
-        margin-top: 3px;
-        color: #64748b;
-        font-size: .74rem;
-    }
-
-    .opsdash-progress-track {
-        height: 8px;
-        margin-top: 10px;
-        border-radius: 999px;
-        background: #eef2f7;
+    .dash-panel {
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        border-radius: 20px;
+        box-shadow: 0 16px 34px rgba(15,23,42,.055);
         overflow: hidden;
     }
 
-        .opsdash-progress-track span {
-            display: block;
-            height: 100%;
-            border-radius: inherit;
-            background: #2563eb;
-        }
-
-        .opsdash-progress-track.green span {
-            background: #16a34a;
-        }
-
-        .opsdash-progress-track.amber span {
-            background: #f59e0b;
-        }
-
-    .opsdash-loading {
+    .dash-panel-header {
+        padding: 17px 18px;
+        border-bottom: 1px solid #edf2f7;
         display: flex;
+        justify-content: space-between;
         align-items: center;
+        gap: 12px;
+    }
+
+    .dash-panel-header h2 {
+        margin: 0;
+        color: #0f172a;
+        font-size: .92rem;
+        font-weight: 720;
+    }
+
+    .dash-panel-header p {
+        margin: 4px 0 0;
+        color: #94a3b8;
+        font-size: .76rem;
+    }
+
+    .dash-small-link {
+        min-height: 32px;
+        padding: 0 11px;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #eef5ff;
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 700;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .dash-shift-empty {
+        margin: 18px;
+        padding: 18px;
+        border-radius: 16px;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        display: flex;
+        justify-content: space-between;
         gap: 14px;
-        padding: 20px;
-        border-radius: 18px;
-        background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 14px 30px rgba(15, 23, 42, .06);
+        align-items: center;
     }
 
-    .opsdash-loading-dot {
-        width: 13px;
-        height: 13px;
-        border-radius: 999px;
-        background: #2563eb;
-        box-shadow: 0 0 0 8px rgba(37, 99, 235, .12);
-    }
-
-    .opsdash-loading strong,
-    .opsdash-loading span {
+    .dash-shift-empty strong,
+    .dash-shift-empty span {
         display: block;
     }
 
-    .opsdash-loading strong {
+    .dash-shift-empty strong {
+        color: #9a3412;
+        font-size: .9rem;
+    }
+
+    .dash-shift-empty span {
+        color: #c2410c;
+        font-size: .76rem;
+        margin-top: 3px;
+    }
+
+    .dash-shift-empty a {
+        min-height: 36px;
+        border-radius: 10px;
+        padding: 0 12px;
+        background: #111827;
+        color: #ffffff;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        font-size: .78rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .dash-shift-card {
+        padding: 18px;
+    }
+
+    .dash-shift-status {
+        padding: 14px;
+        margin-bottom: 12px;
+        border-radius: 16px;
+        background: #ecfdf5;
+        border: 1px solid #bbf7d0;
+    }
+
+    .dash-shift-status span,
+    .dash-shift-status strong {
+        display: block;
+    }
+
+    .dash-shift-status span {
+        color: #15803d;
+        font-size: .72rem;
+        font-weight: 650;
+    }
+
+    .dash-shift-status strong {
+        margin-top: 4px;
+        color: #166534;
+        font-size: .88rem;
+    }
+
+    .dash-shift-metrics {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .dash-shift-metrics div {
+        padding: 13px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+    }
+
+    .dash-shift-metrics span,
+    .dash-shift-metrics strong {
+        display: block;
+    }
+
+    .dash-shift-metrics span {
+        color: #64748b;
+        font-size: .72rem;
+        font-weight: 650;
+    }
+
+    .dash-shift-metrics strong {
+        margin-top: 4px;
+        color: #0f172a;
+        font-size: .84rem;
+    }
+
+    .dash-quick-actions {
+        padding: 18px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .dash-quick-actions a {
+        min-height: 58px;
+        padding: 12px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #0f172a;
+        text-decoration: none;
+        font-size: .84rem;
+        font-weight: 700;
+    }
+
+    .dash-quick-actions i {
+        width: 34px;
+        height: 34px;
+        border-radius: 12px;
+        background: #eef5ff;
+        color: #2563eb;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .dash-list {
+        padding: 14px 18px;
+        display: grid;
+        gap: 10px;
+    }
+
+    .dash-list-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 14px;
+        padding: 13px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+    }
+
+    .dash-list-row strong,
+    .dash-list-row span {
+        display: block;
+    }
+
+    .dash-list-row strong {
+        color: #0f172a;
+        font-size: .84rem;
+        font-weight: 720;
+    }
+
+    .dash-list-row span {
+        margin-top: 3px;
+        color: #64748b;
+        font-size: .72rem;
+    }
+
+    .dash-row-money {
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .dash-row-money.negative strong {
+        color: #dc2626;
+    }
+
+    .dash-stock-count {
+        min-width: 42px;
+        min-height: 32px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .78rem;
+        font-weight: 800;
+    }
+
+    .dash-stock-count.warning {
+        color: #b45309;
+        background: #fffbeb;
+    }
+
+    .dash-stock-count.danger {
+        color: #dc2626;
+        background: #fef2f2;
+    }
+
+    .dash-empty {
+        margin: 18px 0;
+        padding: 34px 20px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px dashed #dbe3ef;
+        text-align: center;
+    }
+
+    .dash-empty strong,
+    .dash-empty span {
+        display: block;
+    }
+
+    .dash-empty strong {
         color: #0f172a;
         font-size: .9rem;
     }
 
-    .opsdash-loading span {
+    .dash-empty span {
+        margin-top: 4px;
         color: #64748b;
         font-size: .78rem;
-        margin-top: 2px;
     }
 
-    @@keyframes opsdashIn {
+    @@keyframes dashIn {
         from {
             opacity: 0;
             transform: translateY(8px);
@@ -853,80 +765,88 @@ else
     }
 
     @@media (max-width: 1199px) {
-        .opsdash-overview-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+        .dash-summary-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 991px) {
+        .dash-hero,
+        .dash-panel-header,
+        .dash-shift-empty {
+            flex-direction: column;
+            align-items: flex-start;
         }
 
-        .opsdash-grid,
-        .opsdash-bottom-grid {
+        .dash-actions,
+        .dash-actions a,
+        .dash-shift-empty a {
+            width: 100%;
+        }
+
+        .dash-grid {
             grid-template-columns: 1fr;
         }
     }
 
-    @@media (max-width: 768px) {
-        .opsdash-header {
+    @@media (max-width: 640px) {
+        .dash-summary-grid,
+        .dash-shift-metrics,
+        .dash-quick-actions {
+            grid-template-columns: 1fr;
+        }
+
+        .dash-list-row {
             align-items: flex-start;
-            flex-direction: column;
-        }
-
-        .opsdash-header-actions {
-            width: 100%;
-        }
-
-        .opsdash-primary-btn,
-        .opsdash-secondary-btn {
-            flex: 1;
-        }
-
-        .opsdash-overview-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .opsdash-actions-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .opsdash-insight-row {
-            grid-template-columns: 1fr;
-        }
-
-            .opsdash-insight-row div {
-                border-right: 0;
-                border-bottom: 1px solid #edf2f7;
-            }
-
-                .opsdash-insight-row div:last-child {
-                    border-bottom: 0;
-                }
-
-        .opsdash-bars {
-            min-width: 520px;
-        }
-
-        .opsdash-chart-area {
-            overflow-x: auto;
         }
     }
 </style>
 
 @code {
-    private ClaimsPrincipal? _user;
+    private BusinessSettingsFormModel _settings = new();
+    private DashboardViewModel _dashboard = new();
 
-    private string DisplayName =>
-        _user?.Identity?.Name
-        ?? _user?.FindFirstValue(ClaimTypes.Email)
-        ?? "User";
+    private bool _loading = true;
 
-    private string UserInitial =>
-        string.IsNullOrWhiteSpace(DisplayName)
-            ? "P"
-            : DisplayName.Trim()[0].ToString().ToUpper();
+    private string Greeting
+    {
+        get
+        {
+            var hour = DateTime.Now.Hour;
+
+            if (hour < 12)
+            {
+                return "Good morning";
+            }
+
+            if (hour < 17)
+            {
+                return "Good afternoon";
+            }
+
+            return "Good evening";
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        _user = authState.User;
+        _settings = await BusinessSettingsService.GetSettingsAsync();
+        await LoadDashboardAsync();
     }
 
-    private string GetClaim(string type) => _user?.FindFirst(type)?.Value ?? "-";
+    private async Task LoadDashboardAsync()
+    {
+        _loading = true;
+        _dashboard = await DashboardService.GetDashboardAsync();
+        _loading = false;
+    }
+
+    private string Money(decimal value)
+    {
+        var symbol = string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
+            ? "R"
+            : _settings.CurrencySymbol;
+
+        return $"{symbol} {value:0.00}";
+    }
 }
