@@ -1,0 +1,956 @@
+﻿@page "/stock-transfers"
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@layout MainLayout
+@attribute [Authorize]
+@using PosPlatform.Web.Components.Layout
+@using PosPlatform.Web.Models.Branches
+@using PosPlatform.Web.Models.Settings
+@using PosPlatform.Web.Models.StockTransfers
+@using PosPlatform.Web.Services
+@inject StockTransferService StockTransferService
+@inject BranchService BranchService
+@inject BusinessSettingsService BusinessSettingsService
+@inject UserAccessService UserAccessService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Stock Transfers</PageTitle>
+
+<section class="transfer-page">
+    <div class="transfer-header">
+        <div>
+            <div class="transfer-kicker">
+                <i class="bi bi-arrow-left-right"></i>
+                Branch inventory
+            </div>
+            <h1>Stock Transfers</h1>
+            <p>Move stock between branches and keep stock movement history accurate.</p>
+        </div>
+
+        <button type="button" class="transfer-primary-btn" @onclick="OpenTransferPanel">
+            <i class="bi bi-plus-lg"></i>
+            New Transfer
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="transfer-alert @(_isSuccess ? "success" : "danger")">
+            <i class="bi @(_isSuccess ? "bi-check-circle" : "bi-exclamation-triangle")"></i>
+            <span>@_message</span>
+            <button type="button" @onclick="ClearMessage">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    }
+
+    <div class="transfer-settings-strip">
+        <div>
+            <span>Business</span>
+            <strong>@_settings.BusinessName</strong>
+        </div>
+
+        <div>
+            <span>Branches</span>
+            <strong>@_branches.Count active</strong>
+        </div>
+
+        <div>
+            <span>Currency</span>
+            <strong>@_settings.CurrencyCode · @_settings.CurrencySymbol</strong>
+        </div>
+
+        <div>
+            <span>Stock Tracking</span>
+            <strong>@(_settings.StockTrackingEnabled ? "Enabled" : "Disabled")</strong>
+        </div>
+    </div>
+
+    @if (_showTransferPanel)
+    {
+        <div class="transfer-panel">
+            <div class="transfer-panel-header">
+                <div>
+                    <h2>Create Transfer</h2>
+                    <p>Select source and destination branch, then add stock items.</p>
+                </div>
+
+                <button type="button" class="transfer-ghost-btn" @onclick="CloseTransferPanel">
+                    Close
+                </button>
+            </div>
+
+            <EditForm Model="_transfer" OnValidSubmit="SaveTransferAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="transfer-validation" />
+
+                <div class="transfer-form-grid">
+                    <div>
+                        <label>Source Branch</label>
+                        <select class="transfer-input"
+                                value="@_transfer.SourceBranchId"
+                                @onchange="SourceBranchChangedAsync">
+                            <option value="0">Select source branch</option>
+                            @foreach (var branch in _branches)
+                            {
+                                <option value="@branch.Id">
+                                    @branch.Name
+                                    @if (branch.IsMainBranch)
+                                    {
+                                        @(" · Main")
+                                    }
+                                </option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label>Destination Branch</label>
+                        <InputSelect class="transfer-input" @bind-Value="_transfer.DestinationBranchId">
+                            <option value="0">Select destination branch</option>
+                            @foreach (var branch in _branches.Where(x => x.Id != _transfer.SourceBranchId))
+                            {
+                                <option value="@branch.Id">
+                                    @branch.Name
+                                    @if (branch.IsMainBranch)
+                                    {
+                                        @(" · Main")
+                                    }
+                                </option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div>
+                        <label>Transfer Date</label>
+                        <InputDate class="transfer-input" @bind-Value="_transfer.TransferDate" />
+                    </div>
+                </div>
+
+                <div class="transfer-items-card">
+                    <div class="transfer-items-header">
+                        <div>
+                            <h3>Transfer Items</h3>
+                            <p>Only available stock from the selected source branch will appear.</p>
+                        </div>
+
+                        <button type="button" class="transfer-secondary-btn" @onclick="AddLine">
+                            <i class="bi bi-plus-lg"></i>
+                            Add Line
+                        </button>
+                    </div>
+
+                    @if (_transfer.SourceBranchId <= 0)
+                    {
+                        <div class="transfer-empty small">
+                            <strong>Select source branch first</strong>
+                            <span>Products will load after selecting a source branch.</span>
+                        </div>
+                    }
+                    else if (_sourceProducts.Count == 0)
+                    {
+                        <div class="transfer-empty small">
+                            <strong>No stock available</strong>
+                            <span>No stock-tracked items with available quantity were found for this branch.</span>
+                        </div>
+                    }
+                    else if (_transfer.Items.Count == 0)
+                    {
+                        <div class="transfer-empty small">
+                            <strong>No items added</strong>
+                            <span>Add at least one item to transfer.</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="transfer-lines">
+                            @foreach (var line in _transfer.Items)
+                            {
+                                <div class="transfer-line">
+                                    <div>
+                                        <label>Product</label>
+                                        <select class="transfer-input"
+                                                value="@line.ProductId"
+                                                @onchange="(e) => ProductChanged(line, e.Value?.ToString())">
+                                            <option value="0">Select product</option>
+                                            @foreach (var product in _sourceProducts)
+                                            {
+                                                <option value="@product.Id">
+                                                    @GetProductOptionText(product)
+                                                </option>
+                                            }
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label>Qty</label>
+                                        <InputNumber class="transfer-input" @bind-Value="line.Quantity" />
+                                    </div>
+
+                                    <div>
+                                        <label>Available</label>
+                                        <div class="transfer-line-total">
+                                            @GetAvailableText(line.ProductId)
+                                        </div>
+                                    </div>
+
+                                    <button type="button" class="transfer-remove-btn" @onclick="() => RemoveLine(line)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="transfer-notes">
+                    <label>Notes</label>
+                    <InputTextArea class="transfer-input transfer-textarea" @bind-Value="_transfer.Notes" />
+                </div>
+
+                <div class="transfer-total-box">
+                    <div>
+                        <span>Total Lines</span>
+                        <strong>@_transfer.Items.Count</strong>
+                    </div>
+
+                    <div>
+                        <span>Total Quantity</span>
+                        <strong>@TransferTotalQuantity.ToString("0.##")</strong>
+                    </div>
+                </div>
+
+                <div class="transfer-actions">
+                    <button type="button" class="transfer-ghost-btn" @onclick="ResetTransferForm">
+                        Reset
+                    </button>
+
+                    <button type="submit" class="transfer-primary-btn" disabled="@_savingTransfer">
+                        <i class="bi bi-check2-circle"></i>
+                        @(_savingTransfer ? "Transferring..." : "Complete Transfer")
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    }
+
+    <div class="transfer-history-panel">
+        <div class="transfer-panel-header">
+            <div>
+                <h2>Transfer History</h2>
+                <p>Completed stock transfers between branches.</p>
+            </div>
+
+            <div class="transfer-filters">
+                <input type="date" @bind="_fromDate" />
+                <input type="date" @bind="_toDate" />
+
+                <select class="transfer-filter-select" @bind="_branchFilter">
+                    <option value="">All branches</option>
+                    @foreach (var branch in _branches)
+                    {
+                        <option value="@branch.Id">
+                            @branch.Name
+                            @if (branch.IsMainBranch)
+                            {
+                                @(" · Main")
+                            }
+                        </option>
+                    }
+                </select>
+
+                <div class="transfer-search small-search">
+                    <i class="bi bi-search"></i>
+                    <input @bind="_searchTerm"
+                           @bind:event="oninput"
+                           placeholder="Search transfer or branch" />
+                </div>
+
+                <button type="button" class="transfer-secondary-btn" @onclick="LoadTransfersAsync">
+                    Filter
+                </button>
+            </div>
+        </div>
+
+        @if (_loadingTransfers)
+        {
+            <div class="transfer-empty">
+                <strong>Loading transfers...</strong>
+                <span>Please wait while we fetch stock transfers.</span>
+            </div>
+        }
+        else if (_transfers.Count == 0)
+        {
+            <div class="transfer-empty">
+                <strong>No transfers found</strong>
+                <span>Transfer stock between branches to see records here.</span>
+            </div>
+        }
+        else
+        {
+            <div class="transfer-table-wrap">
+                <table class="transfer-table">
+                    <thead>
+                        <tr>
+                            <th>Transfer No.</th>
+                            <th>Date</th>
+                            <th>From</th>
+                            <th>To</th>
+                            <th>Items</th>
+                            <th>Qty</th>
+                            <th>Status</th>
+                            <th>Created By</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var transfer in _transfers)
+                        {
+                            <tr>
+                                <td>@transfer.TransferNumber</td>
+                                <td>@transfer.TransferDate.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                                <td>@transfer.SourceBranchName</td>
+                                <td>@transfer.DestinationBranchName</td>
+                                <td>@transfer.ItemCount</td>
+                                <td>@transfer.TotalQuantity.ToString("0.##")</td>
+                                <td>
+                                    <span class="transfer-status-pill">@transfer.Status</span>
+                                </td>
+                                <td>@(string.IsNullOrWhiteSpace(transfer.CreatedByName) ? "-" : transfer.CreatedByName)</td>
+                                <td>@(string.IsNullOrWhiteSpace(transfer.Notes) ? "-" : transfer.Notes)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>
+
+<style>
+    .transfer-page {
+        animation: transferIn .22s ease both;
+    }
+
+    .transfer-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 18px;
+        margin-bottom: 18px;
+    }
+
+    .transfer-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 750;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+
+    .transfer-header h1 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 1.45rem;
+        font-weight: 680;
+        letter-spacing: -.03em;
+    }
+
+    .transfer-header p {
+        margin: 6px 0 0;
+        color: #64748b;
+        font-size: .88rem;
+    }
+
+    .transfer-primary-btn,
+    .transfer-secondary-btn,
+    .transfer-ghost-btn {
+        min-height: 38px;
+        border-radius: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 650;
+        border: 0;
+        white-space: nowrap;
+        text-decoration: none;
+    }
+
+    .transfer-primary-btn {
+        color: #ffffff;
+        background: #111827;
+        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+    }
+
+    .transfer-secondary-btn {
+        color: #2563eb;
+        background: #eef5ff;
+    }
+
+    .transfer-ghost-btn {
+        color: #475569;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+    }
+
+    .transfer-alert {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        font-size: .84rem;
+        font-weight: 600;
+        border: 1px solid;
+    }
+
+        .transfer-alert.success {
+            color: #166534;
+            background: #f0fdf4;
+            border-color: #bbf7d0;
+        }
+
+        .transfer-alert.danger {
+            color: #991b1b;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+        .transfer-alert span {
+            flex: 1;
+        }
+
+        .transfer-alert button {
+            border: 0;
+            background: transparent;
+            color: inherit;
+        }
+
+    .transfer-settings-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+        .transfer-settings-strip div {
+            padding: 13px;
+            border-radius: 16px;
+            background: #ffffff;
+            border: 1px solid #e7edf5;
+            box-shadow: 0 12px 28px rgba(15,23,42,.04);
+        }
+
+        .transfer-settings-strip span,
+        .transfer-settings-strip strong {
+            display: block;
+        }
+
+        .transfer-settings-strip span {
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .transfer-settings-strip strong {
+            margin-top: 4px;
+            color: #0f172a;
+            font-size: .84rem;
+            font-weight: 720;
+        }
+
+    .transfer-panel,
+    .transfer-history-panel,
+    .transfer-items-card {
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        border-radius: 20px;
+        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        overflow: hidden;
+        margin-bottom: 16px;
+    }
+
+    .transfer-panel-header,
+    .transfer-items-header {
+        padding: 17px 18px;
+        border-bottom: 1px solid #edf2f7;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+    }
+
+        .transfer-panel-header h2,
+        .transfer-items-header h3 {
+            margin: 0;
+            color: #0f172a;
+            font-size: .92rem;
+            font-weight: 720;
+        }
+
+        .transfer-panel-header p,
+        .transfer-items-header p {
+            margin: 4px 0 0;
+            color: #94a3b8;
+            font-size: .76rem;
+        }
+
+    .transfer-form-grid {
+        padding: 18px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+        .transfer-form-grid label,
+        .transfer-lines label,
+        .transfer-notes label {
+            display: block;
+            margin-bottom: 6px;
+            color: #475569;
+            font-size: .77rem;
+            font-weight: 700;
+        }
+
+    .transfer-input,
+    .transfer-filters input,
+    .transfer-filter-select {
+        width: 100%;
+        min-height: 40px;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        color: #0f172a;
+        padding: 0 12px;
+        font-size: .84rem;
+        outline: none;
+    }
+
+    .transfer-items-card {
+        margin: 0 18px 14px;
+        box-shadow: none;
+    }
+
+    .transfer-lines {
+        padding: 14px 18px;
+        display: grid;
+        gap: 10px;
+    }
+
+    .transfer-line {
+        display: grid;
+        grid-template-columns: minmax(240px, 1fr) 130px 150px auto;
+        gap: 10px;
+        align-items: end;
+        padding: 13px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+    }
+
+    .transfer-line-total {
+        min-height: 40px;
+        border-radius: 12px;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        color: #0f172a;
+        font-size: .84rem;
+        font-weight: 750;
+    }
+
+    .transfer-remove-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        border: 1px solid #fecaca;
+        background: #fef2f2;
+        color: #dc2626;
+    }
+
+    .transfer-notes {
+        margin: 0 18px 14px;
+    }
+
+    .transfer-textarea {
+        min-height: 86px;
+        padding-top: 10px;
+        resize: vertical;
+    }
+
+    .transfer-total-box {
+        margin: 0 18px 14px;
+        border-top: 1px solid #edf2f7;
+        padding-top: 12px;
+        display: grid;
+        gap: 8px;
+    }
+
+        .transfer-total-box div {
+            display: flex;
+            justify-content: space-between;
+            color: #64748b;
+            font-size: .84rem;
+        }
+
+        .transfer-total-box strong {
+            color: #0f172a;
+        }
+
+    .transfer-actions {
+        padding: 0 18px 18px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+
+    .transfer-validation {
+        margin: 0 18px 14px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: #fef2f2;
+        color: #991b1b;
+        font-size: .82rem;
+    }
+
+    .transfer-filters {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .transfer-search {
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 12px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        color: #94a3b8;
+    }
+
+        .transfer-search input {
+            border: 0;
+            outline: none;
+            background: transparent;
+            color: #0f172a;
+            font-size: .84rem;
+        }
+
+    .small-search {
+        width: 260px;
+    }
+
+    .transfer-table-wrap {
+        overflow-x: auto;
+    }
+
+    .transfer-table {
+        width: 100%;
+        min-width: 1000px;
+        border-collapse: collapse;
+    }
+
+        .transfer-table th {
+            padding: 12px 16px;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: .7rem;
+            font-weight: 750;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            border-bottom: 1px solid #e7edf5;
+        }
+
+        .transfer-table td {
+            padding: 14px 16px;
+            color: #334155;
+            font-size: .82rem;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+
+    .transfer-status-pill {
+        display: inline-flex;
+        min-height: 26px;
+        align-items: center;
+        padding: 0 9px;
+        border-radius: 999px;
+        color: #15803d;
+        background: #ecfdf5;
+        font-size: .72rem;
+        font-weight: 750;
+    }
+
+    .transfer-empty {
+        margin: 18px;
+        padding: 34px 20px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px dashed #dbe3ef;
+        text-align: center;
+    }
+
+        .transfer-empty.small {
+            margin: 14px 18px;
+            padding: 24px 16px;
+        }
+
+        .transfer-empty strong,
+        .transfer-empty span {
+            display: block;
+        }
+
+        .transfer-empty strong {
+            color: #0f172a;
+            font-size: .9rem;
+        }
+
+        .transfer-empty span {
+            margin-top: 4px;
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+    @@keyframes transferIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width: 1199px) {
+        .transfer-settings-strip,
+        .transfer-form-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .transfer-line {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .transfer-header,
+        .transfer-panel-header,
+        .transfer-items-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+            .transfer-header .transfer-primary-btn,
+            .transfer-actions button {
+                width: 100%;
+            }
+
+        .transfer-settings-strip,
+        .transfer-form-grid,
+        .transfer-line {
+            grid-template-columns: 1fr;
+        }
+
+        .transfer-actions {
+            flex-direction: column-reverse;
+        }
+
+        .transfer-filters,
+        .transfer-filters input,
+        .transfer-filter-select,
+        .transfer-filters button,
+        .small-search {
+            width: 100%;
+        }
+
+        .transfer-search input {
+            width: 100%;
+        }
+    }
+</style>
+
+@code {
+    private BusinessSettingsFormModel _settings = new();
+    private List<BranchOptionViewModel> _branches = new();
+    private List<StockTransferProductOptionViewModel> _sourceProducts = new();
+    private List<StockTransferHistoryRowViewModel> _transfers = new();
+
+    private CreateStockTransferModel _transfer = new();
+
+    private bool _showTransferPanel;
+    private bool _savingTransfer;
+    private bool _loadingTransfers = true;
+
+    private DateTime? _fromDate = DateTime.Today.AddDays(-30);
+    private DateTime? _toDate = DateTime.Today;
+    private int? _branchFilter;
+    private string? _searchTerm;
+
+    private string? _message;
+    private bool _isSuccess;
+
+    private decimal TransferTotalQuantity => _transfer.Items.Sum(x => x.Quantity);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserAccessService.CanAccessAsync("stock-transfers"))
+        {
+            NavigationManager.NavigateTo("/dashboard");
+            return;
+        }
+
+        _settings = await BusinessSettingsService.GetSettingsAsync();
+        _branches = await BranchService.GetBranchOptionsAsync();
+
+        ResetTransferForm();
+        await LoadTransfersAsync();
+    }
+
+    private async Task LoadTransfersAsync()
+    {
+        _loadingTransfers = true;
+        _transfers = await StockTransferService.GetTransfersAsync(_fromDate, _toDate, _branchFilter, _searchTerm);
+        _loadingTransfers = false;
+    }
+
+    private void OpenTransferPanel()
+    {
+        _showTransferPanel = true;
+
+        if (_transfer.Items.Count == 0)
+        {
+            AddLine();
+        }
+    }
+
+    private void CloseTransferPanel()
+    {
+        _showTransferPanel = false;
+    }
+
+    private void ResetTransferForm()
+    {
+        _transfer = new CreateStockTransferModel
+        {
+            TransferDate = DateTime.Today,
+            Items = new List<CreateStockTransferItemModel>()
+        };
+
+        _sourceProducts = new List<StockTransferProductOptionViewModel>();
+        AddLine();
+    }
+
+    private async Task SourceBranchChangedAsync(ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var branchId))
+        {
+            branchId = 0;
+        }
+
+        _transfer.SourceBranchId = branchId;
+
+        if (_transfer.DestinationBranchId == branchId)
+        {
+            _transfer.DestinationBranchId = 0;
+        }
+
+        _sourceProducts = branchId > 0
+            ? await StockTransferService.GetSourceProductsAsync(branchId)
+            : new List<StockTransferProductOptionViewModel>();
+
+        _transfer.Items.Clear();
+        AddLine();
+    }
+
+    private void AddLine()
+    {
+        _transfer.Items.Add(new CreateStockTransferItemModel
+        {
+            Quantity = 1
+        });
+    }
+
+    private void RemoveLine(CreateStockTransferItemModel line)
+    {
+        _transfer.Items.Remove(line);
+    }
+
+    private void ProductChanged(CreateStockTransferItemModel line, string? value)
+    {
+        if (!int.TryParse(value, out var productId))
+        {
+            line.ProductId = 0;
+            return;
+        }
+
+        line.ProductId = productId;
+    }
+
+    private async Task SaveTransferAsync()
+    {
+        _savingTransfer = true;
+
+        _transfer.Items = _transfer.Items
+            .Where(x => x.ProductId > 0 && x.Quantity > 0)
+            .ToList();
+
+        var result = await StockTransferService.CreateTransferAsync(_transfer);
+
+        _savingTransfer = false;
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            ResetTransferForm();
+            _showTransferPanel = false;
+            await LoadTransfersAsync();
+        }
+    }
+
+    private string GetProductOptionText(StockTransferProductOptionViewModel product)
+    {
+        var unit = string.IsNullOrWhiteSpace(product.UnitOfMeasure) ? "" : $" {product.UnitOfMeasure}";
+        return $"{product.ProductName} ({product.SKU}) · Available {product.QuantityInStock:0.##}{unit}";
+    }
+
+    private string GetAvailableText(int productId)
+    {
+        var product = _sourceProducts.FirstOrDefault(x => x.Id == productId);
+
+        if (product == null)
+        {
+            return "-";
+        }
+
+        var unit = string.IsNullOrWhiteSpace(product.UnitOfMeasure) ? "" : $" {product.UnitOfMeasure}";
+        return $"{product.QuantityInStock:0.##}{unit}";
+    }
+
+    private void ShowMessage(string message, bool success)
+    {
+        _message = message;
+        _isSuccess = success;
+    }
+
+    private void ClearMessage()
+    {
+        _message = null;
+    }
+}

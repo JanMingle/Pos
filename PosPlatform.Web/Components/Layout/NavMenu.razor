@@ -89,6 +89,14 @@
             </NavLink>
         }
 
+        @if (_canStockTransfers)
+        {
+            <NavLink href="/stock-transfers" class="pos-nav-link">
+                <span class="pos-nav-icon"><i class="bi bi-arrow-left-right"></i></span>
+                <span class="pos-nav-text">Stock Transfers</span>
+            </NavLink>
+        }
+
         @if (_canUsers || _canReports || _canSettings)
         {
             <div class="pos-nav-section">Management</div>
@@ -154,6 +162,7 @@
     private bool _canSuppliers;
     private bool _canStockPurchases;
     private bool _canExpenses;
+    private bool _canStockTransfers;
 
     protected override async Task OnInitializedAsync()
     {
@@ -171,5 +180,6 @@
         _canSuppliers = await UserAccessService.CanAccessAsync("suppliers");
         _canStockPurchases = await UserAccessService.CanAccessAsync("stock-purchases");
         _canExpenses = await UserAccessService.CanAccessAsync("expenses");
+        _canStockTransfers = await UserAccessService.CanAccessAsync("stock-transfers");
     }
 }

@@ -40,6 +40,7 @@ builder.Services.AddScoped<StockPurchaseService>();
 builder.Services.AddScoped<ExpenseService>();
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<BranchService>();
+builder.Services.AddScoped<StockTransferService>();
 
 var app = builder.Build();
 

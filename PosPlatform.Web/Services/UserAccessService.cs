@@ -68,6 +68,7 @@ namespace PosPlatform.Web.Services
                 "reports" => role is "Accounting User" or "Manager" or "Viewer",
                 "expenses" => role is "Manager" or "Accounting User",
 
+                "stock-transfers" => role is "Manager" or "Inventory User",
                 "users" => false,
                 "settings" => false,
 

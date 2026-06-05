@@ -49,6 +49,9 @@ namespace PosPlatform.Infrastructure.Data
         public DbSet<ExpenseCategory> ExpenseCategories => Set<ExpenseCategory>();
         public DbSet<Expense> Expenses => Set<Expense>();
 
+        public DbSet<StockTransfer> StockTransfers => Set<StockTransfer>();
+        public DbSet<StockTransferItem> StockTransferItems => Set<StockTransferItem>();
+
 
 
         protected override void OnModelCreating(ModelBuilder builder)
@@ -269,7 +272,8 @@ namespace PosPlatform.Infrastructure.Data
                 entity.Property(x => x.ReorderLevel)
                       .HasColumnType("decimal(18,2)");
 
-                entity.HasIndex(x => new { x.TenantId, x.SKU }).IsUnique();
+                entity.HasIndex(x => new { x.TenantId, x.BranchId, x.SKU })
+      .IsUnique();
 
                 entity.HasOne(x => x.ProductCategory)
                       .WithMany(x => x.Products)
@@ -865,6 +869,88 @@ namespace PosPlatform.Infrastructure.Data
                       .WithMany()
                       .HasForeignKey(x => x.CreatedByUserId)
                       .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            builder.Entity<StockTransfer>(entity =>
+            {
+                entity.ToTable("StockTransfers");
+
+                entity.Property(x => x.TransferNumber)
+                    .HasMaxLength(80)
+                    .IsRequired();
+
+                entity.Property(x => x.Status)
+                    .HasMaxLength(50)
+                    .IsRequired();
+
+                entity.Property(x => x.Notes)
+                    .HasMaxLength(500);
+
+                entity.Property(x => x.CreatedByName)
+                    .HasMaxLength(150);
+
+                entity.HasIndex(x => new { x.TenantId, x.TransferNumber });
+
+                entity.HasOne(x => x.Tenant)
+                    .WithMany()
+                    .HasForeignKey(x => x.TenantId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.SourceBranch)
+                    .WithMany()
+                    .HasForeignKey(x => x.SourceBranchId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.DestinationBranch)
+                    .WithMany()
+                    .HasForeignKey(x => x.DestinationBranchId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            builder.Entity<StockTransferItem>(entity =>
+            {
+                entity.ToTable("StockTransferItems");
+
+                entity.Property(x => x.ProductName)
+                    .HasMaxLength(150)
+                    .IsRequired();
+
+                entity.Property(x => x.SKU)
+                    .HasMaxLength(80)
+                    .IsRequired();
+
+                entity.Property(x => x.Quantity)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.SourceQuantityBefore)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.SourceQuantityAfter)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.DestinationQuantityBefore)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.DestinationQuantityAfter)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.UnitOfMeasure)
+                    .HasMaxLength(50);
+
+                entity.HasOne(x => x.StockTransfer)
+                    .WithMany(x => x.Items)
+                    .HasForeignKey(x => x.StockTransferId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(x => x.SourceProduct)
+                    .WithMany()
+                    .HasForeignKey(x => x.SourceProductId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.TargetProduct)
+                    .WithMany()
+                    .HasForeignKey(x => x.TargetProductId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
         }

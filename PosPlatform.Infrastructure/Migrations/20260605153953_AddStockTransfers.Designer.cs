@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PosPlatform.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using PosPlatform.Infrastructure.Data;
 namespace PosPlatform.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260605153953_AddStockTransfers")]
+    partial class AddStockTransfers
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -830,9 +833,8 @@ namespace PosPlatform.Infrastructure.Migrations
 
                     b.HasIndex("ProductCategoryId");
 
-                    b.HasIndex("TenantId", "BranchId", "SKU")
-                        .IsUnique()
-                        .HasFilter("[BranchId] IS NOT NULL");
+                    b.HasIndex("TenantId", "SKU")
+                        .IsUnique();
 
                     b.ToTable("Products", (string)null);
                 });
