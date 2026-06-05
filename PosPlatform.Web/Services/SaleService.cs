@@ -74,6 +74,51 @@ namespace PosPlatform.Web.Services
         
         }
 
+     
+        public async Task<SaleProductOptionViewModel?> GetProductByBarcodeAsync(string? barcodeOrSku)
+        {
+            var tenantId = await _tenantContext.GetTenantIdAsync();
+            var currentBranchId = await _tenantContext.GetBranchIdAsync();
+
+            if (tenantId == null || string.IsNullOrWhiteSpace(barcodeOrSku))
+            {
+                return null;
+            }
+
+            var code = barcodeOrSku.Trim();
+
+            return await _db.Products
+                .AsNoTracking()
+                .Where(x =>
+                    x.TenantId == tenantId.Value &&
+                    x.IsActive &&
+                    (
+                        x.SKU == code ||
+                        (x.Barcode != null && x.Barcode == code)
+                    ) &&
+                    (!currentBranchId.HasValue || x.BranchId == null || x.BranchId == currentBranchId.Value))
+                .OrderByDescending(x => currentBranchId.HasValue && x.BranchId == currentBranchId.Value)
+                .ThenBy(x => x.ProductName)
+                .Select(x => new SaleProductOptionViewModel
+                {
+                    Id = x.Id,
+                    ProductName = x.ProductName,
+                    SKU = x.SKU,
+                    Barcode = x.Barcode,
+
+                    ProductType = x.ProductType,
+                    TrackStock = x.TrackStock,
+                    AgeRestricted = x.AgeRestricted,
+                    UnitOfMeasure = x.UnitOfMeasure,
+                    DurationMinutes = x.DurationMinutes,
+
+                    SellingPrice = x.SellingPrice,
+                    QuantityInStock = x.QuantityInStock,
+                    IsActive = x.IsActive
+                })
+                .FirstOrDefaultAsync();
+        }
+
         public async Task<SaleResult> CompleteSaleAsync(CreateSaleRequest request)
         {
             var tenantId = await _tenantContext.GetTenantIdAsync();

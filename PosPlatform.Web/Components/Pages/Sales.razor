@@ -19,6 +19,7 @@
 @using PosPlatform.Web.Models.Shifts
 @using PosPlatform.Web.Models.Customers
 @inject BranchService BranchService
+@using Microsoft.AspNetCore.Components.Web
 
 
 
@@ -111,6 +112,25 @@
                     <h2>Items</h2>
                     <p>Search product name, SKU, barcode or item type.</p>
                 </div>
+            </div>
+
+            <div class="sales-barcode-row">
+                <div class="sales-barcode-box">
+                    <i class="bi bi-upc-scan"></i>
+                    <input @bind="_barcodeValue"
+                           @bind:event="oninput"
+                           @onkeydown="HandleBarcodeKeyDown"
+                           autofocus
+                           placeholder="Scan barcode or type SKU, then press Enter" />
+                </div>
+
+                <button type="button"
+                        class="sales-primary-btn"
+                        disabled="@_barcodeScanning"
+                        @onclick="ScanBarcodeAsync">
+                    <i class="bi bi-upc"></i>
+                    @(_barcodeScanning ? "Checking..." : "Add Scan")
+                </button>
             </div>
 
             <div class="sales-search-row">
@@ -1842,6 +1862,14 @@
             grid-template-columns: 1fr;
         }
 
+        .sales-barcode-row {
+            grid-template-columns: 1fr;
+        }
+
+            .sales-barcode-row button {
+                width: 100%;
+            }
+
         .sales-shift-warning {
             flex-direction: column;
             align-items: flex-start;
@@ -2105,6 +2133,40 @@
     .sales-refund-summary {
         grid-template-columns: 1fr;
     }
+
+    .sales-barcode-row {
+        display: grid;
+        grid-template-columns: minmax(240px, 1fr) auto;
+        gap: 10px;
+        padding: 0 18px 12px;
+    }
+
+    .sales-barcode-box {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 13px;
+        border-radius: 14px;
+        background: #ecfdf5;
+        border: 1px solid #bbf7d0;
+        color: #15803d;
+    }
+
+        .sales-barcode-box input {
+            width: 100%;
+            border: 0;
+            outline: none;
+            background: transparent;
+            color: #0f172a;
+            font-size: .9rem;
+            font-weight: 650;
+        }
+
+            .sales-barcode-box input::placeholder {
+                color: #64748b;
+                font-weight: 500;
+            }
 </style>
 
 @code {
@@ -2128,6 +2190,8 @@
     private bool _ageRestrictionConfirmed;
 
     private string? _searchTerm;
+    private string? _barcodeValue;
+    private bool _barcodeScanning;
     private string? _message;
     private bool _isSuccess;
 
@@ -2196,6 +2260,48 @@
         _returnHistory = await RefundService.GetReturnHistoryAsync(_fromDate, _toDate, _branchFilter);
 
         _loadingMySales = false;
+    }
+
+    private async Task HandleBarcodeKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ScanBarcodeAsync();
+        }
+    }
+
+    private async Task ScanBarcodeAsync()
+    {
+        var code = _barcodeValue?.Trim();
+
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            ShowMessage("Scan or type a barcode first.", false);
+            return;
+        }
+
+        _barcodeScanning = true;
+
+        var product = await SaleService.GetProductByBarcodeAsync(code);
+
+        _barcodeScanning = false;
+
+        if (product == null)
+        {
+            ShowMessage($"No item found for barcode or SKU: {code}", false);
+            return;
+        }
+
+        if (IsAddDisabled(product))
+        {
+            ShowMessage($"{product.ProductName} cannot be added. Check stock or item status.", false);
+            return;
+        }
+
+        AddToCart(product);
+
+        _barcodeValue = null;
+        ShowMessage($"{product.ProductName} added to cart.", true);
     }
 
     private void AddToCart(SaleProductOptionViewModel product)
