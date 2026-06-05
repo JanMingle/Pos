@@ -47,5 +47,6 @@
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
         public ICollection<InvoiceItem> InvoiceItems { get; set; } = new List<InvoiceItem>();
+        public ICollection<InvoicePayment> Payments { get; set; } = new List<InvoicePayment>();
     }
 }

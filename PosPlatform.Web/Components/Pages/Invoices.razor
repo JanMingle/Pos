@@ -23,7 +23,7 @@
                 Customer billing
             </div>
             <h1>Invoices</h1>
-            <p>View invoices created from accepted quotes.</p>
+            <p>View invoices created from accepted quotes and record customer payments.</p>
         </div>
     </div>
 
@@ -261,10 +261,121 @@
                 </div>
 
                 <div>
+                    <span>Amount Paid</span>
+                    <strong>@Money(_selectedInvoice.AmountPaid)</strong>
+                </div>
+
+                <div>
                     <span>Balance Due</span>
                     <strong>@Money(_selectedInvoice.BalanceDue)</strong>
                 </div>
             </div>
+
+            @if (_selectedInvoice.Status != "Paid" && _selectedInvoice.Status != "Cancelled" && _selectedInvoice.BalanceDue > 0)
+            {
+                <button type="button" class="invoices-primary-btn full" @onclick="OpenPaymentModal">
+                    <i class="bi bi-cash-coin"></i>
+                    Record Payment
+                </button>
+            }
+
+            <div class="invoices-payment-history">
+                <h5>Payment History</h5>
+
+                @if (_selectedInvoice.Payments.Count == 0)
+                {
+                    <div class="invoices-empty small">
+                        <strong>No payments yet</strong>
+                        <span>Payments recorded for this invoice will appear here.</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="invoices-table-wrap">
+                        <table class="invoices-table compact">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Method</th>
+                                    <th>Reference</th>
+                                    <th>Received By</th>
+                                    <th>Amount</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var payment in _selectedInvoice.Payments)
+                                {
+                                    <tr>
+                                        <td>@payment.PaymentDate.ToString("yyyy-MM-dd")</td>
+                                        <td>@payment.PaymentMethod</td>
+                                        <td>@(payment.ReferenceNumber ?? "-")</td>
+                                        <td>@payment.ReceivedByName</td>
+                                        <td class="invoices-money">@Money(payment.Amount)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showPaymentModal && _selectedInvoice != null)
+{
+    <div class="invoices-modal-backdrop">
+        <div class="invoices-modal small">
+            <div class="invoices-modal-header">
+                <div>
+                    <span>Invoice Payment</span>
+                    <h4>@_selectedInvoice.InvoiceNumber</h4>
+                    <p>Balance due: @Money(_selectedInvoice.BalanceDue)</p>
+                </div>
+
+                <button type="button" class="invoices-close-btn" @onclick="ClosePaymentModal">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div class="invoices-form-grid">
+                <div>
+                    <label>Payment Date</label>
+                    <input type="date" @bind="_paymentModel.PaymentDate" />
+                </div>
+
+                <div>
+                    <label>Amount</label>
+                    <input type="number" min="0.01" step="0.01" @bind="_paymentModel.Amount" />
+                </div>
+
+                <div>
+                    <label>Payment Method</label>
+                    <select @bind="_paymentModel.PaymentMethod">
+                        <option value="Cash">Cash</option>
+                        <option value="Card">Card</option>
+                        <option value="EFT">EFT</option>
+                        <option value="Bank Transfer">Bank Transfer</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Reference Number</label>
+                    <input @bind="_paymentModel.ReferenceNumber" placeholder="Optional" />
+                </div>
+
+                <div class="span-2">
+                    <label>Notes</label>
+                    <textarea @bind="_paymentModel.Notes" placeholder="Optional payment notes"></textarea>
+                </div>
+            </div>
+
+            <button type="button" class="invoices-primary-btn full mt" disabled="@_savingPayment" @onclick="SavePaymentAsync">
+                <i class="bi bi-check-circle"></i>
+                @(_savingPayment ? "Saving..." : "Save Payment")
+            </button>
         </div>
     </div>
 }
@@ -417,6 +528,7 @@
             font-size: .84rem;
         }
 
+    .invoices-primary-btn,
     .invoices-secondary-btn,
     .invoices-ghost-btn,
     .invoices-mini-btn {
@@ -432,6 +544,17 @@
         border: 0;
         white-space: nowrap;
     }
+
+    .invoices-primary-btn {
+        color: #fff;
+        background: #111827;
+        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+    }
+
+        .invoices-primary-btn:disabled {
+            opacity: .55;
+            cursor: not-allowed;
+        }
 
     .invoices-secondary-btn {
         color: #2563eb;
@@ -555,6 +678,11 @@
         text-align: center;
     }
 
+        .invoices-empty.small {
+            margin: 10px 0;
+            padding: 24px 16px;
+        }
+
         .invoices-empty strong,
         .invoices-empty span {
             display: block;
@@ -592,6 +720,10 @@
         background: #fff;
         box-shadow: 0 24px 60px rgba(15, 23, 42, .24);
     }
+
+        .invoices-modal.small {
+            max-width: 620px;
+        }
 
     .invoices-modal-header {
         display: flex;
@@ -689,6 +821,63 @@
             font-size: .86rem;
         }
 
+    .invoices-payment-history {
+        margin-top: 16px;
+    }
+
+        .invoices-payment-history h5 {
+            margin: 0 0 10px;
+            color: #0f172a;
+            font-size: .9rem;
+            font-weight: 720;
+        }
+
+    .invoices-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+        .invoices-form-grid label {
+            display: block;
+            margin-bottom: 5px;
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .invoices-form-grid input,
+        .invoices-form-grid select,
+        .invoices-form-grid textarea {
+            width: 100%;
+            min-height: 40px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            color: #0f172a;
+            padding: 0 12px;
+            font-size: .84rem;
+            outline: none;
+        }
+
+        .invoices-form-grid textarea {
+            min-height: 80px;
+            padding: 10px 12px;
+            resize: vertical;
+        }
+
+    .span-2 {
+        grid-column: span 2;
+    }
+
+    .mt {
+        margin-top: 14px;
+    }
+
+    .full {
+        width: 100%;
+    }
+
     @@keyframes invoicesIn {
         from {
             opacity: 0;
@@ -718,6 +907,14 @@
         .invoices-control-panel button {
             width: 100%;
         }
+
+        .invoices-form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .span-2 {
+            grid-column: span 1;
+        }
     }
 </style>
 
@@ -736,6 +933,10 @@
     private bool _isSuccess;
 
     private InvoiceDetailsViewModel? _selectedInvoice;
+
+    private bool _showPaymentModal;
+    private bool _savingPayment;
+    private RecordInvoicePaymentModel _paymentModel = new();
 
     private string CurrencyLabel =>
         string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
@@ -785,6 +986,70 @@
     private void CloseDetails()
     {
         _selectedInvoice = null;
+        _showPaymentModal = false;
+    }
+
+    private void OpenPaymentModal()
+    {
+        if (_selectedInvoice == null)
+        {
+            return;
+        }
+
+        _paymentModel = new RecordInvoicePaymentModel
+        {
+            InvoiceId = _selectedInvoice.Id,
+            Amount = _selectedInvoice.BalanceDue,
+            PaymentMethod = "Cash",
+            PaymentDate = DateTime.Today
+        };
+
+        _showPaymentModal = true;
+    }
+
+    private void ClosePaymentModal()
+    {
+        _showPaymentModal = false;
+    }
+
+    private async Task SavePaymentAsync()
+    {
+        if (_savingPayment)
+        {
+            return;
+        }
+
+        if (_paymentModel.Amount <= 0)
+        {
+            ShowMessage("Payment amount must be greater than zero.", false);
+            return;
+        }
+
+        if (_selectedInvoice != null && _paymentModel.Amount > _selectedInvoice.BalanceDue)
+        {
+            ShowMessage("Payment cannot be greater than the invoice balance.", false);
+            return;
+        }
+
+        _savingPayment = true;
+
+        var result = await InvoiceService.RecordPaymentAsync(_paymentModel);
+
+        _savingPayment = false;
+
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            _showPaymentModal = false;
+
+            if (_selectedInvoice != null)
+            {
+                _selectedInvoice = await InvoiceService.GetInvoiceDetailsAsync(_selectedInvoice.Id);
+            }
+
+            await LoadInvoicesAsync();
+        }
     }
 
     private string Money(decimal value)

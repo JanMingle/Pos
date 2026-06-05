@@ -62,6 +62,8 @@ namespace PosPlatform.Infrastructure.Data
         public DbSet<Invoice> Invoices => Set<Invoice>();
         public DbSet<InvoiceItem> InvoiceItems => Set<InvoiceItem>();
 
+        public DbSet<InvoicePayment> InvoicePayments => Set<InvoicePayment>();
+
 
 
         protected override void OnModelCreating(ModelBuilder builder)
@@ -1285,6 +1287,50 @@ namespace PosPlatform.Infrastructure.Data
                 entity.HasOne(x => x.Product)
                     .WithMany()
                     .HasForeignKey(x => x.ProductId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+            builder.Entity<InvoicePayment>(entity =>
+            {
+                entity.ToTable("InvoicePayments");
+
+                entity.Property(x => x.Amount)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.PaymentMethod)
+                    .HasMaxLength(50)
+                    .IsRequired();
+
+                entity.Property(x => x.ReferenceNumber)
+                    .HasMaxLength(100);
+
+                entity.Property(x => x.Notes)
+                    .HasMaxLength(300);
+
+                entity.Property(x => x.ReceivedByName)
+                    .HasMaxLength(150)
+                    .IsRequired();
+
+                entity.HasIndex(x => new { x.TenantId, x.InvoiceId });
+                entity.HasIndex(x => new { x.TenantId, x.PaymentDate });
+
+                entity.HasOne(x => x.Tenant)
+                    .WithMany()
+                    .HasForeignKey(x => x.TenantId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Branch)
+                    .WithMany()
+                    .HasForeignKey(x => x.BranchId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Invoice)
+                    .WithMany(x => x.Payments)
+                    .HasForeignKey(x => x.InvoiceId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(x => x.ReceivedByUser)
+                    .WithMany()
+                    .HasForeignKey(x => x.ReceivedByUserId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
 

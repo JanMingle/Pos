@@ -1,4 +1,6 @@
-﻿namespace PosPlatform.Web.Models.Invoices
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace PosPlatform.Web.Models.Invoices
 {
     public class InvoiceListItemViewModel
     {
@@ -54,6 +56,7 @@
         public DateTime CreatedAt { get; set; }
 
         public List<InvoiceItemViewModel> Items { get; set; } = new();
+        public List<InvoicePaymentViewModel> Payments { get; set; } = new();
     }
 
     public class InvoiceItemViewModel
@@ -66,5 +69,40 @@
         public decimal Quantity { get; set; }
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }
+    }
+
+    public class InvoicePaymentViewModel
+    {
+        public int Id { get; set; }
+        public DateTime PaymentDate { get; set; }
+
+        public decimal Amount { get; set; }
+
+        public string PaymentMethod { get; set; } = "Cash";
+        public string? ReferenceNumber { get; set; }
+        public string? Notes { get; set; }
+
+        public string ReceivedByName { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+    }
+
+    public class RecordInvoicePaymentModel
+    {
+        public int InvoiceId { get; set; }
+
+        [Range(0.01, 999999999, ErrorMessage = "Amount must be greater than zero.")]
+        public decimal Amount { get; set; }
+
+        [Required]
+        [StringLength(50)]
+        public string PaymentMethod { get; set; } = "Cash";
+
+        [StringLength(100)]
+        public string? ReferenceNumber { get; set; }
+
+        public DateTime PaymentDate { get; set; } = DateTime.Today;
+
+        [StringLength(300)]
+        public string? Notes { get; set; }
     }
 }

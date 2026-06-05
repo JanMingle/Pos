@@ -108,6 +108,7 @@ namespace PosPlatform.Web.Services
                 .AsNoTracking()
                 .Include(x => x.Quote)
                 .Include(x => x.InvoiceItems)
+                .Include(x => x.Payments)
                 .Where(x => x.Id == invoiceId && x.TenantId == tenantId.Value)
                 .Select(x => new InvoiceDetailsViewModel
                 {
@@ -142,6 +143,21 @@ namespace PosPlatform.Web.Services
                             Quantity = i.Quantity,
                             UnitPrice = i.UnitPrice,
                             LineTotal = i.LineTotal
+                        })
+                        .ToList(),
+                    Payments = x.Payments
+                        .OrderByDescending(p => p.PaymentDate)
+                        .ThenByDescending(p => p.Id)
+                        .Select(p => new InvoicePaymentViewModel
+                        {
+                            Id = p.Id,
+                            PaymentDate = p.PaymentDate,
+                            Amount = p.Amount,
+                            PaymentMethod = p.PaymentMethod,
+                            ReferenceNumber = p.ReferenceNumber,
+                            Notes = p.Notes,
+                            ReceivedByName = p.ReceivedByName,
+                            CreatedAt = p.CreatedAt
                         })
                         .ToList()
                 })
@@ -323,6 +339,141 @@ namespace PosPlatform.Web.Services
             return (true, $"Invoice created successfully: {completedInvoice?.InvoiceNumber}", completedInvoice?.Id);
         }
 
+        public async Task<(bool Success, string Message)> RecordPaymentAsync(RecordInvoicePaymentModel model)
+        {
+            var tenantId = await _tenantContext.GetTenantIdAsync();
+            var branchId = await _tenantContext.GetBranchIdAsync();
+            var userId = GetCurrentUserId();
+            var userName = GetCurrentUserDisplayName();
+
+            if (tenantId == null)
+            {
+                return (false, "Tenant not found.");
+            }
+
+            if (userId == null)
+            {
+                return (false, "Logged-in user could not be identified.");
+            }
+
+            if (model.InvoiceId <= 0)
+            {
+                return (false, "Invoice is required.");
+            }
+
+            if (model.Amount <= 0)
+            {
+                return (false, "Payment amount must be greater than zero.");
+            }
+
+            if (string.IsNullOrWhiteSpace(model.PaymentMethod))
+            {
+                return (false, "Payment method is required.");
+            }
+
+            var invoice = await _db.Invoices
+                .Include(x => x.Payments)
+                .FirstOrDefaultAsync(x =>
+                    x.Id == model.InvoiceId &&
+                    x.TenantId == tenantId.Value);
+
+            if (invoice == null)
+            {
+                return (false, "Invoice not found.");
+            }
+
+            if (invoice.Status == "Cancelled")
+            {
+                return (false, "Cannot record payment for a cancelled invoice.");
+            }
+
+            if (invoice.Status == "Paid" || invoice.BalanceDue <= 0)
+            {
+                return (false, "This invoice is already fully paid.");
+            }
+
+            if (model.Amount > invoice.BalanceDue)
+            {
+                return (false, $"Payment cannot be greater than the balance due. Balance due: {invoice.BalanceDue:0.00}");
+            }
+
+            var oldValues = new
+            {
+                invoice.InvoiceNumber,
+                invoice.TotalAmount,
+                invoice.AmountPaid,
+                invoice.BalanceDue,
+                invoice.Status
+            };
+
+            var payment = new InvoicePayment
+            {
+                TenantId = tenantId.Value,
+                BranchId = invoice.BranchId ?? branchId,
+                InvoiceId = invoice.Id,
+                Amount = model.Amount,
+                PaymentMethod = model.PaymentMethod.Trim(),
+                ReferenceNumber = Clean(model.ReferenceNumber),
+                PaymentDate = model.PaymentDate.Date,
+                Notes = Clean(model.Notes),
+                ReceivedByUserId = userId.Value,
+                ReceivedByName = userName,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _db.InvoicePayments.Add(payment);
+
+            invoice.AmountPaid += model.Amount;
+            invoice.BalanceDue = invoice.TotalAmount - invoice.AmountPaid;
+
+            if (invoice.BalanceDue <= 0)
+            {
+                invoice.BalanceDue = 0;
+                invoice.Status = "Paid";
+            }
+            else if (invoice.AmountPaid > 0)
+            {
+                invoice.Status = "Partially Paid";
+            }
+            else
+            {
+                invoice.Status = "Unpaid";
+            }
+
+            invoice.UpdatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            await _auditLogService.LogAsync(
+                module: "Invoices",
+                action: "Payment",
+                entityName: "InvoicePayment",
+                entityId: payment.Id,
+                summary: $"Recorded payment of {payment.Amount:0.00} for invoice {invoice.InvoiceNumber}. Balance due {invoice.BalanceDue:0.00}.",
+                oldValues: oldValues,
+                newValues: new
+                {
+                    payment.Id,
+                    payment.InvoiceId,
+                    invoice.InvoiceNumber,
+                    payment.Amount,
+                    payment.PaymentMethod,
+                    payment.ReferenceNumber,
+                    payment.PaymentDate,
+                    payment.Notes,
+                    payment.ReceivedByName,
+                    InvoiceAfterPayment = new
+                    {
+                        invoice.TotalAmount,
+                        invoice.AmountPaid,
+                        invoice.BalanceDue,
+                        invoice.Status
+                    }
+                });
+
+            return (true, "Payment recorded successfully.");
+        }
+
         private int? GetCurrentUserId()
         {
             var value = _httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -337,6 +488,11 @@ namespace PosPlatform.Web.Services
                 ?? user?.Identity?.Name
                 ?? user?.FindFirstValue(ClaimTypes.Email)
                 ?? "User";
+        }
+
+        private static string? Clean(string? value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         }
     }
 }
