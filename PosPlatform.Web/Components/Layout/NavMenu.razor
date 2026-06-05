@@ -104,7 +104,7 @@
             </NavLink>
         }
 
-        @if (_canUsers || _canReports || _canSettings)
+        @if (_canUsers || _canReports || _canAuditTrail || _canSettings)
         {
             <div class="pos-nav-section">Management</div>
         }
@@ -122,6 +122,14 @@
             <NavLink href="/reports" class="pos-nav-link">
                 <span class="pos-nav-icon"><i class="bi bi-bar-chart"></i></span>
                 <span class="pos-nav-text">Reports</span>
+            </NavLink>
+        }
+
+        @if (_canAuditTrail)
+        {
+            <NavLink href="/audit-trail" class="pos-nav-link">
+                <span class="pos-nav-icon"><i class="bi bi-shield-lock"></i></span>
+                <span class="pos-nav-text">Audit Trail</span>
             </NavLink>
         }
 
@@ -171,6 +179,7 @@
     private bool _canStockPurchases;
     private bool _canExpenses;
     private bool _canStockTransfers;
+    private bool _canAuditTrail;
 
     protected override async Task OnInitializedAsync()
     {
@@ -190,5 +199,6 @@
         _canStockPurchases = await UserAccessService.CanAccessAsync("stock-purchases");
         _canExpenses = await UserAccessService.CanAccessAsync("expenses");
         _canStockTransfers = await UserAccessService.CanAccessAsync("stock-transfers");
+        _canAuditTrail = await UserAccessService.CanAccessAsync("audit-trail");
     }
 }

@@ -120,6 +120,9 @@ namespace PosPlatform.Web.Services
                 CashierUserId = userId.Value,
                 CashierName = cashierName,
                 OpeningCash = model.OpeningCash,
+                CashIn = 0,
+                CashOut = 0,
+                ExpectedCash = model.OpeningCash,
                 OpeningNotes = Clean(model.OpeningNotes),
                 Status = "Open",
                 OpenedAt = DateTime.UtcNow,
@@ -130,6 +133,87 @@ namespace PosPlatform.Web.Services
             await _db.SaveChangesAsync();
 
             return (true, "Shift opened successfully.");
+        }
+
+        public async Task<(bool Success, string Message)> RecordCashMovementAsync(CashMovementModel model)
+        {
+            var tenantId = await _tenantContext.GetTenantIdAsync();
+            var userId = GetCurrentUserId();
+            var cashierName = GetCurrentUserDisplayName();
+
+            if (tenantId == null || userId == null)
+            {
+                return (false, "Logged-in user could not be identified.");
+            }
+
+            var movementType = NormalizeMovementType(model.MovementType);
+
+            if (movementType == null)
+            {
+                return (false, "Select a valid movement type.");
+            }
+
+            if (model.Amount <= 0)
+            {
+                return (false, "Amount must be greater than zero.");
+            }
+
+            if (string.IsNullOrWhiteSpace(model.Reason))
+            {
+                return (false, "Reason is required.");
+            }
+
+            var shift = await _db.CashierShifts.FirstOrDefaultAsync(x =>
+                x.TenantId == tenantId.Value &&
+                x.CashierUserId == userId.Value &&
+                x.Status == "Open");
+
+            if (shift == null)
+            {
+                return (false, "You do not have an open shift.");
+            }
+
+            var movement = new CashierShiftCashMovement
+            {
+                TenantId = tenantId.Value,
+                BranchId = shift.BranchId,
+                CashierShiftId = shift.Id,
+                CashierUserId = userId.Value,
+                CashierName = cashierName,
+                MovementType = movementType,
+                Amount = model.Amount,
+                Reason = model.Reason.Trim(),
+                Notes = Clean(model.Notes),
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _db.CashierShiftCashMovements.Add(movement);
+
+            if (movementType == "Cash In")
+            {
+                shift.CashIn += model.Amount;
+            }
+            else
+            {
+                shift.CashOut += model.Amount;
+            }
+
+            var totals = await CalculateShiftTotalsAsync(
+                tenantId.Value,
+                userId.Value,
+                shift.OpenedAt,
+                DateTime.UtcNow);
+
+            shift.CashSales = totals.CashSales;
+            shift.CardSales = totals.CardSales;
+            shift.EftSales = totals.EftSales;
+            shift.TotalSales = totals.TotalSales;
+            shift.ExpectedCash = shift.OpeningCash + shift.CashSales + shift.CashIn - shift.CashOut;
+            shift.UpdatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            return (true, $"{movementType} recorded successfully.");
         }
 
         public async Task<(bool Success, string Message)> CloseShiftAsync(CloseShiftModel model)
@@ -158,13 +242,18 @@ namespace PosPlatform.Web.Services
                 shift.OpenedAt,
                 DateTime.UtcNow);
 
+            var movementTotals = await CalculateCashMovementTotalsAsync(shift.Id);
+
             shift.CashSales = totals.CashSales;
             shift.CardSales = totals.CardSales;
             shift.EftSales = totals.EftSales;
             shift.TotalSales = totals.TotalSales;
 
+            shift.CashIn = movementTotals.CashIn;
+            shift.CashOut = movementTotals.CashOut;
+
             shift.ClosingCash = model.ClosingCash;
-            shift.ExpectedCash = shift.OpeningCash + totals.CashSales;
+            shift.ExpectedCash = shift.OpeningCash + totals.CashSales + movementTotals.CashIn - movementTotals.CashOut;
             shift.CashDifference = model.ClosingCash - shift.ExpectedCash;
 
             shift.ClosingNotes = Clean(model.ClosingNotes);
@@ -191,8 +280,13 @@ namespace PosPlatform.Web.Services
                     TotalSales = shift.TotalSales
                 };
 
+            var movementTotals = await CalculateCashMovementTotalsAsync(shift.Id);
+
+            var cashIn = shift.Status == "Open" ? movementTotals.CashIn : shift.CashIn;
+            var cashOut = shift.Status == "Open" ? movementTotals.CashOut : shift.CashOut;
+
             var expectedCash = shift.Status == "Open"
-                ? shift.OpeningCash + totals.CashSales
+                ? shift.OpeningCash + totals.CashSales + cashIn - cashOut
                 : shift.ExpectedCash;
 
             var cashDifference = shift.Status == "Open"
@@ -212,11 +306,14 @@ namespace PosPlatform.Web.Services
                 CardSales = totals.CardSales,
                 EftSales = totals.EftSales,
                 TotalSales = totals.TotalSales,
+                CashIn = cashIn,
+                CashOut = cashOut,
                 ExpectedCash = expectedCash,
                 CashDifference = cashDifference,
                 Status = shift.Status,
                 OpeningNotes = shift.OpeningNotes,
-                ClosingNotes = shift.ClosingNotes
+                ClosingNotes = shift.ClosingNotes,
+                CashMovements = movementTotals.Movements
             };
         }
 
@@ -259,6 +356,38 @@ namespace PosPlatform.Web.Services
             };
         }
 
+        private async Task<CashMovementTotals> CalculateCashMovementTotalsAsync(int shiftId)
+        {
+            var movements = await _db.CashierShiftCashMovements
+                .AsNoTracking()
+                .Where(x => x.CashierShiftId == shiftId)
+                .OrderByDescending(x => x.CreatedAt)
+                .Select(x => new CashierShiftCashMovementViewModel
+                {
+                    Id = x.Id,
+                    MovementType = x.MovementType,
+                    Amount = x.Amount,
+                    Reason = x.Reason,
+                    Notes = x.Notes,
+                    CashierName = x.CashierName,
+                    CreatedAt = x.CreatedAt
+                })
+                .ToListAsync();
+
+            return new CashMovementTotals
+            {
+                CashIn = movements
+                    .Where(x => x.MovementType == "Cash In")
+                    .Sum(x => x.Amount),
+
+                CashOut = movements
+                    .Where(x => x.MovementType == "Cash Out")
+                    .Sum(x => x.Amount),
+
+                Movements = movements
+            };
+        }
+
         private int? GetCurrentUserId()
         {
             var value = _httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -280,12 +409,29 @@ namespace PosPlatform.Web.Services
             return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         }
 
+        private static string? NormalizeMovementType(string? value)
+        {
+            return value?.Trim() switch
+            {
+                "Cash In" => "Cash In",
+                "Cash Out" => "Cash Out",
+                _ => null
+            };
+        }
+
         private class ShiftTotals
         {
             public decimal CashSales { get; set; }
             public decimal CardSales { get; set; }
             public decimal EftSales { get; set; }
             public decimal TotalSales { get; set; }
+        }
+
+        private class CashMovementTotals
+        {
+            public decimal CashIn { get; set; }
+            public decimal CashOut { get; set; }
+            public List<CashierShiftCashMovementViewModel> Movements { get; set; } = new();
         }
     }
 }

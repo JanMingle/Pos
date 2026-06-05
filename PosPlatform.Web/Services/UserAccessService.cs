@@ -70,6 +70,7 @@ namespace PosPlatform.Web.Services
 
                 "stock-transfers" => role is "Manager" or "Inventory User",
                 "barcode-labels" => role is "Manager" or "Inventory User",
+                "audit-trail" => role is "Owner" or "Admin" or "Manager",
                 "users" => false,
                 "settings" => false,
 

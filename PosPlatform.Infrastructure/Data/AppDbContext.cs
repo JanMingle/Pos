@@ -52,6 +52,10 @@ namespace PosPlatform.Infrastructure.Data
         public DbSet<StockTransfer> StockTransfers => Set<StockTransfer>();
         public DbSet<StockTransferItem> StockTransferItems => Set<StockTransferItem>();
 
+        public DbSet<CashierShiftCashMovement> CashierShiftCashMovements => Set<CashierShiftCashMovement>();
+
+        public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
 
 
         protected override void OnModelCreating(ModelBuilder builder)
@@ -482,6 +486,8 @@ namespace PosPlatform.Infrastructure.Data
                 entity.Property(x => x.TotalSales).HasColumnType("decimal(18,2)");
                 entity.Property(x => x.ExpectedCash).HasColumnType("decimal(18,2)");
                 entity.Property(x => x.CashDifference).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.CashIn).HasColumnType("decimal(18,2)");
+                entity.Property(x => x.CashOut).HasColumnType("decimal(18,2)");
 
                 entity.Property(x => x.Status)
                       .HasMaxLength(30)
@@ -950,6 +956,105 @@ namespace PosPlatform.Infrastructure.Data
                 entity.HasOne(x => x.TargetProduct)
                     .WithMany()
                     .HasForeignKey(x => x.TargetProductId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            builder.Entity<CashierShiftCashMovement>(entity =>
+            {
+                entity.ToTable("CashierShiftCashMovements");
+
+                entity.Property(x => x.MovementType)
+                    .HasMaxLength(30)
+                    .IsRequired();
+
+                entity.Property(x => x.Amount)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.Reason)
+                    .HasMaxLength(120)
+                    .IsRequired();
+
+                entity.Property(x => x.Notes)
+                    .HasMaxLength(300);
+
+                entity.Property(x => x.CashierName)
+                    .HasMaxLength(150)
+                    .IsRequired();
+
+                entity.HasOne(x => x.Tenant)
+                    .WithMany()
+                    .HasForeignKey(x => x.TenantId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Branch)
+                    .WithMany()
+                    .HasForeignKey(x => x.BranchId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.CashierShift)
+                    .WithMany(x => x.CashMovements)
+                    .HasForeignKey(x => x.CashierShiftId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(x => x.CashierUser)
+                    .WithMany()
+                    .HasForeignKey(x => x.CashierUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            builder.Entity<AuditLog>(entity =>
+            {
+                entity.ToTable("AuditLogs");
+
+                entity.Property(x => x.UserName)
+                    .HasMaxLength(150)
+                    .IsRequired();
+
+                entity.Property(x => x.Module)
+                    .HasMaxLength(80)
+                    .IsRequired();
+
+                entity.Property(x => x.Action)
+                    .HasMaxLength(80)
+                    .IsRequired();
+
+                entity.Property(x => x.EntityName)
+                    .HasMaxLength(120)
+                    .IsRequired();
+
+                entity.Property(x => x.Summary)
+                    .HasMaxLength(500)
+                    .IsRequired();
+
+                entity.Property(x => x.OldValues)
+                    .HasColumnType("nvarchar(max)");
+
+                entity.Property(x => x.NewValues)
+                    .HasColumnType("nvarchar(max)");
+
+                entity.Property(x => x.IpAddress)
+                    .HasMaxLength(80);
+
+                entity.Property(x => x.UserAgent)
+                    .HasMaxLength(500);
+
+                entity.HasIndex(x => new { x.TenantId, x.CreatedAt });
+                entity.HasIndex(x => new { x.TenantId, x.Module });
+                entity.HasIndex(x => new { x.TenantId, x.Action });
+
+                entity.HasOne(x => x.Tenant)
+                    .WithMany()
+                    .HasForeignKey(x => x.TenantId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Branch)
+                    .WithMany()
+                    .HasForeignKey(x => x.BranchId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.User)
+                    .WithMany()
+                    .HasForeignKey(x => x.UserId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
 

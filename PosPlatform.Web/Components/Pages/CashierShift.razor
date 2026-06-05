@@ -123,9 +123,98 @@
                         </div>
 
                         <div>
+                            <span>Cash In</span>
+                            <strong>@Money(_openShift.CashIn)</strong>
+                        </div>
+
+                        <div>
+                            <span>Cash Out</span>
+                            <strong>@Money(_openShift.CashOut)</strong>
+                        </div>
+
+                        <div>
                             <span>Expected Cash</span>
                             <strong>@Money(_openShift.ExpectedCash)</strong>
                         </div>
+                    </div>
+
+                    <div class="shift-cash-movement-card">
+                        <div class="shift-mini-header">
+                            <div>
+                                <h3>Cash In / Cash Out</h3>
+                                <p>Record extra float, petty cash, cash drops or till withdrawals.</p>
+                            </div>
+                        </div>
+
+                        <EditForm Model="_movementModel" OnValidSubmit="RecordCashMovementAsync">
+                            <DataAnnotationsValidator />
+
+                            <div class="shift-movement-form">
+                                <div>
+                                    <label>Movement Type</label>
+                                    <InputSelect class="shift-input" @bind-Value="_movementModel.MovementType">
+                                        <option value="Cash In">Cash In</option>
+                                        <option value="Cash Out">Cash Out</option>
+                                    </InputSelect>
+                                </div>
+
+                                <div>
+                                    <label>Amount (@CurrencyLabel)</label>
+                                    <InputNumber class="shift-input" @bind-Value="_movementModel.Amount" />
+                                </div>
+
+                                <div>
+                                    <label>Reason</label>
+                                    <InputText class="shift-input" @bind-Value="_movementModel.Reason" />
+                                </div>
+
+                                <div>
+                                    <label>Notes</label>
+                                    <InputTextArea class="shift-input shift-textarea" @bind-Value="_movementModel.Notes" />
+                                </div>
+                            </div>
+
+                            <ValidationSummary class="shift-validation" />
+
+                            <button type="submit" class="shift-secondary-btn" disabled="@_savingMovement">
+                                <i class="bi bi-plus-circle"></i>
+                                @(_savingMovement ? "Recording..." : "Record Cash Movement")
+                            </button>
+                        </EditForm>
+
+                        @if (_openShift.CashMovements.Count == 0)
+                        {
+                            <div class="shift-empty compact">
+                                <strong>No cash movements yet</strong>
+                                <span>Cash in/out entries will appear here.</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="shift-movement-list">
+                                @foreach (var movement in _openShift.CashMovements)
+                                {
+                                    <div class="shift-movement-item">
+                                        <div>
+                                            <span class="shift-movement-pill @(movement.MovementType == "Cash In" ? "in" : "out")">
+                                                @movement.MovementType
+                                            </span>
+                                            <strong>@movement.Reason</strong>
+                                            <small>@movement.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</small>
+
+                                            @if (!string.IsNullOrWhiteSpace(movement.Notes))
+                                            {
+                                                <small>@movement.Notes</small>
+                                            }
+                                        </div>
+
+                                        <div class="shift-movement-amount @(movement.MovementType == "Cash In" ? "in" : "out")">
+                                            @Money(movement.Amount)
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
                     </div>
 
                     <EditForm Model="_closeModel" OnValidSubmit="CloseShiftAsync">
@@ -165,7 +254,7 @@
             <div class="shift-help">
                 <div>
                     <strong>Expected Cash</strong>
-                    <span>Opening cash plus cash sales made during the shift.</span>
+                    <span>Opening cash plus cash sales plus cash in, minus cash out.</span>
                 </div>
 
                 <div>
@@ -215,6 +304,8 @@
                             <th>Opened</th>
                             <th>Closed</th>
                             <th>Opening</th>
+                            <th>Cash In</th>
+                            <th>Cash Out</th>
                             <th>Cash Sales</th>
                             <th>Card</th>
                             <th>EFT</th>
@@ -237,6 +328,8 @@
                                 <td>@shift.OpenedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
                                 <td>@(shift.ClosedAt.HasValue? shift.ClosedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "-")</td>
                                 <td>@Money(shift.OpeningCash)</td>
+                                <td>@Money(shift.CashIn)</td>
+                                <td>@Money(shift.CashOut)</td>
                                 <td>@Money(shift.CashSales)</td>
                                 <td>@Money(shift.CardSales)</td>
                                 <td>@Money(shift.EftSales)</td>
@@ -645,6 +738,112 @@
             width: 100%;
         }
     }
+
+    .shift-movement-form {
+        grid-template-columns: 1fr;
+    }
+
+    .shift-movement-item {
+        flex-direction: column;
+    }
+
+    .shift-cash-movement-card {
+        padding: 14px;
+        border-radius: 18px;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+    }
+
+    .shift-mini-header {
+        margin-bottom: 12px;
+    }
+
+        .shift-mini-header h3 {
+            margin: 0;
+            color: #0f172a;
+            font-size: .9rem;
+            font-weight: 720;
+        }
+
+        .shift-mini-header p {
+            margin: 4px 0 0;
+            color: #64748b;
+            font-size: .76rem;
+        }
+
+    .shift-movement-form {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .shift-movement-list {
+        display: grid;
+        gap: 8px;
+        margin-top: 14px;
+    }
+
+    .shift-movement-item {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px;
+        border-radius: 15px;
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+    }
+
+        .shift-movement-item strong,
+        .shift-movement-item small {
+            display: block;
+        }
+
+        .shift-movement-item strong {
+            margin-top: 5px;
+            color: #0f172a;
+            font-size: .84rem;
+        }
+
+        .shift-movement-item small {
+            margin-top: 2px;
+            color: #64748b;
+            font-size: .72rem;
+        }
+
+    .shift-movement-pill {
+        display: inline-flex;
+        min-height: 24px;
+        align-items: center;
+        padding: 0 8px;
+        border-radius: 999px;
+        font-size: .68rem;
+        font-weight: 750;
+    }
+
+        .shift-movement-pill.in {
+            color: #15803d;
+            background: #ecfdf5;
+        }
+
+        .shift-movement-pill.out {
+            color: #dc2626;
+            background: #fef2f2;
+        }
+
+    .shift-movement-amount {
+        white-space: nowrap;
+        font-size: .86rem;
+        font-weight: 800;
+    }
+
+        .shift-movement-amount.in {
+            color: #15803d;
+        }
+
+        .shift-movement-amount.out {
+            color: #dc2626;
+        }
 </style>
 
 @code {
@@ -655,9 +854,14 @@
 
     private OpenShiftModel _openModel = new();
     private CloseShiftModel _closeModel = new();
+    private CashMovementModel _movementModel = new()
+    {
+        MovementType = "Cash In"
+    };
 
     private bool _loading = true;
     private bool _saving;
+    private bool _savingMovement;
 
     private string? _message;
     private bool _isSuccess;
@@ -708,6 +912,26 @@
         }
     }
 
+    private async Task RecordCashMovementAsync()
+    {
+        _savingMovement = true;
+
+        var result = await CashierShiftService.RecordCashMovementAsync(_movementModel);
+
+        _savingMovement = false;
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            _movementModel = new CashMovementModel
+            {
+                MovementType = "Cash In"
+            };
+
+            await LoadAsync();
+        }
+    }
+
     private async Task CloseShiftAsync()
     {
         _saving = true;
@@ -723,7 +947,7 @@
             await LoadAsync();
         }
     }
-
+    
     private string Money(decimal value)
     {
         return $"{CurrencyLabel} {value:0.00}";

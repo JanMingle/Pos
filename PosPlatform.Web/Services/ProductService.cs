@@ -9,11 +9,16 @@ namespace PosPlatform.Web.Services
     {
         private readonly AppDbContext _db;
         private readonly TenantContextService _tenantContext;
+        private readonly AuditLogService _auditLogService;
 
-        public ProductService(AppDbContext db, TenantContextService tenantContext)
+        public ProductService(
+            AppDbContext db,
+            TenantContextService tenantContext,
+            AuditLogService auditLogService)
         {
             _db = db;
             _tenantContext = tenantContext;
+            _auditLogService = auditLogService;
         }
 
         public async Task<List<ProductListItemViewModel>> GetProductsAsync(string? search = null)
@@ -161,8 +166,8 @@ namespace PosPlatform.Web.Services
             var sku = model.SKU.Trim();
 
             var effectiveBranchId = model.Id.HasValue && model.Id.Value > 0
-        ? model.BranchId ?? branchId
-        : branchId;
+                ? model.BranchId ?? branchId
+                : branchId;
 
             var skuExists = await _db.Products.AnyAsync(x =>
                 x.TenantId == tenantId.Value &&
@@ -192,17 +197,39 @@ namespace PosPlatform.Web.Services
             }
 
             Product entity;
+            object? oldValues = null;
+            var isNew = !model.Id.HasValue || model.Id.Value <= 0;
 
-            if (model.Id.HasValue && model.Id.Value > 0)
+            if (!isNew)
             {
                 entity = await _db.Products.FirstOrDefaultAsync(x =>
-                    x.Id == model.Id.Value && x.TenantId == tenantId.Value)
+                    x.Id == model.Id!.Value && x.TenantId == tenantId.Value)
                     ?? new Product();
 
                 if (entity.Id == 0)
                 {
                     return (false, "Product not found.");
                 }
+
+                oldValues = new
+                {
+                    entity.ProductName,
+                    entity.SKU,
+                    entity.Barcode,
+                    entity.Description,
+                    entity.ProductType,
+                    entity.TrackStock,
+                    entity.AgeRestricted,
+                    entity.UnitOfMeasure,
+                    entity.DurationMinutes,
+                    entity.CostPrice,
+                    entity.SellingPrice,
+                    entity.QuantityInStock,
+                    entity.ReorderLevel,
+                    entity.ProductCategoryId,
+                    entity.BranchId,
+                    entity.IsActive
+                };
             }
             else
             {
@@ -237,7 +264,38 @@ namespace PosPlatform.Web.Services
 
             await _db.SaveChangesAsync();
 
-            return (true, model.Id.HasValue ? "Item updated successfully." : "Item added successfully.");
+            var newValues = new
+            {
+                entity.ProductName,
+                entity.SKU,
+                entity.Barcode,
+                entity.Description,
+                entity.ProductType,
+                entity.TrackStock,
+                entity.AgeRestricted,
+                entity.UnitOfMeasure,
+                entity.DurationMinutes,
+                entity.CostPrice,
+                entity.SellingPrice,
+                entity.QuantityInStock,
+                entity.ReorderLevel,
+                entity.ProductCategoryId,
+                entity.BranchId,
+                entity.IsActive
+            };
+
+            await _auditLogService.LogAsync(
+                module: "Products",
+                action: isNew ? "Create" : "Update",
+                entityName: "Product",
+                entityId: entity.Id,
+                summary: isNew
+                    ? $"Created product {entity.ProductName} ({entity.SKU})."
+                    : $"Updated product {entity.ProductName} ({entity.SKU}).",
+                oldValues: oldValues,
+                newValues: newValues);
+
+            return (true, isNew ? "Item added successfully." : "Item updated successfully.");
         }
 
         public async Task<(bool Success, string Message)> DeleteAsync(int id)
@@ -258,8 +316,41 @@ namespace PosPlatform.Web.Services
                 return (false, "Product not found.");
             }
 
+            var oldValues = new
+            {
+                entity.ProductName,
+                entity.SKU,
+                entity.Barcode,
+                entity.Description,
+                entity.ProductType,
+                entity.TrackStock,
+                entity.AgeRestricted,
+                entity.UnitOfMeasure,
+                entity.DurationMinutes,
+                entity.CostPrice,
+                entity.SellingPrice,
+                entity.QuantityInStock,
+                entity.ReorderLevel,
+                entity.ProductCategoryId,
+                entity.BranchId,
+                entity.IsActive
+            };
+
+            var productName = entity.ProductName;
+            var sku = entity.SKU;
+            var productId = entity.Id;
+
             _db.Products.Remove(entity);
             await _db.SaveChangesAsync();
+
+            await _auditLogService.LogAsync(
+                module: "Products",
+                action: "Delete",
+                entityName: "Product",
+                entityId: productId,
+                summary: $"Deleted product {productName} ({sku}).",
+                oldValues: oldValues,
+                newValues: null);
 
             return (true, "Item deleted successfully.");
         }
@@ -282,10 +373,33 @@ namespace PosPlatform.Web.Services
                 return (false, "Product not found.");
             }
 
+            var oldValues = new
+            {
+                entity.ProductName,
+                entity.SKU,
+                entity.IsActive
+            };
+
             entity.IsActive = !entity.IsActive;
             entity.UpdatedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
+
+            var action = entity.IsActive ? "Activate" : "Deactivate";
+
+            await _auditLogService.LogAsync(
+                module: "Products",
+                action: action,
+                entityName: "Product",
+                entityId: entity.Id,
+                summary: $"{action}d product {entity.ProductName} ({entity.SKU}).",
+                oldValues: oldValues,
+                newValues: new
+                {
+                    entity.ProductName,
+                    entity.SKU,
+                    entity.IsActive
+                });
 
             return (true, entity.IsActive ? "Item activated." : "Item deactivated.");
         }

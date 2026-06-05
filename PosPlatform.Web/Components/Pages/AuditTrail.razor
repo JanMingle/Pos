@@ -1,0 +1,738 @@
+﻿@page "/audit-trail"
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@layout MainLayout
+@attribute [Authorize]
+@using PosPlatform.Web.Components.Layout
+@using PosPlatform.Web.Models.Audit
+@using PosPlatform.Web.Models.Settings
+@using PosPlatform.Web.Services
+@inject AuditLogService AuditLogService
+@inject BusinessSettingsService BusinessSettingsService
+@inject UserAccessService UserAccessService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Audit Trail</PageTitle>
+
+<section class="audit-page">
+    <div class="audit-header">
+        <div>
+            <div class="audit-kicker">
+                <i class="bi bi-shield-lock"></i>
+                Security record
+            </div>
+            <h1>Audit Trail</h1>
+            <p>Track important actions across the business, including who did what and when.</p>
+        </div>
+    </div>
+
+    <div class="audit-settings-strip">
+        <div>
+            <span>Business</span>
+            <strong>@_settings.BusinessName</strong>
+        </div>
+
+        <div>
+            <span>Records Showing</span>
+            <strong>@_logs.Count</strong>
+        </div>
+
+        <div>
+            <span>Date Range</span>
+            <strong>@_fromDate?.ToString("yyyy-MM-dd") → @_toDate?.ToString("yyyy-MM-dd")</strong>
+        </div>
+
+        <div>
+            <span>Access</span>
+            <strong>Management</strong>
+        </div>
+    </div>
+
+    <div class="audit-control-panel">
+        <input type="date" @bind="_fromDate" />
+        <input type="date" @bind="_toDate" />
+
+        <select class="audit-filter" @bind="_moduleFilter">
+            <option value="all">All modules</option>
+            <option value="Products">Products</option>
+            <option value="Stock">Stock</option>
+            <option value="Stock Transfers">Stock Transfers</option>
+            <option value="Sales">Sales</option>
+            <option value="Refunds">Refunds</option>
+            <option value="Expenses">Expenses</option>
+            <option value="Users">Users</option>
+            <option value="Branches">Branches</option>
+            <option value="Cashier Shift">Cashier Shift</option>
+            <option value="Settings">Settings</option>
+        </select>
+
+        <select class="audit-filter" @bind="_actionFilter">
+            <option value="all">All actions</option>
+            <option value="Create">Create</option>
+            <option value="Update">Update</option>
+            <option value="Delete">Delete</option>
+            <option value="Activate">Activate</option>
+            <option value="Deactivate">Deactivate</option>
+            <option value="Open">Open</option>
+            <option value="Close">Close</option>
+            <option value="Cash In">Cash In</option>
+            <option value="Cash Out">Cash Out</option>
+            <option value="Refund">Refund</option>
+            <option value="Transfer">Transfer</option>
+        </select>
+
+        <div class="audit-search">
+            <i class="bi bi-search"></i>
+            <input @bind="_searchTerm"
+                   @bind:event="oninput"
+                   placeholder="Search user, action, module or summary" />
+        </div>
+
+        <button type="button" class="audit-secondary-btn" @onclick="LoadLogsAsync">
+            <i class="bi bi-filter"></i>
+            Filter
+        </button>
+
+        <button type="button" class="audit-ghost-btn" @onclick="ResetFiltersAsync">
+            <i class="bi bi-arrow-counterclockwise"></i>
+            Reset
+        </button>
+    </div>
+
+    <div class="audit-table-card">
+        <div class="audit-table-header">
+            <div>
+                <h2>Activity Log</h2>
+                <p>Latest 250 matching audit records.</p>
+            </div>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="audit-empty">
+                <strong>Loading audit records...</strong>
+                <span>Please wait.</span>
+            </div>
+        }
+        else if (_logs.Count == 0)
+        {
+            <div class="audit-empty">
+                <strong>No audit records found</strong>
+                <span>Once actions are logged, they will appear here.</span>
+            </div>
+        }
+        else
+        {
+            <div class="audit-table-wrap">
+                <table class="audit-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>User</th>
+                            <th>Branch</th>
+                            <th>Module</th>
+                            <th>Action</th>
+                            <th>Entity</th>
+                            <th>Summary</th>
+                            <th>IP</th>
+                            <th class="text-end">Details</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var item in _logs)
+                        {
+                            <tr>
+                                <td>@item.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@item.UserName</td>
+                                <td>@item.BranchName</td>
+                                <td>
+                                    <span class="audit-module-pill">@item.Module</span>
+                                </td>
+                                <td>
+                                    <span class="audit-action-pill @GetActionClass(item.Action)">
+                                        @item.Action
+                                    </span>
+                                </td>
+                                <td>
+                                    @item.EntityName
+                                    @if (item.EntityId.HasValue)
+                                    {
+                                        <span class="audit-muted">#@item.EntityId</span>
+                                    }
+                                </td>
+                                <td>@item.Summary</td>
+                                <td>@(string.IsNullOrWhiteSpace(item.IpAddress) ? "-" : item.IpAddress)</td>
+                                <td class="text-end">
+                                    <button type="button" class="audit-mini-btn" @onclick="() => ViewLog(item)">
+                                        View
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>
+
+@if (_selectedLog != null)
+{
+    <div class="audit-modal-backdrop">
+        <div class="audit-modal">
+            <div class="audit-modal-header">
+                <div>
+                    <span>@_selectedLog.Module · @_selectedLog.Action</span>
+                    <h4>@_selectedLog.Summary</h4>
+                    <p>@_selectedLog.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") by @_selectedLog.UserName</p>
+                </div>
+
+                <button type="button" class="audit-close-btn" @onclick="CloseLog">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div class="audit-detail-grid">
+                <div>
+                    <span>Entity</span>
+                    <strong>@_selectedLog.EntityName @(_selectedLog.EntityId.HasValue ? $"#{_selectedLog.EntityId}" : "")</strong>
+                </div>
+
+                <div>
+                    <span>Branch</span>
+                    <strong>@_selectedLog.BranchName</strong>
+                </div>
+
+                <div>
+                    <span>IP Address</span>
+                    <strong>@(string.IsNullOrWhiteSpace(_selectedLog.IpAddress) ? "-" : _selectedLog.IpAddress)</strong>
+                </div>
+            </div>
+
+            <div class="audit-json-grid">
+                <div>
+                    <h5>Old Values</h5>
+                    <pre>@(string.IsNullOrWhiteSpace(_selectedLog.OldValues) ? "No old values captured." : _selectedLog.OldValues)</pre>
+                </div>
+
+                <div>
+                    <h5>New Values</h5>
+                    <pre>@(string.IsNullOrWhiteSpace(_selectedLog.NewValues) ? "No new values captured." : _selectedLog.NewValues)</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .audit-page {
+        animation: auditIn .22s ease both;
+    }
+
+    .audit-header {
+        margin-bottom: 18px;
+    }
+
+    .audit-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 750;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+
+    .audit-header h1 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 1.45rem;
+        font-weight: 680;
+        letter-spacing: -.03em;
+    }
+
+    .audit-header p {
+        margin: 6px 0 0;
+        color: #64748b;
+        font-size: .88rem;
+    }
+
+    .audit-settings-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+        .audit-settings-strip div {
+            padding: 13px;
+            border-radius: 16px;
+            background: #ffffff;
+            border: 1px solid #e7edf5;
+            box-shadow: 0 12px 28px rgba(15,23,42,.04);
+        }
+
+        .audit-settings-strip span,
+        .audit-settings-strip strong {
+            display: block;
+        }
+
+        .audit-settings-strip span {
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .audit-settings-strip strong {
+            margin-top: 4px;
+            color: #0f172a;
+            font-size: .84rem;
+            font-weight: 720;
+        }
+
+    .audit-control-panel {
+        display: grid;
+        grid-template-columns: 150px 150px 180px 160px minmax(240px, 1fr) auto auto;
+        gap: 10px;
+        padding: 14px;
+        margin-bottom: 16px;
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+    }
+
+        .audit-control-panel input,
+        .audit-filter {
+            width: 100%;
+            min-height: 40px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            background: #ffffff;
+            color: #0f172a;
+            padding: 0 12px;
+            font-size: .84rem;
+            outline: none;
+        }
+
+    .audit-search {
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 13px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        color: #94a3b8;
+    }
+
+        .audit-search input {
+            width: 100%;
+            border: 0;
+            outline: none;
+            background: transparent;
+            color: #0f172a;
+            font-size: .84rem;
+        }
+
+    .audit-secondary-btn,
+    .audit-ghost-btn,
+    .audit-mini-btn {
+        min-height: 38px;
+        border-radius: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 650;
+        border: 0;
+        white-space: nowrap;
+    }
+
+    .audit-secondary-btn {
+        color: #2563eb;
+        background: #eef5ff;
+    }
+
+    .audit-ghost-btn {
+        color: #475569;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+    }
+
+    .audit-mini-btn {
+        min-height: 30px;
+        color: #2563eb;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        padding: 0 10px;
+    }
+
+    .audit-table-card {
+        overflow: hidden;
+        border-radius: 20px;
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+    }
+
+    .audit-table-header {
+        padding: 17px 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .audit-table-header h2 {
+            margin: 0;
+            color: #0f172a;
+            font-size: .92rem;
+            font-weight: 720;
+        }
+
+        .audit-table-header p {
+            margin: 4px 0 0;
+            color: #94a3b8;
+            font-size: .76rem;
+        }
+
+    .audit-table-wrap {
+        overflow-x: auto;
+    }
+
+    .audit-table {
+        width: 100%;
+        min-width: 1180px;
+        border-collapse: collapse;
+    }
+
+        .audit-table th {
+            padding: 12px 16px;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: .7rem;
+            font-weight: 750;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            border-bottom: 1px solid #e7edf5;
+            white-space: nowrap;
+        }
+
+        .audit-table td {
+            padding: 14px 16px;
+            color: #334155;
+            font-size: .82rem;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+
+    .audit-module-pill,
+    .audit-action-pill {
+        display: inline-flex;
+        min-height: 26px;
+        align-items: center;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 750;
+        white-space: nowrap;
+    }
+
+    .audit-module-pill {
+        color: #2563eb;
+        background: #eff6ff;
+    }
+
+    .audit-action-pill.create,
+    .audit-action-pill.open,
+    .audit-action-pill.cash-in {
+        color: #15803d;
+        background: #ecfdf5;
+    }
+
+    .audit-action-pill.update,
+    .audit-action-pill.transfer {
+        color: #2563eb;
+        background: #eff6ff;
+    }
+
+    .audit-action-pill.delete,
+    .audit-action-pill.cash-out,
+    .audit-action-pill.refund {
+        color: #dc2626;
+        background: #fef2f2;
+    }
+
+    .audit-action-pill.default {
+        color: #64748b;
+        background: #f1f5f9;
+    }
+
+    .audit-muted {
+        display: block;
+        margin-top: 2px;
+        color: #94a3b8;
+        font-size: .7rem;
+    }
+
+    .audit-empty {
+        margin: 18px;
+        padding: 34px 20px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px dashed #dbe3ef;
+        text-align: center;
+    }
+
+        .audit-empty strong,
+        .audit-empty span {
+            display: block;
+        }
+
+        .audit-empty strong {
+            color: #0f172a;
+            font-size: .9rem;
+        }
+
+        .audit-empty span {
+            margin-top: 4px;
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+    .audit-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1050;
+        padding: 20px;
+        background: rgba(15, 23, 42, .44);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .audit-modal {
+        width: 100%;
+        max-width: 980px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+        padding: 22px;
+        border-radius: 22px;
+        background: #ffffff;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, .24);
+    }
+
+    .audit-modal-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding-bottom: 16px;
+        margin-bottom: 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .audit-modal-header span {
+            color: #2563eb;
+            font-size: .72rem;
+            font-weight: 750;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+        .audit-modal-header h4 {
+            margin: 3px 0 0;
+            color: #0f172a;
+            font-size: 1.05rem;
+            font-weight: 720;
+        }
+
+        .audit-modal-header p {
+            margin: 5px 0 0;
+            color: #64748b;
+            font-size: .84rem;
+        }
+
+    .audit-close-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        color: #64748b;
+    }
+
+    .audit-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+        .audit-detail-grid div {
+            padding: 13px;
+            border-radius: 16px;
+            background: #f8fafc;
+            border: 1px solid #e7edf5;
+        }
+
+        .audit-detail-grid span,
+        .audit-detail-grid strong {
+            display: block;
+        }
+
+        .audit-detail-grid span {
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .audit-detail-grid strong {
+            margin-top: 4px;
+            color: #0f172a;
+            font-size: .84rem;
+        }
+
+    .audit-json-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+        .audit-json-grid h5 {
+            margin: 0 0 8px;
+            color: #0f172a;
+            font-size: .86rem;
+            font-weight: 720;
+        }
+
+        .audit-json-grid pre {
+            min-height: 180px;
+            max-height: 360px;
+            overflow: auto;
+            padding: 13px;
+            border-radius: 16px;
+            background: #0f172a;
+            color: #e5e7eb;
+            font-size: .76rem;
+            white-space: pre-wrap;
+        }
+
+    @@keyframes auditIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width: 1199px) {
+        .audit-control-panel,
+        .audit-settings-strip {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .audit-control-panel,
+        .audit-settings-strip,
+        .audit-detail-grid,
+        .audit-json-grid {
+            grid-template-columns: 1fr;
+        }
+
+            .audit-control-panel button {
+                width: 100%;
+            }
+
+        .audit-modal-header {
+            align-items: flex-start;
+        }
+    }
+</style>
+
+@code {
+    private BusinessSettingsFormModel _settings = new();
+    private List<AuditLogListItemViewModel> _logs = new();
+
+    private bool _loading = true;
+
+    private DateTime? _fromDate = DateTime.Today.AddDays(-7);
+    private DateTime? _toDate = DateTime.Today;
+
+    private string _moduleFilter = "all";
+    private string _actionFilter = "all";
+    private string? _searchTerm;
+
+    private AuditLogListItemViewModel? _selectedLog;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserAccessService.CanAccessAsync("audit-trail"))
+        {
+            NavigationManager.NavigateTo("/dashboard");
+            return;
+        }
+
+        _settings = await BusinessSettingsService.GetSettingsAsync();
+        await LoadLogsAsync();
+    }
+
+    private async Task LoadLogsAsync()
+    {
+        _loading = true;
+
+        _logs = await AuditLogService.GetLogsAsync(
+            _fromDate,
+            _toDate,
+            _moduleFilter,
+            _actionFilter,
+            _searchTerm);
+
+        _loading = false;
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        _fromDate = DateTime.Today.AddDays(-7);
+        _toDate = DateTime.Today;
+        _moduleFilter = "all";
+        _actionFilter = "all";
+        _searchTerm = null;
+
+        await LoadLogsAsync();
+    }
+
+    private void ViewLog(AuditLogListItemViewModel log)
+    {
+        _selectedLog = log;
+    }
+
+    private void CloseLog()
+    {
+        _selectedLog = null;
+    }
+
+    private string GetActionClass(string action)
+    {
+        return action switch
+        {
+            "Create" => "create",
+            "Open" => "open",
+            "Cash In" => "cash-in",
+            "Update" => "update",
+            "Transfer" => "transfer",
+            "Delete" => "delete",
+            "Refund" => "refund",
+            "Cash Out" => "cash-out",
+            _ => "default"
+        };
+    }
+}

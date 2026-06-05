@@ -26,6 +26,9 @@
         public decimal EftSales { get; set; }
         public decimal TotalSales { get; set; }
 
+        public decimal CashIn { get; set; }
+        public decimal CashOut { get; set; }
+
         public decimal ExpectedCash { get; set; }
         public decimal CashDifference { get; set; }
 
@@ -36,5 +39,7 @@
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+        public ICollection<CashierShiftCashMovement> CashMovements { get; set; } = new List<CashierShiftCashMovement>();
     }
 }

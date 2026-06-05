@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PosPlatform.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using PosPlatform.Infrastructure.Data;
 namespace PosPlatform.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260605180535_AddCashMovementsToCashierShifts")]
+    partial class AddCashMovementsToCashierShifts
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -196,83 +199,6 @@ namespace PosPlatform.Infrastructure.Migrations
                     b.HasIndex("TenantId");
 
                     b.ToTable("Users", (string)null);
-                });
-
-            modelBuilder.Entity("PosPlatform.Domain.Entities.AuditLog", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
-                    b.Property<int?>("BranchId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("EntityId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("EntityName")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("nvarchar(120)");
-
-                    b.Property<string>("IpAddress")
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
-                    b.Property<string>("Module")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
-                    b.Property<string>("NewValues")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("OldValues")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Summary")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<int>("TenantId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("UserAgent")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<int?>("UserId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("UserName")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BranchId");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("TenantId", "Action");
-
-                    b.HasIndex("TenantId", "CreatedAt");
-
-                    b.HasIndex("TenantId", "Module");
-
-                    b.ToTable("AuditLogs", (string)null);
                 });
 
             modelBuilder.Entity("PosPlatform.Domain.Entities.Branch", b =>
@@ -1942,31 +1868,6 @@ namespace PosPlatform.Infrastructure.Migrations
                     b.Navigation("Branch");
 
                     b.Navigation("Tenant");
-                });
-
-            modelBuilder.Entity("PosPlatform.Domain.Entities.AuditLog", b =>
-                {
-                    b.HasOne("PosPlatform.Domain.Entities.Branch", "Branch")
-                        .WithMany()
-                        .HasForeignKey("BranchId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("PosPlatform.Domain.Entities.Tenant", "Tenant")
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("PosPlatform.Domain.Entities.ApplicationUser", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Branch");
-
-                    b.Navigation("Tenant");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("PosPlatform.Domain.Entities.Branch", b =>
