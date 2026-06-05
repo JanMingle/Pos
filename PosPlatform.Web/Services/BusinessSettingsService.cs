@@ -9,11 +9,16 @@ namespace PosPlatform.Web.Services
     {
         private readonly AppDbContext _db;
         private readonly TenantContextService _tenantContext;
+        private readonly AuditLogService _auditLogService;
 
-        public BusinessSettingsService(AppDbContext db, TenantContextService tenantContext)
+        public BusinessSettingsService(
+            AppDbContext db,
+            TenantContextService tenantContext,
+            AuditLogService auditLogService)
         {
             _db = db;
             _tenantContext = tenantContext;
+            _auditLogService = auditLogService;
         }
 
         public List<BusinessTypeOptionViewModel> GetBusinessTypes()
@@ -137,6 +142,26 @@ namespace PosPlatform.Web.Services
                 return (false, "Tenant not found.");
             }
 
+            if (string.IsNullOrWhiteSpace(model.BusinessName))
+            {
+                return (false, "Business name is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(model.BusinessType))
+            {
+                return (false, "Business type is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(model.CurrencyCode))
+            {
+                return (false, "Currency code is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(model.CurrencySymbol))
+            {
+                return (false, "Currency symbol is required.");
+            }
+
             if (model.TaxEnabled && model.TaxRate <= 0)
             {
                 return (false, "Tax rate must be greater than zero when tax is enabled.");
@@ -144,6 +169,9 @@ namespace PosPlatform.Web.Services
 
             var settings = await _db.BusinessSettings
                 .FirstOrDefaultAsync(x => x.TenantId == tenantId.Value);
+
+            var isNew = settings == null;
+            object? oldValues = null;
 
             if (settings == null)
             {
@@ -154,6 +182,34 @@ namespace PosPlatform.Web.Services
                 };
 
                 _db.BusinessSettings.Add(settings);
+            }
+            else
+            {
+                oldValues = new
+                {
+                    settings.BusinessName,
+                    settings.BusinessType,
+                    settings.Address,
+                    settings.Phone,
+                    settings.Email,
+                    settings.CurrencyCode,
+                    settings.CurrencySymbol,
+                    settings.TaxEnabled,
+                    settings.TaxName,
+                    settings.TaxRate,
+                    settings.ProductsEnabled,
+                    settings.StockTrackingEnabled,
+                    settings.ServicesEnabled,
+                    settings.AppointmentsEnabled,
+                    settings.CustomersEnabled,
+                    settings.AgeRestrictedProductsEnabled,
+                    settings.AllowNegativeStock,
+                    settings.RequireCustomerForSale,
+                    settings.AllowDiscounts,
+                    settings.ReceiptTitle,
+                    settings.ReceiptFooterMessage,
+                    settings.ReturnPolicyText
+                };
             }
 
             settings.BusinessName = model.BusinessName.Trim();
@@ -189,8 +245,18 @@ namespace PosPlatform.Web.Services
 
             var tenant = await _db.Tenants.FirstOrDefaultAsync(x => x.Id == tenantId.Value);
 
+            object? oldTenantValues = null;
+
             if (tenant != null)
             {
+                oldTenantValues = new
+                {
+                    tenant.Name,
+                    tenant.BusinessType,
+                    tenant.Email,
+                    tenant.Phone
+                };
+
                 tenant.Name = settings.BusinessName;
                 tenant.BusinessType = settings.BusinessType;
                 tenant.Email = settings.Email;
@@ -198,6 +264,55 @@ namespace PosPlatform.Web.Services
             }
 
             await _db.SaveChangesAsync();
+
+            await _auditLogService.LogAsync(
+                module: "Settings",
+                action: isNew ? "Create" : "Update",
+                entityName: "BusinessSettings",
+                entityId: settings.Id,
+                summary: isNew
+                    ? $"Created business settings for {settings.BusinessName}."
+                    : $"Updated business settings for {settings.BusinessName}.",
+                oldValues: new
+                {
+                    Settings = oldValues,
+                    Tenant = oldTenantValues
+                },
+                newValues: new
+                {
+                    Settings = new
+                    {
+                        settings.BusinessName,
+                        settings.BusinessType,
+                        settings.Address,
+                        settings.Phone,
+                        settings.Email,
+                        settings.CurrencyCode,
+                        settings.CurrencySymbol,
+                        settings.TaxEnabled,
+                        settings.TaxName,
+                        settings.TaxRate,
+                        settings.ProductsEnabled,
+                        settings.StockTrackingEnabled,
+                        settings.ServicesEnabled,
+                        settings.AppointmentsEnabled,
+                        settings.CustomersEnabled,
+                        settings.AgeRestrictedProductsEnabled,
+                        settings.AllowNegativeStock,
+                        settings.RequireCustomerForSale,
+                        settings.AllowDiscounts,
+                        settings.ReceiptTitle,
+                        settings.ReceiptFooterMessage,
+                        settings.ReturnPolicyText
+                    },
+                    Tenant = tenant == null ? null : new
+                    {
+                        tenant.Name,
+                        tenant.BusinessType,
+                        tenant.Email,
+                        tenant.Phone
+                    }
+                });
 
             return (true, "Business settings saved successfully.");
         }

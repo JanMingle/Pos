@@ -11,17 +11,18 @@ namespace PosPlatform.Web.Services
         private readonly AppDbContext _db;
         private readonly TenantContextService _tenantContext;
         private readonly IHttpContextAccessor _httpContextAccessor;
-
+        private readonly AuditLogService _auditLogService;
         public SaleService(
-            AppDbContext db,
-            TenantContextService tenantContext,
-            IHttpContextAccessor httpContextAccessor)
+     AppDbContext db,
+     TenantContextService tenantContext,
+     IHttpContextAccessor httpContextAccessor,
+     AuditLogService auditLogService)
         {
             _db = db;
             _tenantContext = tenantContext;
             _httpContextAccessor = httpContextAccessor;
+            _auditLogService = auditLogService;
         }
-
         public async Task<List<SaleProductOptionViewModel>> SearchProductsAsync(string? search = null)
         {
             var tenantId = await _tenantContext.GetTenantIdAsync();
@@ -135,12 +136,13 @@ namespace PosPlatform.Web.Services
             {
                 return Fail("Logged-in user could not be identified.");
             }
+
             var hasOpenShift = await _db.CashierShifts
-    .AsNoTracking()
-    .AnyAsync(x =>
-        x.TenantId == tenantId.Value &&
-        x.CashierUserId == cashierUserId.Value &&
-        x.Status == "Open");
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.TenantId == tenantId.Value &&
+                    x.CashierUserId == cashierUserId.Value &&
+                    x.Status == "Open");
 
             if (!hasOpenShift)
             {
@@ -151,6 +153,7 @@ namespace PosPlatform.Web.Services
                     RequiresOpenShift = true
                 };
             }
+
             var settings = await _db.BusinessSettings
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x => x.TenantId == tenantId.Value);
@@ -212,11 +215,6 @@ namespace PosPlatform.Web.Services
                 return Fail("Discounts are disabled in Business Settings.");
             }
 
-            if (requireCustomerForSale && string.IsNullOrWhiteSpace(request.CustomerName))
-            {
-                return Fail("Customer name is required for this business.");
-            }
-
             var groupedItems = request.Items
                 .GroupBy(x => x.ProductId)
                 .Select(x => new CreateSaleItemRequest
@@ -262,6 +260,10 @@ namespace PosPlatform.Web.Services
                     return Fail($"Not enough stock for {product.ProductName}. Available: {product.QuantityInStock:0.##}");
                 }
             }
+
+            Sale? completedSale = null;
+            var auditItems = new List<object>();
+            var stockAudit = new List<object>();
 
             await using var transaction = await _db.Database.BeginTransactionAsync();
 
@@ -336,6 +338,20 @@ namespace PosPlatform.Web.Services
                         CreatedAt = DateTime.UtcNow
                     });
 
+                    auditItems.Add(new
+                    {
+                        product.Id,
+                        product.ProductName,
+                        product.SKU,
+                        product.ProductType,
+                        product.TrackStock,
+                        Quantity = item.Quantity,
+                        UnitPrice = unitPrice,
+                        LineTotal = lineTotal,
+                        UnitCost = unitCost,
+                        CostTotal = costTotal
+                    });
+
                     if (product.TrackStock)
                     {
                         var quantityBefore = product.QuantityInStock;
@@ -357,6 +373,16 @@ namespace PosPlatform.Web.Services
                             ReferenceId = sale.Id,
                             Notes = $"Stock deducted for sale {sale.SaleNumber}",
                             CreatedAt = DateTime.UtcNow
+                        });
+
+                        stockAudit.Add(new
+                        {
+                            product.Id,
+                            product.ProductName,
+                            product.SKU,
+                            QuantityBefore = quantityBefore,
+                            QuantitySold = item.Quantity,
+                            QuantityAfter = quantityAfter
                         });
                     }
 
@@ -394,21 +420,58 @@ namespace PosPlatform.Web.Services
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                return new SaleResult
-                {
-                    Success = true,
-                    Message = $"Sale completed successfully. Receipt: {sale.SaleNumber}",
-                    SaleId = sale.Id,
-                    SaleNumber = sale.SaleNumber,
-                    TotalAmount = sale.TotalAmount,
-                    ChangeAmount = sale.ChangeAmount
-                };
+                completedSale = sale;
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
                 return Fail($"Sale failed: {ex.Message}");
             }
+
+            if (completedSale != null)
+            {
+                await _auditLogService.LogAsync(
+                    module: "Sales",
+                    action: "Create",
+                    entityName: "Sale",
+                    entityId: completedSale.Id,
+                    summary: $"Completed sale {completedSale.SaleNumber} for {completedSale.TotalAmount:0.00}. Payment: {completedSale.PaymentMethod}.",
+                    oldValues: null,
+                    newValues: new
+                    {
+                        completedSale.Id,
+                        completedSale.SaleNumber,
+                        completedSale.BranchId,
+                        completedSale.CashierUserId,
+                        completedSale.CashierName,
+                        completedSale.CustomerId,
+                        completedSale.CustomerName,
+                        completedSale.CustomerPhone,
+                        completedSale.PaymentMethod,
+                        completedSale.Subtotal,
+                        completedSale.DiscountAmount,
+                        completedSale.TaxAmount,
+                        completedSale.TotalAmount,
+                        completedSale.AmountPaid,
+                        completedSale.ChangeAmount,
+                        completedSale.Status,
+                        completedSale.Notes,
+                        Items = auditItems,
+                        StockDeducted = stockAudit
+                    });
+
+                return new SaleResult
+                {
+                    Success = true,
+                    Message = $"Sale completed successfully. Receipt: {completedSale.SaleNumber}",
+                    SaleId = completedSale.Id,
+                    SaleNumber = completedSale.SaleNumber,
+                    TotalAmount = completedSale.TotalAmount,
+                    ChangeAmount = completedSale.ChangeAmount
+                };
+            }
+
+            return Fail("Sale could not be completed.");
         }
 
         public async Task<SaleReceiptViewModel?> GetReceiptAsync(int saleId)
