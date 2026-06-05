@@ -9,11 +9,16 @@ namespace PosPlatform.Web.Services
     {
         private readonly AppDbContext _db;
         private readonly TenantContextService _tenantContext;
+        private readonly AuditLogService _auditLogService;
 
-        public BranchService(AppDbContext db, TenantContextService tenantContext)
+        public BranchService(
+            AppDbContext db,
+            TenantContextService tenantContext,
+            AuditLogService auditLogService)
         {
             _db = db;
             _tenantContext = tenantContext;
+            _auditLogService = auditLogService;
         }
 
         public async Task<List<BranchListItemViewModel>> GetBranchesAsync(string? search, string statusFilter)
@@ -165,12 +170,12 @@ namespace PosPlatform.Web.Services
                 .Where(x => x.TenantId == tenantId.Value && x.IsActive)
                 .OrderByDescending(x => x.IsMainBranch)
                 .ThenBy(x => x.Name)
-            .Select(x => new BranchOptionViewModel
-            {
-                Id = x.Id,
-                Name = x.Name,
-                IsMainBranch = x.IsMainBranch
-            })
+                .Select(x => new BranchOptionViewModel
+                {
+                    Id = x.Id,
+                    Name = x.Name,
+                    IsMainBranch = x.IsMainBranch
+                })
                 .ToListAsync();
         }
 
@@ -223,11 +228,13 @@ namespace PosPlatform.Web.Services
             }
 
             Branch entity;
+            object? oldValues = null;
+            var isNew = !model.Id.HasValue || model.Id.Value <= 0;
 
-            if (model.Id.HasValue && model.Id.Value > 0)
+            if (!isNew)
             {
                 entity = await _db.Branches.FirstOrDefaultAsync(x =>
-                    x.Id == model.Id.Value &&
+                    x.Id == model.Id!.Value &&
                     x.TenantId == tenantId.Value)
                     ?? new Branch();
 
@@ -235,6 +242,18 @@ namespace PosPlatform.Web.Services
                 {
                     return (false, "Branch not found.");
                 }
+
+                oldValues = new
+                {
+                    entity.Name,
+                    entity.BranchCode,
+                    entity.Phone,
+                    entity.Email,
+                    entity.Address,
+                    entity.Notes,
+                    entity.IsMainBranch,
+                    entity.IsActive
+                };
             }
             else
             {
@@ -247,6 +266,8 @@ namespace PosPlatform.Web.Services
                 _db.Branches.Add(entity);
             }
 
+            var previousMainBranches = new List<object>();
+
             if (model.IsMainBranch)
             {
                 var otherMainBranches = await _db.Branches
@@ -258,6 +279,13 @@ namespace PosPlatform.Web.Services
 
                 foreach (var branch in otherMainBranches)
                 {
+                    previousMainBranches.Add(new
+                    {
+                        branch.Id,
+                        branch.Name,
+                        branch.IsMainBranch
+                    });
+
                     branch.IsMainBranch = false;
                     branch.UpdatedAt = DateTime.UtcNow;
                 }
@@ -275,7 +303,29 @@ namespace PosPlatform.Web.Services
 
             await _db.SaveChangesAsync();
 
-            return (true, model.Id.HasValue ? "Branch updated successfully." : "Branch added successfully.");
+            await _auditLogService.LogAsync(
+                module: "Branches",
+                action: isNew ? "Create" : "Update",
+                entityName: "Branch",
+                entityId: entity.Id,
+                summary: isNew
+                    ? $"Created branch {entity.Name}."
+                    : $"Updated branch {entity.Name}.",
+                oldValues: oldValues,
+                newValues: new
+                {
+                    entity.Name,
+                    entity.BranchCode,
+                    entity.Phone,
+                    entity.Email,
+                    entity.Address,
+                    entity.Notes,
+                    entity.IsMainBranch,
+                    entity.IsActive,
+                    PreviousMainBranchesChanged = previousMainBranches
+                });
+
+            return (true, isNew ? "Branch added successfully." : "Branch updated successfully.");
         }
 
         public async Task<(bool Success, string Message)> ToggleStatusAsync(int id)
@@ -301,10 +351,35 @@ namespace PosPlatform.Web.Services
                 return (false, "Main branch cannot be deactivated. Set another branch as main first.");
             }
 
+            var oldValues = new
+            {
+                entity.Name,
+                entity.BranchCode,
+                entity.IsMainBranch,
+                entity.IsActive
+            };
+
             entity.IsActive = !entity.IsActive;
             entity.UpdatedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
+
+            var action = entity.IsActive ? "Activate" : "Deactivate";
+
+            await _auditLogService.LogAsync(
+                module: "Branches",
+                action: action,
+                entityName: "Branch",
+                entityId: entity.Id,
+                summary: $"{action}d branch {entity.Name}.",
+                oldValues: oldValues,
+                newValues: new
+                {
+                    entity.Name,
+                    entity.BranchCode,
+                    entity.IsMainBranch,
+                    entity.IsActive
+                });
 
             return (true, entity.IsActive ? "Branch activated." : "Branch deactivated.");
         }
@@ -332,6 +407,21 @@ namespace PosPlatform.Web.Services
                 return (false, "Main branch cannot be deleted.");
             }
 
+            var oldValues = new
+            {
+                entity.Name,
+                entity.BranchCode,
+                entity.Phone,
+                entity.Email,
+                entity.Address,
+                entity.Notes,
+                entity.IsMainBranch,
+                entity.IsActive
+            };
+
+            var branchName = entity.Name;
+            var branchId = entity.Id;
+
             var hasSales = await _db.Sales.AnyAsync(x => x.TenantId == tenantId.Value && x.BranchId == id);
             var hasPurchases = await _db.StockPurchases.AnyAsync(x => x.TenantId == tenantId.Value && x.BranchId == id);
             var hasExpenses = await _db.Expenses.AnyAsync(x => x.TenantId == tenantId.Value && x.BranchId == id);
@@ -343,11 +433,41 @@ namespace PosPlatform.Web.Services
                 entity.UpdatedAt = DateTime.UtcNow;
                 await _db.SaveChangesAsync();
 
+                await _auditLogService.LogAsync(
+                    module: "Branches",
+                    action: "Deactivate",
+                    entityName: "Branch",
+                    entityId: entity.Id,
+                    summary: $"Deactivated branch {entity.Name} because it has linked records.",
+                    oldValues: oldValues,
+                    newValues: new
+                    {
+                        entity.Name,
+                        entity.BranchCode,
+                        entity.IsActive,
+                        LinkedRecords = new
+                        {
+                            HasSales = hasSales,
+                            HasPurchases = hasPurchases,
+                            HasExpenses = hasExpenses,
+                            HasUsers = hasUsers
+                        }
+                    });
+
                 return (true, "Branch has linked records, so it was deactivated instead of deleted.");
             }
 
             _db.Branches.Remove(entity);
             await _db.SaveChangesAsync();
+
+            await _auditLogService.LogAsync(
+                module: "Branches",
+                action: "Delete",
+                entityName: "Branch",
+                entityId: branchId,
+                summary: $"Deleted branch {branchName}.",
+                oldValues: oldValues,
+                newValues: null);
 
             return (true, "Branch deleted successfully.");
         }

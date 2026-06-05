@@ -11,6 +11,7 @@ namespace PosPlatform.Web.Services
         private readonly AppDbContext _db;
         private readonly TenantContextService _tenantContext;
         private readonly IPasswordHasher<ApplicationUser> _passwordHasher;
+        private readonly AuditLogService _auditLogService;
 
         private static readonly List<RoleOptionViewModel> DefaultRoles = new()
         {
@@ -54,11 +55,13 @@ namespace PosPlatform.Web.Services
         public UserManagementService(
             AppDbContext db,
             TenantContextService tenantContext,
-            IPasswordHasher<ApplicationUser> passwordHasher)
+            IPasswordHasher<ApplicationUser> passwordHasher,
+            AuditLogService auditLogService)
         {
             _db = db;
             _tenantContext = tenantContext;
             _passwordHasher = passwordHasher;
+            _auditLogService = auditLogService;
         }
 
         public async Task EnsureDefaultRolesAsync()
@@ -253,19 +256,21 @@ namespace PosPlatform.Web.Services
                 return (false, "No active branch found. Please create a branch first.");
             }
 
-            var branchExists = await _db.Branches.AnyAsync(x =>
-                x.Id == branchId.Value &&
-                x.TenantId == tenantId.Value &&
-                x.IsActive);
+            var branch = await _db.Branches
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.Id == branchId.Value &&
+                    x.TenantId == tenantId.Value &&
+                    x.IsActive);
 
-            if (!branchExists)
+            if (branch == null)
             {
                 return (false, "Selected branch was not found or is inactive.");
             }
 
             if (model.Id.HasValue && model.Id.Value > 0)
             {
-                return await UpdateUserAsync(model, tenantId.Value, role.Id, branchId.Value);
+                return await UpdateUserAsync(model, tenantId.Value, role.Id, role.Name, branch.Id, branch.Name);
             }
 
             if (string.IsNullOrWhiteSpace(model.Password))
@@ -276,7 +281,7 @@ namespace PosPlatform.Web.Services
             var user = new ApplicationUser
             {
                 TenantId = tenantId.Value,
-                BranchId = branchId.Value,
+                BranchId = branch.Id,
                 UserName = email,
                 NormalizedUserName = normalizedEmail,
                 Email = email,
@@ -300,9 +305,29 @@ namespace PosPlatform.Web.Services
                 RoleId = role.Id
             });
 
-            await SyncUserClaimsAsync(user.Id, tenantId.Value, branchId.Value);
+            await SyncUserClaimsAsync(user.Id, tenantId.Value, branch.Id);
 
             await _db.SaveChangesAsync();
+
+            await _auditLogService.LogAsync(
+                module: "Users",
+                action: "Create",
+                entityName: "ApplicationUser",
+                entityId: user.Id,
+                summary: $"Created user {email} with role {role.Name} at branch {branch.Name}.",
+                oldValues: null,
+                newValues: new
+                {
+                    user.Id,
+                    user.Email,
+                    user.PhoneNumber,
+                    user.BranchId,
+                    BranchName = branch.Name,
+                    RoleName = role.Name,
+                    user.LockoutEnabled,
+                    user.LockoutEnd,
+                    PasswordSet = true
+                });
 
             return (true, "User created successfully.");
         }
@@ -311,10 +336,14 @@ namespace PosPlatform.Web.Services
             UserFormModel model,
             int tenantId,
             int roleId,
-            int branchId)
+            string roleName,
+            int branchId,
+            string branchName)
         {
             var user = await _db.Users
+                .Include(x => x.Branch)
                 .Include(x => x.UserRoles)
+                    .ThenInclude(x => x.Role)
                 .FirstOrDefaultAsync(x => x.Id == model.Id!.Value && x.TenantId == tenantId);
 
             if (user == null)
@@ -322,8 +351,24 @@ namespace PosPlatform.Web.Services
                 return (false, "User not found.");
             }
 
+            var oldRoleName = user.UserRoles
+                .Select(x => x.Role != null ? x.Role.Name : "-")
+                .FirstOrDefault() ?? "-";
+
+            var oldValues = new
+            {
+                user.Email,
+                user.PhoneNumber,
+                user.BranchId,
+                BranchName = user.Branch?.Name ?? "-",
+                RoleName = oldRoleName,
+                PasswordChanged = false
+            };
+
             var email = model.Email.Trim();
             var normalizedEmail = email.ToUpperInvariant();
+
+            var passwordChanged = !string.IsNullOrWhiteSpace(model.Password);
 
             user.Email = email;
             user.NormalizedEmail = normalizedEmail;
@@ -333,9 +378,9 @@ namespace PosPlatform.Web.Services
             user.BranchId = branchId;
             user.ConcurrencyStamp = Guid.NewGuid().ToString();
 
-            if (!string.IsNullOrWhiteSpace(model.Password))
+            if (passwordChanged)
             {
-                user.PasswordHash = _passwordHasher.HashPassword(user, model.Password);
+                user.PasswordHash = _passwordHasher.HashPassword(user, model.Password!);
                 user.SecurityStamp = Guid.NewGuid().ToString();
             }
 
@@ -351,6 +396,23 @@ namespace PosPlatform.Web.Services
 
             await _db.SaveChangesAsync();
 
+            await _auditLogService.LogAsync(
+                module: "Users",
+                action: "Update",
+                entityName: "ApplicationUser",
+                entityId: user.Id,
+                summary: $"Updated user {email}. Role: {oldRoleName} → {roleName}. Branch: {oldValues.BranchName} → {branchName}.",
+                oldValues: oldValues,
+                newValues: new
+                {
+                    user.Email,
+                    user.PhoneNumber,
+                    user.BranchId,
+                    BranchName = branchName,
+                    RoleName = roleName,
+                    PasswordChanged = passwordChanged
+                });
+
             return (true, "User updated successfully.");
         }
 
@@ -363,9 +425,13 @@ namespace PosPlatform.Web.Services
                 return (false, "Tenant not found.");
             }
 
-            var user = await _db.Users.FirstOrDefaultAsync(x =>
-                x.Id == userId &&
-                x.TenantId == tenantId.Value);
+            var user = await _db.Users
+                .Include(x => x.Branch)
+                .Include(x => x.UserRoles)
+                    .ThenInclude(x => x.Role)
+                .FirstOrDefaultAsync(x =>
+                    x.Id == userId &&
+                    x.TenantId == tenantId.Value);
 
             if (user == null)
             {
@@ -373,9 +439,17 @@ namespace PosPlatform.Web.Services
             }
 
             var now = DateTimeOffset.UtcNow;
-            var isDisabled = user.LockoutEnd != null && user.LockoutEnd > now;
+            var wasDisabled = user.LockoutEnd != null && user.LockoutEnd > now;
 
-            if (isDisabled)
+            var oldValues = new
+            {
+                user.Email,
+                user.LockoutEnabled,
+                user.LockoutEnd,
+                IsDisabled = wasDisabled
+            };
+
+            if (wasDisabled)
             {
                 user.LockoutEnd = null;
                 user.AccessFailedCount = 0;
@@ -390,7 +464,29 @@ namespace PosPlatform.Web.Services
 
             await _db.SaveChangesAsync();
 
-            return (true, isDisabled ? "User activated successfully." : "User disabled successfully.");
+            var isNowDisabled = user.LockoutEnd != null && user.LockoutEnd > DateTimeOffset.UtcNow;
+            var action = isNowDisabled ? "Deactivate" : "Activate";
+
+            await _auditLogService.LogAsync(
+                module: "Users",
+                action: action,
+                entityName: "ApplicationUser",
+                entityId: user.Id,
+                summary: $"{action}d user {user.Email ?? user.UserName ?? user.Id.ToString()}.",
+                oldValues: oldValues,
+                newValues: new
+                {
+                    user.Email,
+                    user.LockoutEnabled,
+                    user.LockoutEnd,
+                    IsDisabled = isNowDisabled,
+                    BranchName = user.Branch?.Name ?? "-",
+                    RoleName = user.UserRoles
+                        .Select(x => x.Role != null ? x.Role.Name : "-")
+                        .FirstOrDefault() ?? "-"
+                });
+
+            return (true, wasDisabled ? "User activated successfully." : "User disabled successfully.");
         }
 
         private async Task EnsureMainBranchExistsAsync(int tenantId)
