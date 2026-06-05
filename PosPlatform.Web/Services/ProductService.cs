@@ -160,14 +160,35 @@ namespace PosPlatform.Web.Services
 
             var sku = model.SKU.Trim();
 
+            var effectiveBranchId = model.Id.HasValue && model.Id.Value > 0
+        ? model.BranchId ?? branchId
+        : branchId;
+
             var skuExists = await _db.Products.AnyAsync(x =>
                 x.TenantId == tenantId.Value &&
+                x.BranchId == effectiveBranchId &&
                 x.SKU == sku &&
                 x.Id != (model.Id ?? 0));
 
             if (skuExists)
             {
-                return (false, "SKU already exists.");
+                return (false, "SKU already exists for this branch.");
+            }
+
+            var barcode = string.IsNullOrWhiteSpace(model.Barcode) ? null : model.Barcode.Trim();
+
+            if (!string.IsNullOrWhiteSpace(barcode))
+            {
+                var barcodeExists = await _db.Products.AnyAsync(x =>
+                    x.TenantId == tenantId.Value &&
+                    x.BranchId == effectiveBranchId &&
+                    x.Barcode == barcode &&
+                    x.Id != (model.Id ?? 0));
+
+                if (barcodeExists)
+                {
+                    return (false, "Barcode already exists for this branch.");
+                }
             }
 
             Product entity;
@@ -197,7 +218,7 @@ namespace PosPlatform.Web.Services
 
             entity.ProductName = model.ProductName.Trim();
             entity.SKU = sku;
-            entity.Barcode = string.IsNullOrWhiteSpace(model.Barcode) ? null : model.Barcode.Trim();
+            entity.Barcode = barcode;
             entity.Description = string.IsNullOrWhiteSpace(model.Description) ? null : model.Description.Trim();
 
             entity.ProductType = productType;

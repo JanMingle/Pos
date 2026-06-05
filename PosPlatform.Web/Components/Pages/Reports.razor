@@ -52,6 +52,10 @@
                 Apply
             </button>
         </div>
+        <button type="button" class="reports-secondary-btn" @onclick="DownloadExcelReport">
+            <i class="bi bi-file-earmark-excel"></i>
+            Export Excel
+        </button>
     </div>
 
     <div class="reports-settings-strip">
@@ -1309,4 +1313,34 @@
     {
         return value >= 0 ? "difference-good" : "difference-bad";
     }
+
+    private void DownloadExcelReport()
+    {
+        var query = new List<string>();
+
+        if (_fromDate.HasValue)
+        {
+            query.Add($"fromDate={_fromDate.Value:yyyy-MM-dd}");
+        }
+
+        if (_toDate.HasValue)
+        {
+            query.Add($"toDate={_toDate.Value:yyyy-MM-dd}");
+        }
+
+        if (_branchFilter.HasValue)
+        {
+            query.Add($"branchId={_branchFilter.Value}");
+        }
+
+        var url = "/reports/export/excel";
+
+        if (query.Count > 0)
+        {
+            url += "?" + string.Join("&", query);
+        }
+
+        NavigationManager.NavigateTo(url, forceLoad: true);
+    }
+
 }
