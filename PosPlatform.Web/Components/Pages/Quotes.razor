@@ -400,6 +400,10 @@
                     <span>Customer Phone</span>
                     <strong>@(_selectedQuote.CustomerPhone ?? "-")</strong>
                 </div>
+                <button type="button" class="quotes-secondary-btn full" @onclick="() => PrintQuote(_selectedQuote.Id)">
+                    <i class="bi bi-printer"></i>
+                    Print Quote
+                </button>
             </div>
 
             <div class="quotes-table-wrap">
@@ -1493,5 +1497,10 @@
         public string SKU { get; set; } = string.Empty;
         public decimal SellingPrice { get; set; }
         public decimal Quantity { get; set; } = 1;
+    }
+
+    private void PrintQuote(int quoteId)
+    {
+        NavigationManager.NavigateTo($"/quotes/print/{quoteId}");
     }
 }

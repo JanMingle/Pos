@@ -154,6 +154,10 @@
                                     <button type="button" class="invoices-mini-btn" @onclick="() => ViewInvoiceAsync(invoice.Id)">
                                         View
                                     </button>
+
+                                    <button type="button" class="invoices-mini-btn" @onclick="() => PrintInvoice(invoice.Id)">
+                                        Print
+                                    </button>
                                 </td>
                             </tr>
                         }
@@ -210,6 +214,10 @@
                     <span>Balance Due</span>
                     <strong>@Money(_selectedInvoice.BalanceDue)</strong>
                 </div>
+                <button type="button" class="invoices-secondary-btn full" @onclick="() => PrintInvoice(_selectedInvoice.Id)">
+                    <i class="bi bi-printer"></i>
+                    Print Invoice
+                </button>
             </div>
 
             <div class="invoices-table-wrap">
@@ -1078,5 +1086,9 @@
             "Cancelled" => "cancelled",
             _ => "unpaid"
         };
+    }
+    private void PrintInvoice(int invoiceId)
+    {
+        NavigationManager.NavigateTo($"/invoices/print/{invoiceId}");
     }
 }

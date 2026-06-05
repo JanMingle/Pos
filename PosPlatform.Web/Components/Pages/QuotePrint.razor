@@ -1,0 +1,452 @@
+﻿@page "/quotes/print/{QuoteId:int}"
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@layout MainLayout
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.JSInterop
+@using PosPlatform.Web.Components.Layout
+@using PosPlatform.Web.Models.Quotes
+@using PosPlatform.Web.Models.Settings
+@using PosPlatform.Web.Services
+@inject QuoteService QuoteService
+@inject BusinessSettingsService BusinessSettingsService
+@inject UserAccessService UserAccessService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+
+<PageTitle>Print Quote</PageTitle>
+
+@if (_loading)
+{
+    <div class="print-loading">Loading quote...</div>
+}
+else if (_quote == null)
+{
+    <div class="print-loading">
+        <strong>Quote not found.</strong>
+        <button type="button" @onclick="BackToQuotes">Back to Quotes</button>
+    </div>
+}
+else
+{
+    <section class="print-page">
+        <div class="print-toolbar">
+            <button type="button" class="print-secondary-btn" @onclick="BackToQuotes">
+                <i class="bi bi-arrow-left"></i>
+                Back
+            </button>
+
+            <button type="button" class="print-primary-btn" @onclick="PrintAsync">
+                <i class="bi bi-printer"></i>
+                Print / Save PDF
+            </button>
+        </div>
+
+        <div class="print-sheet">
+            <div class="print-header">
+                <div>
+                    <h1>@_settings.BusinessName</h1>
+                    <p>@(_settings.Address ?? "")</p>
+                    <p>@(_settings.Phone ?? "") @(!string.IsNullOrWhiteSpace(_settings.Email) ? $" · {_settings.Email}" : "")</p>
+                </div>
+
+                <div class="print-document-title">
+                    <span>QUOTE</span>
+                    <strong>@_quote.QuoteNumber</strong>
+                </div>
+            </div>
+
+            <div class="print-meta-grid">
+                <div>
+                    <span>Quote Date</span>
+                    <strong>@_quote.QuoteDate.ToString("yyyy-MM-dd")</strong>
+                </div>
+
+                <div>
+                    <span>Expiry Date</span>
+                    <strong>@(_quote.ExpiryDate?.ToString("yyyy-MM-dd") ?? "-")</strong>
+                </div>
+
+                <div>
+                    <span>Status</span>
+                    <strong>@_quote.Status</strong>
+                </div>
+            </div>
+
+            <div class="print-customer-box">
+                <span>Prepared For</span>
+                <strong>@(_quote.CustomerName ?? "Walk-in / Unsaved")</strong>
+                <p>@(_quote.CustomerPhone ?? "")</p>
+                <p>@(_quote.CustomerEmail ?? "")</p>
+            </div>
+
+            <table class="print-table">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>SKU</th>
+                        <th>Type</th>
+                        <th class="right">Qty</th>
+                        <th class="right">Unit Price</th>
+                        <th class="right">Line Total</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var item in _quote.Items)
+                    {
+                        <tr>
+                            <td>@item.ProductName</td>
+                            <td>@item.SKU</td>
+                            <td>@item.ProductType</td>
+                            <td class="right">@item.Quantity</td>
+                            <td class="right">@Money(item.UnitPrice)</td>
+                            <td class="right">@Money(item.LineTotal)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <div class="print-totals">
+                <div>
+                    <span>Subtotal</span>
+                    <strong>@Money(_quote.Subtotal)</strong>
+                </div>
+
+                <div>
+                    <span>Discount</span>
+                    <strong>@Money(_quote.DiscountAmount)</strong>
+                </div>
+
+                <div>
+                    <span>@TaxLabel</span>
+                    <strong>@Money(_quote.TaxAmount)</strong>
+                </div>
+
+                <div class="grand">
+                    <span>Total</span>
+                    <strong>@Money(_quote.TotalAmount)</strong>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_quote.Notes) || !string.IsNullOrWhiteSpace(_quote.Terms))
+            {
+                <div class="print-notes">
+                    @if (!string.IsNullOrWhiteSpace(_quote.Notes))
+                    {
+                        <div>
+                            <span>Notes</span>
+                            <p>@_quote.Notes</p>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(_quote.Terms))
+                    {
+                        <div>
+                            <span>Terms</span>
+                            <p>@_quote.Terms</p>
+                        </div>
+                    }
+                </div>
+            }
+
+            <div class="print-footer">
+                <p>This quotation is not an invoice. Prices and availability may be subject to change until accepted.</p>
+            </div>
+        </div>
+    </section>
+}
+
+<style>
+    .print-page {
+        padding: 20px 0 40px;
+    }
+
+    .print-loading {
+        padding: 30px;
+        color: #0f172a;
+    }
+
+    .print-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        max-width: 980px;
+        margin: 0 auto 14px;
+    }
+
+    .print-primary-btn,
+    .print-secondary-btn {
+        min-height: 38px;
+        border-radius: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .82rem;
+        font-weight: 650;
+        border: 0;
+    }
+
+    .print-primary-btn {
+        color: #fff;
+        background: #111827;
+    }
+
+    .print-secondary-btn {
+        color: #334155;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+    }
+
+    .print-sheet {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 42px;
+        background: #fff;
+        border: 1px solid #e7edf5;
+        border-radius: 18px;
+        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        color: #0f172a;
+    }
+
+    .print-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 30px;
+        padding-bottom: 24px;
+        border-bottom: 2px solid #111827;
+    }
+
+        .print-header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 750;
+        }
+
+        .print-header p {
+            margin: 5px 0 0;
+            color: #64748b;
+            font-size: .86rem;
+        }
+
+    .print-document-title {
+        text-align: right;
+    }
+
+        .print-document-title span {
+            display: block;
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: .08em;
+        }
+
+        .print-document-title strong {
+            display: block;
+            margin-top: 6px;
+            color: #475569;
+            font-size: .88rem;
+        }
+
+    .print-meta-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin: 22px 0;
+    }
+
+        .print-meta-grid div,
+        .print-customer-box {
+            padding: 14px;
+            border-radius: 14px;
+            background: #f8fafc;
+            border: 1px solid #e7edf5;
+        }
+
+            .print-meta-grid span,
+            .print-customer-box span {
+                display: block;
+                color: #64748b;
+                font-size: .72rem;
+                font-weight: 700;
+                text-transform: uppercase;
+            }
+
+            .print-meta-grid strong,
+            .print-customer-box strong {
+                display: block;
+                margin-top: 5px;
+                font-size: .9rem;
+            }
+
+    .print-customer-box {
+        margin-bottom: 22px;
+    }
+
+        .print-customer-box p {
+            margin: 4px 0 0;
+            color: #64748b;
+            font-size: .84rem;
+        }
+
+    .print-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+        .print-table th {
+            padding: 11px 10px;
+            background: #111827;
+            color: #fff;
+            text-align: left;
+            font-size: .72rem;
+            text-transform: uppercase;
+        }
+
+        .print-table td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #e7edf5;
+            font-size: .84rem;
+            color: #334155;
+        }
+
+    .right {
+        text-align: right;
+    }
+
+    .print-totals {
+        width: 320px;
+        margin-left: auto;
+        margin-top: 22px;
+        display: grid;
+        gap: 8px;
+    }
+
+        .print-totals div {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 8px 0;
+            border-bottom: 1px solid #e7edf5;
+        }
+
+        .print-totals .grand {
+            padding: 12px;
+            border-radius: 12px;
+            background: #111827;
+            color: #fff;
+            border: 0;
+        }
+
+    .print-notes {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 28px;
+    }
+
+        .print-notes div {
+            padding: 14px;
+            border-radius: 14px;
+            background: #f8fafc;
+            border: 1px solid #e7edf5;
+        }
+
+        .print-notes span {
+            display: block;
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        .print-notes p {
+            margin: 0;
+            color: #334155;
+            font-size: .84rem;
+            line-height: 1.5;
+        }
+
+    .print-footer {
+        margin-top: 28px;
+        padding-top: 16px;
+        border-top: 1px solid #e7edf5;
+        color: #64748b;
+        font-size: .78rem;
+    }
+
+    @@media print {
+        .print-toolbar,
+        .pos-sidebar,
+        .pos-topbar,
+        .pos-sidebar-card {
+            display: none !important;
+        }
+
+        body {
+            background: #fff !important;
+        }
+
+        .print-page {
+            padding: 0 !important;
+        }
+
+        .print-sheet {
+            max-width: 100%;
+            margin: 0;
+            padding: 20px;
+            border: 0;
+            border-radius: 0;
+            box-shadow: none;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public int QuoteId { get; set; }
+
+    private BusinessSettingsFormModel _settings = new();
+    private QuoteDetailsViewModel? _quote;
+    private bool _loading = true;
+
+    private string CurrencyLabel =>
+        string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
+            ? "R"
+            : _settings.CurrencySymbol;
+
+    private string TaxLabel =>
+        string.IsNullOrWhiteSpace(_settings.TaxName)
+            ? "Tax"
+            : _settings.TaxName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserAccessService.CanAccessAsync("quotes"))
+        {
+            NavigationManager.NavigateTo("/dashboard");
+            return;
+        }
+
+        _settings = await BusinessSettingsService.GetSettingsAsync();
+        _quote = await QuoteService.GetQuoteDetailsAsync(QuoteId);
+        _loading = false;
+    }
+
+    private async Task PrintAsync()
+    {
+        await JS.InvokeVoidAsync("window.print");
+    }
+
+    private void BackToQuotes()
+    {
+        NavigationManager.NavigateTo("/quotes");
+    }
+
+    private string Money(decimal value)
+    {
+        return $"{CurrencyLabel} {value:0.00}";
+    }
+}
