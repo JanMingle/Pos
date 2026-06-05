@@ -1,0 +1,1497 @@
+﻿@page "/quotes"
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@layout MainLayout
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using PosPlatform.Web.Components.Layout
+@using PosPlatform.Web.Models.Quotes
+@using PosPlatform.Web.Models.Settings
+@using PosPlatform.Web.Services
+@inject QuoteService QuoteService
+@inject InvoiceService InvoiceService
+@inject BusinessSettingsService BusinessSettingsService
+@inject UserAccessService UserAccessService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Quotes</PageTitle>
+
+<section class="quotes-page">
+    <div class="quotes-header">
+        <div>
+            <div class="quotes-kicker">
+                <i class="bi bi-file-earmark-text"></i>
+                Sales documents
+            </div>
+            <h1>Quotes</h1>
+            <p>Create customer quotes and turn accepted quotes into invoices.</p>
+        </div>
+
+        <button type="button" class="quotes-primary-btn" @onclick="OpenCreate">
+            <i class="bi bi-plus-circle"></i>
+            New Quote
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="quotes-alert @(_isSuccess ? "success" : "danger")">
+            <i class="bi @(_isSuccess ? "bi-check-circle" : "bi-exclamation-triangle")"></i>
+            <span>@_message</span>
+            <button type="button" @onclick="ClearMessage">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    }
+
+    <div class="quotes-settings-strip">
+        <div>
+            <span>Business</span>
+            <strong>@_settings.BusinessName</strong>
+        </div>
+
+        <div>
+            <span>Currency</span>
+            <strong>@CurrencyLabel</strong>
+        </div>
+
+        <div>
+            <span>Quotes Showing</span>
+            <strong>@_quotes.Count</strong>
+        </div>
+
+        <div>
+            <span>Total Value</span>
+            <strong>@Money(_quotes.Sum(x => x.TotalAmount))</strong>
+        </div>
+    </div>
+
+    <div class="quotes-control-panel">
+        <input type="date" @bind="_fromDate" />
+        <input type="date" @bind="_toDate" />
+
+        <select @bind="_statusFilter">
+            <option value="all">All statuses</option>
+            <option value="Draft">Draft</option>
+            <option value="Sent">Sent</option>
+            <option value="Accepted">Accepted</option>
+            <option value="Cancelled">Cancelled</option>
+        </select>
+
+        <div class="quotes-search">
+            <i class="bi bi-search"></i>
+            <input @bind="_searchTerm"
+                   @bind:event="oninput"
+                   placeholder="Search quote number or customer" />
+        </div>
+
+        <button type="button" class="quotes-secondary-btn" @onclick="LoadQuotesAsync">
+            <i class="bi bi-filter"></i>
+            Filter
+        </button>
+
+        <button type="button" class="quotes-ghost-btn" @onclick="ResetFiltersAsync">
+            <i class="bi bi-arrow-counterclockwise"></i>
+            Reset
+        </button>
+    </div>
+
+    <div class="quotes-table-card">
+        <div class="quotes-table-header">
+            <div>
+                <h2>Quote List</h2>
+                <p>Latest matching customer quotes.</p>
+            </div>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="quotes-empty">
+                <strong>Loading quotes...</strong>
+                <span>Please wait.</span>
+            </div>
+        }
+        else if (_quotes.Count == 0)
+        {
+            <div class="quotes-empty">
+                <strong>No quotes found</strong>
+                <span>Create your first customer quote to get started.</span>
+            </div>
+        }
+        else
+        {
+            <div class="quotes-table-wrap">
+                <table class="quotes-table">
+                    <thead>
+                        <tr>
+                            <th>Quote</th>
+                            <th>Customer</th>
+                            <th>Date</th>
+                            <th>Expiry</th>
+                            <th>Items</th>
+                            <th>Total</th>
+                            <th>Status</th>
+                            <th>Created By</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var quote in _quotes)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@quote.QuoteNumber</strong>
+                                    @if (!string.IsNullOrWhiteSpace(quote.Notes))
+                                    {
+                                        <span class="quotes-muted">@quote.Notes</span>
+                                    }
+                                </td>
+                                <td>@quote.CustomerName</td>
+                                <td>@quote.QuoteDate.ToString("yyyy-MM-dd")</td>
+                                <td>@(quote.ExpiryDate?.ToString("yyyy-MM-dd") ?? "-")</td>
+                                <td>@quote.ItemCount</td>
+                                <td class="quotes-money">@Money(quote.TotalAmount)</td>
+                                <td>
+                                    <span class="quotes-pill @GetStatusClass(quote.Status)">
+                                        @quote.Status
+                                    </span>
+                                </td>
+                                <td>@quote.CreatedByName</td>
+                                <td class="text-end">
+                                    <button type="button" class="quotes-mini-btn" @onclick="() => ViewQuoteAsync(quote.Id)">
+                                        View
+                                    </button>
+
+                                    <button type="button" class="quotes-mini-btn" @onclick="() => MarkSentAsync(quote.Id)">
+                                        Sent
+                                    </button>
+
+                                    <button type="button" class="quotes-mini-btn" @onclick="() => MarkAcceptedAsync(quote.Id)">
+                                        Accept
+                                    </button>
+
+                                    <button type="button" class="quotes-danger-mini-btn" @onclick="() => MarkCancelledAsync(quote.Id)">
+                                        Cancel
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>
+
+@if (_showCreate)
+{
+    <div class="quotes-modal-backdrop">
+        <div class="quotes-modal large">
+            <div class="quotes-modal-header">
+                <div>
+                    <span>Create Quote</span>
+                    <h4>New customer quote</h4>
+                    <p>Add customer details, products/services, discount and notes.</p>
+                </div>
+
+                <button type="button" class="quotes-close-btn" @onclick="CloseCreate">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div class="quotes-create-grid">
+                <div class="quotes-panel">
+                    <h5>Customer</h5>
+
+                    <div class="quotes-form-grid">
+                        <div>
+                            <label>Search customer</label>
+                            <input class="quotes-input" @bind="_customerSearch" @bind:event="oninput" placeholder="Name, phone or email" />
+                        </div>
+
+                        <div class="align-end">
+                            <button type="button" class="quotes-secondary-btn full" @onclick="SearchCustomersAsync">
+                                Search
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (_customers.Count > 0)
+                    {
+                        <div class="quotes-option-list">
+                            @foreach (var customer in _customers)
+                            {
+                                <button type="button" @onclick="() => SelectCustomer(customer)">
+                                    <strong>@customer.DisplayName</strong>
+                                    <span>@(customer.Phone ?? "-") · @(customer.Email ?? "-")</span>
+                                </button>
+                            }
+                        </div>
+                    }
+
+                    <div class="quotes-form-grid">
+                        <div>
+                            <label>Customer Name</label>
+                            <input class="quotes-input" @bind="_createModel.CustomerName" />
+                        </div>
+
+                        <div>
+                            <label>Phone</label>
+                            <input class="quotes-input" @bind="_createModel.CustomerPhone" />
+                        </div>
+
+                        <div>
+                            <label>Email</label>
+                            <input class="quotes-input" @bind="_createModel.CustomerEmail" />
+                        </div>
+
+                        <div>
+                            <label>Expiry Date</label>
+                            <input type="date" class="quotes-input" @bind="_createModel.ExpiryDate" />
+                        </div>
+                    </div>
+
+                    <h5 class="mt">Products / Services</h5>
+
+                    <div class="quotes-form-grid">
+                        <div>
+                            <label>Search product</label>
+                            <input class="quotes-input" @bind="_productSearch" @bind:event="oninput" placeholder="Product, SKU or barcode" />
+                        </div>
+
+                        <div class="align-end">
+                            <button type="button" class="quotes-secondary-btn full" @onclick="SearchProductsAsync">
+                                Search
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (_products.Count > 0)
+                    {
+                        <div class="quotes-product-list">
+                            @foreach (var product in _products)
+                            {
+                                <div>
+                                    <div>
+                                        <strong>@product.ProductName</strong>
+                                        <span>@product.SKU · @product.ProductType · @Money(product.SellingPrice)</span>
+                                    </div>
+
+                                    <button type="button" class="quotes-mini-btn" @onclick="() => AddProduct(product)">
+                                        Add
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="quotes-panel">
+                    <h5>Quote Items</h5>
+
+                    @if (_selectedItems.Count == 0)
+                    {
+                        <div class="quotes-empty small">
+                            <strong>No items added</strong>
+                            <span>Add products or services from the search list.</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="quotes-cart-list">
+                            @foreach (var item in _selectedItems)
+                            {
+                                <div class="quotes-cart-item">
+                                    <div>
+                                        <strong>@item.ProductName</strong>
+                                        <span>@item.SKU · @Money(item.SellingPrice)</span>
+                                    </div>
+
+                                    <input type="number" min="0.01" step="0.01" @bind="item.Quantity" />
+
+                                    <button type="button" class="quotes-remove-btn" @onclick="() => RemoveProduct(item.ProductId)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <div class="quotes-form-grid mt">
+                        <div>
+                            <label>Discount (@CurrencyLabel)</label>
+                            <input type="number" min="0" step="0.01" class="quotes-input" @bind="_createModel.DiscountAmount" />
+                        </div>
+                    </div>
+
+                    <div class="quotes-form-grid">
+                        <div>
+                            <label>Notes</label>
+                            <textarea class="quotes-input quotes-textarea" @bind="_createModel.Notes"></textarea>
+                        </div>
+
+                        <div>
+                            <label>Terms</label>
+                            <textarea class="quotes-input quotes-textarea" @bind="_createModel.Terms"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="quotes-summary">
+                        <div>
+                            <span>Subtotal</span>
+                            <strong>@Money(CreateSubtotal)</strong>
+                        </div>
+
+                        <div>
+                            <span>Discount</span>
+                            <strong>@Money(_createModel.DiscountAmount)</strong>
+                        </div>
+
+                        <div>
+                            <span>Estimated Tax</span>
+                            <strong>@Money(CreateTax)</strong>
+                        </div>
+
+                        <div>
+                            <span>Estimated Total</span>
+                            <strong>@Money(CreateTotal)</strong>
+                        </div>
+                    </div>
+
+                    <button type="button" class="quotes-primary-btn full" disabled="@_saving" @onclick="SaveQuoteAsync">
+                        <i class="bi bi-check-circle"></i>
+                        @(_saving ? "Saving..." : "Create Quote")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_selectedQuote != null)
+{
+    <div class="quotes-modal-backdrop">
+        <div class="quotes-modal">
+            <div class="quotes-modal-header">
+                <div>
+                    <span>@_selectedQuote.Status</span>
+                    <h4>@_selectedQuote.QuoteNumber</h4>
+                    <p>@(_selectedQuote.CustomerName ?? "Walk-in / Unsaved") · @Money(_selectedQuote.TotalAmount)</p>
+                </div>
+
+                <button type="button" class="quotes-close-btn" @onclick="CloseDetails">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div class="quotes-detail-grid">
+                <div>
+                    <span>Date</span>
+                    <strong>@_selectedQuote.QuoteDate.ToString("yyyy-MM-dd")</strong>
+                </div>
+
+                <div>
+                    <span>Expiry</span>
+                    <strong>@(_selectedQuote.ExpiryDate?.ToString("yyyy-MM-dd") ?? "-")</strong>
+                </div>
+
+                <div>
+                    <span>Customer Phone</span>
+                    <strong>@(_selectedQuote.CustomerPhone ?? "-")</strong>
+                </div>
+            </div>
+
+            <div class="quotes-table-wrap">
+                <table class="quotes-table compact">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>SKU</th>
+                            <th>Qty</th>
+                            <th>Unit</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var item in _selectedQuote.Items)
+                        {
+                            <tr>
+                                <td>@item.ProductName</td>
+                                <td>@item.SKU</td>
+                                <td>@item.Quantity</td>
+                                <td>@Money(item.UnitPrice)</td>
+                                <td>@Money(item.LineTotal)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="quotes-summary">
+                <div>
+                    <span>Subtotal</span>
+                    <strong>@Money(_selectedQuote.Subtotal)</strong>
+                </div>
+
+                <div>
+                    <span>Discount</span>
+                    <strong>@Money(_selectedQuote.DiscountAmount)</strong>
+                </div>
+
+                <div>
+                    <span>Tax</span>
+                    <strong>@Money(_selectedQuote.TaxAmount)</strong>
+                </div>
+
+                <div>
+                    <span>Total</span>
+                    <strong>@Money(_selectedQuote.TotalAmount)</strong>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_selectedQuote.Notes) || !string.IsNullOrWhiteSpace(_selectedQuote.Terms))
+            {
+                <div class="quotes-notes-grid">
+                    <div>
+                        <span>Notes</span>
+                        <p>@(string.IsNullOrWhiteSpace(_selectedQuote.Notes) ? "-" : _selectedQuote.Notes)</p>
+                    </div>
+
+                    <div>
+                        <span>Terms</span>
+                        <p>@(string.IsNullOrWhiteSpace(_selectedQuote.Terms) ? "-" : _selectedQuote.Terms)</p>
+                    </div>
+                </div>
+            }
+
+            <div class="quotes-detail-actions">
+                @if (_selectedQuote.Status != "Sent")
+                {
+                    <button type="button" class="quotes-secondary-btn full" @onclick="() => MarkSentAsync(_selectedQuote.Id)">
+                        <i class="bi bi-send"></i>
+                        Mark as Sent
+                    </button>
+                }
+
+                @if (_selectedQuote.Status != "Accepted")
+                {
+                    <button type="button" class="quotes-primary-btn full" @onclick="() => MarkAcceptedAsync(_selectedQuote.Id)">
+                        <i class="bi bi-check-circle"></i>
+                        Accept & Create Invoice
+                    </button>
+                }
+
+                @if (_selectedQuote.Status != "Cancelled")
+                {
+                    <button type="button" class="quotes-danger-mini-btn full" @onclick="() => MarkCancelledAsync(_selectedQuote.Id)">
+                        <i class="bi bi-x-circle"></i>
+                        Cancel Quote
+                    </button>
+                }
+
+                @if (_selectedQuote.InvoiceId.HasValue)
+                {
+                    <button type="button" class="quotes-secondary-btn full" @onclick="GoToInvoices">
+                        <i class="bi bi-receipt"></i>
+                        View Invoice
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .quotes-page {
+        animation: quotesIn .22s ease both;
+    }
+
+    .quotes-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        align-items: flex-end;
+        margin-bottom: 18px;
+    }
+
+    .quotes-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 750;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+
+    .quotes-header h1 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 1.45rem;
+        font-weight: 680;
+        letter-spacing: -.03em;
+    }
+
+    .quotes-header p {
+        margin: 6px 0 0;
+        color: #64748b;
+        font-size: .88rem;
+    }
+
+    .quotes-primary-btn,
+    .quotes-secondary-btn,
+    .quotes-ghost-btn,
+    .quotes-mini-btn,
+    .quotes-danger-mini-btn {
+        min-height: 38px;
+        border-radius: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 650;
+        border: 0;
+        white-space: nowrap;
+    }
+
+    .quotes-primary-btn {
+        color: #fff;
+        background: #111827;
+        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+    }
+
+        .quotes-primary-btn:disabled {
+            opacity: .55;
+            cursor: not-allowed;
+        }
+
+    .quotes-secondary-btn {
+        color: #2563eb;
+        background: #eef5ff;
+    }
+
+    .quotes-ghost-btn {
+        color: #475569;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+    }
+
+    .quotes-mini-btn {
+        min-height: 30px;
+        color: #2563eb;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        padding: 0 10px;
+    }
+
+    .quotes-danger-mini-btn {
+        min-height: 30px;
+        color: #dc2626;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        padding: 0 10px;
+    }
+
+    .quotes-alert {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        font-size: .84rem;
+        font-weight: 600;
+        border: 1px solid;
+    }
+
+        .quotes-alert.success {
+            color: #166534;
+            background: #f0fdf4;
+            border-color: #bbf7d0;
+        }
+
+        .quotes-alert.danger {
+            color: #991b1b;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+        .quotes-alert span {
+            flex: 1;
+        }
+
+        .quotes-alert button {
+            border: 0;
+            background: transparent;
+            color: inherit;
+        }
+
+    .quotes-settings-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+        .quotes-settings-strip div {
+            padding: 13px;
+            border-radius: 16px;
+            background: #fff;
+            border: 1px solid #e7edf5;
+            box-shadow: 0 12px 28px rgba(15,23,42,.04);
+        }
+
+        .quotes-settings-strip span,
+        .quotes-settings-strip strong {
+            display: block;
+        }
+
+        .quotes-settings-strip span {
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .quotes-settings-strip strong {
+            margin-top: 4px;
+            color: #0f172a;
+            font-size: .84rem;
+            font-weight: 720;
+        }
+
+    .quotes-control-panel {
+        display: grid;
+        grid-template-columns: 150px 150px 160px minmax(240px, 1fr) auto auto;
+        gap: 10px;
+        padding: 14px;
+        margin-bottom: 16px;
+        border-radius: 18px;
+        background: #fff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+    }
+
+        .quotes-control-panel input,
+        .quotes-control-panel select,
+        .quotes-input {
+            width: 100%;
+            min-height: 40px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            color: #0f172a;
+            padding: 0 12px;
+            font-size: .84rem;
+            outline: none;
+        }
+
+    .quotes-search {
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 13px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        color: #94a3b8;
+    }
+
+        .quotes-search input {
+            width: 100%;
+            border: 0;
+            outline: none;
+            background: transparent;
+            color: #0f172a;
+            font-size: .84rem;
+        }
+
+    .quotes-table-card,
+    .quotes-panel {
+        overflow: hidden;
+        border-radius: 20px;
+        background: #fff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+    }
+
+    .quotes-table-header {
+        padding: 17px 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .quotes-table-header h2,
+        .quotes-panel h5 {
+            margin: 0;
+            color: #0f172a;
+            font-size: .92rem;
+            font-weight: 720;
+        }
+
+        .quotes-table-header p {
+            margin: 4px 0 0;
+            color: #94a3b8;
+            font-size: .76rem;
+        }
+
+    .quotes-table-wrap {
+        overflow-x: auto;
+    }
+
+    .quotes-table {
+        width: 100%;
+        min-width: 980px;
+        border-collapse: collapse;
+    }
+
+        .quotes-table.compact {
+            min-width: 650px;
+        }
+
+        .quotes-table th {
+            padding: 12px 16px;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: .7rem;
+            font-weight: 750;
+            text-transform: uppercase;
+            border-bottom: 1px solid #e7edf5;
+            white-space: nowrap;
+        }
+
+        .quotes-table td {
+            padding: 14px 16px;
+            color: #334155;
+            font-size: .82rem;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+
+    .quotes-muted {
+        display: block;
+        margin-top: 3px;
+        color: #94a3b8;
+        font-size: .72rem;
+    }
+
+    .quotes-money {
+        color: #0f172a;
+        font-weight: 750;
+    }
+
+    .quotes-pill {
+        display: inline-flex;
+        min-height: 27px;
+        align-items: center;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 750;
+    }
+
+        .quotes-pill.draft {
+            color: #64748b;
+            background: #f1f5f9;
+        }
+
+        .quotes-pill.sent {
+            color: #2563eb;
+            background: #eff6ff;
+        }
+
+        .quotes-pill.accepted {
+            color: #15803d;
+            background: #ecfdf5;
+        }
+
+        .quotes-pill.cancelled {
+            color: #dc2626;
+            background: #fef2f2;
+        }
+
+    .quotes-empty {
+        margin: 18px;
+        padding: 34px 20px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px dashed #dbe3ef;
+        text-align: center;
+    }
+
+        .quotes-empty.small {
+            margin: 10px 0;
+            padding: 24px 16px;
+        }
+
+        .quotes-empty strong,
+        .quotes-empty span {
+            display: block;
+        }
+
+        .quotes-empty strong {
+            color: #0f172a;
+            font-size: .9rem;
+        }
+
+        .quotes-empty span {
+            margin-top: 4px;
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+    .quotes-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1050;
+        padding: 20px;
+        background: rgba(15, 23, 42, .44);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .quotes-modal {
+        width: 100%;
+        max-width: 960px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+        padding: 22px;
+        border-radius: 22px;
+        background: #fff;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, .24);
+    }
+
+        .quotes-modal.large {
+            max-width: 1180px;
+        }
+
+    .quotes-modal-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding-bottom: 16px;
+        margin-bottom: 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .quotes-modal-header span {
+            color: #2563eb;
+            font-size: .72rem;
+            font-weight: 750;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+        .quotes-modal-header h4 {
+            margin: 3px 0 0;
+            color: #0f172a;
+            font-size: 1.05rem;
+            font-weight: 720;
+        }
+
+        .quotes-modal-header p {
+            margin: 5px 0 0;
+            color: #64748b;
+            font-size: .84rem;
+        }
+
+    .quotes-close-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        color: #64748b;
+    }
+
+    .quotes-create-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(360px, .65fr);
+        gap: 16px;
+        align-items: start;
+    }
+
+    .quotes-panel {
+        padding: 16px;
+    }
+
+    .quotes-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 12px;
+    }
+
+        .quotes-form-grid label {
+            display: block;
+            margin-bottom: 5px;
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+    .quotes-textarea {
+        min-height: 80px;
+        padding: 10px 12px;
+        resize: vertical;
+    }
+
+    .align-end {
+        align-self: end;
+    }
+
+    .full {
+        width: 100%;
+    }
+
+    .mt {
+        margin-top: 18px !important;
+    }
+
+    .quotes-option-list,
+    .quotes-product-list,
+    .quotes-cart-list {
+        display: grid;
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+        .quotes-option-list button {
+            width: 100%;
+            text-align: left;
+            border: 1px solid #e7edf5;
+            background: #f8fafc;
+            border-radius: 14px;
+            padding: 10px 12px;
+        }
+
+        .quotes-option-list strong,
+        .quotes-option-list span {
+            display: block;
+        }
+
+        .quotes-option-list span {
+            margin-top: 3px;
+            color: #64748b;
+            font-size: .72rem;
+        }
+
+        .quotes-product-list > div,
+        .quotes-cart-item {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 10px;
+            align-items: center;
+            padding: 12px;
+            border-radius: 15px;
+            background: #f8fafc;
+            border: 1px solid #e7edf5;
+        }
+
+            .quotes-product-list strong,
+            .quotes-product-list span,
+            .quotes-cart-item strong,
+            .quotes-cart-item span {
+                display: block;
+            }
+
+            .quotes-product-list span,
+            .quotes-cart-item span {
+                margin-top: 3px;
+                color: #64748b;
+                font-size: .72rem;
+            }
+
+    .quotes-cart-item {
+        grid-template-columns: minmax(0, 1fr) 80px auto;
+    }
+
+        .quotes-cart-item input {
+            width: 80px;
+            min-height: 34px;
+            border-radius: 10px;
+            border: 1px solid #e5e7eb;
+            padding: 0 8px;
+        }
+
+    .quotes-remove-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 11px;
+        border: 1px solid #fecaca;
+        background: #fef2f2;
+        color: #dc2626;
+    }
+
+    .quotes-summary {
+        display: grid;
+        gap: 8px;
+        margin: 14px 0;
+        padding: 14px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+    }
+
+        .quotes-summary div {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .quotes-summary span {
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+        .quotes-summary strong {
+            color: #0f172a;
+            font-size: .86rem;
+        }
+
+    .quotes-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+        .quotes-detail-grid div {
+            padding: 13px;
+            border-radius: 16px;
+            background: #f8fafc;
+            border: 1px solid #e7edf5;
+        }
+
+        .quotes-detail-grid span,
+        .quotes-detail-grid strong {
+            display: block;
+        }
+
+        .quotes-detail-grid span {
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .quotes-detail-grid strong {
+            margin-top: 4px;
+            color: #0f172a;
+            font-size: .84rem;
+        }
+
+    .quotes-notes-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+        .quotes-notes-grid div {
+            padding: 13px;
+            border-radius: 16px;
+            background: #f8fafc;
+            border: 1px solid #e7edf5;
+        }
+
+        .quotes-notes-grid span {
+            display: block;
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+            margin-bottom: 5px;
+        }
+
+        .quotes-notes-grid p {
+            margin: 0;
+            color: #0f172a;
+            font-size: .82rem;
+            line-height: 1.5;
+        }
+
+    .quotes-detail-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    @@keyframes quotesIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width: 1199px) {
+        .quotes-control-panel,
+        .quotes-settings-strip,
+        .quotes-create-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .quotes-header,
+        .quotes-modal-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .quotes-detail-grid,
+        .quotes-form-grid,
+        .quotes-notes-grid,
+        .quotes-detail-actions {
+            grid-template-columns: 1fr;
+        }
+
+        .quotes-header .quotes-primary-btn,
+        .quotes-control-panel button {
+            width: 100%;
+        }
+
+        .quotes-cart-item,
+        .quotes-product-list > div {
+            grid-template-columns: 1fr;
+        }
+
+            .quotes-cart-item input,
+            .quotes-remove-btn {
+                width: 100%;
+            }
+    }
+</style>
+
+@code {
+    private BusinessSettingsFormModel _settings = new();
+    private List<QuoteListItemViewModel> _quotes = new();
+
+    private bool _loading = true;
+    private bool _saving;
+
+    private DateTime? _fromDate = DateTime.Today.AddDays(-30);
+    private DateTime? _toDate = DateTime.Today;
+    private string _statusFilter = "all";
+    private string? _searchTerm;
+
+    private string? _message;
+    private bool _isSuccess;
+
+    private bool _showCreate;
+    private CreateQuoteModel _createModel = new();
+
+    private string? _customerSearch;
+    private List<QuoteCustomerOptionViewModel> _customers = new();
+
+    private string? _productSearch;
+    private List<QuoteProductOptionViewModel> _products = new();
+    private List<SelectedQuoteItem> _selectedItems = new();
+
+    private QuoteDetailsViewModel? _selectedQuote;
+
+    private string CurrencyLabel =>
+        string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
+            ? "R"
+            : _settings.CurrencySymbol;
+
+    private decimal CreateSubtotal =>
+        _selectedItems.Sum(x => x.Quantity * x.SellingPrice);
+
+    private decimal CreateTaxableAmount =>
+        Math.Max(0, CreateSubtotal - _createModel.DiscountAmount);
+
+    private decimal CreateTax =>
+        _settings.TaxEnabled
+            ? Math.Round(CreateTaxableAmount * (_settings.TaxRate / 100), 2)
+            : 0;
+
+    private decimal CreateTotal =>
+        CreateTaxableAmount + CreateTax;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserAccessService.CanAccessAsync("quotes"))
+        {
+            NavigationManager.NavigateTo("/dashboard");
+            return;
+        }
+
+        _settings = await BusinessSettingsService.GetSettingsAsync();
+        await LoadQuotesAsync();
+    }
+
+    private async Task LoadQuotesAsync()
+    {
+        _loading = true;
+
+        _quotes = await QuoteService.GetQuotesAsync(
+            _fromDate,
+            _toDate,
+            _statusFilter,
+            _searchTerm);
+
+        _loading = false;
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        _fromDate = DateTime.Today.AddDays(-30);
+        _toDate = DateTime.Today;
+        _statusFilter = "all";
+        _searchTerm = null;
+
+        await LoadQuotesAsync();
+    }
+
+    private void OpenCreate()
+    {
+        _createModel = new CreateQuoteModel
+        {
+            QuoteDate = DateTime.Today,
+            ExpiryDate = DateTime.Today.AddDays(7),
+            Terms = "This quote is valid until the expiry date shown above."
+        };
+
+        _selectedItems.Clear();
+        _customers.Clear();
+        _products.Clear();
+        _customerSearch = null;
+        _productSearch = null;
+        _showCreate = true;
+    }
+
+    private void CloseCreate()
+    {
+        _showCreate = false;
+    }
+
+    private async Task SearchCustomersAsync()
+    {
+        _customers = await QuoteService.SearchCustomersAsync(_customerSearch);
+    }
+
+    private void SelectCustomer(QuoteCustomerOptionViewModel customer)
+    {
+        _createModel.CustomerId = customer.Id;
+        _createModel.CustomerName = customer.DisplayName;
+        _createModel.CustomerPhone = customer.Phone;
+        _createModel.CustomerEmail = customer.Email;
+        _customers.Clear();
+        _customerSearch = null;
+    }
+
+    private async Task SearchProductsAsync()
+    {
+        _products = await QuoteService.SearchProductsAsync(_productSearch);
+    }
+
+    private void AddProduct(QuoteProductOptionViewModel product)
+    {
+        var existing = _selectedItems.FirstOrDefault(x => x.ProductId == product.Id);
+
+        if (existing != null)
+        {
+            existing.Quantity += 1;
+            return;
+        }
+
+        _selectedItems.Add(new SelectedQuoteItem
+        {
+            ProductId = product.Id,
+            ProductName = product.ProductName,
+            SKU = product.SKU,
+            SellingPrice = product.SellingPrice,
+            Quantity = 1
+        });
+    }
+
+    private void RemoveProduct(int productId)
+    {
+        var item = _selectedItems.FirstOrDefault(x => x.ProductId == productId);
+
+        if (item != null)
+        {
+            _selectedItems.Remove(item);
+        }
+    }
+
+    private async Task SaveQuoteAsync()
+    {
+        if (_saving)
+        {
+            return;
+        }
+
+        if (_selectedItems.Count == 0)
+        {
+            ShowMessage("Add at least one product or service before creating the quote.", false);
+            return;
+        }
+
+        if (_selectedItems.Any(x => x.Quantity <= 0))
+        {
+            ShowMessage("Every quote item must have a quantity greater than zero.", false);
+            return;
+        }
+
+        if (_createModel.DiscountAmount < 0)
+        {
+            ShowMessage("Discount cannot be negative.", false);
+            return;
+        }
+
+        if (_createModel.DiscountAmount > CreateSubtotal)
+        {
+            ShowMessage("Discount cannot be greater than the subtotal.", false);
+            return;
+        }
+
+        _saving = true;
+
+        _createModel.Items = _selectedItems
+            .Where(x => x.Quantity > 0)
+            .Select(x => new CreateQuoteItemModel
+            {
+                ProductId = x.ProductId,
+                Quantity = x.Quantity
+            })
+            .ToList();
+
+        var result = await QuoteService.CreateQuoteAsync(_createModel);
+
+        _saving = false;
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            _showCreate = false;
+            _selectedItems.Clear();
+            _products.Clear();
+            _customers.Clear();
+            await LoadQuotesAsync();
+        }
+    }
+
+    private async Task ViewQuoteAsync(int quoteId)
+    {
+        _selectedQuote = await QuoteService.GetQuoteDetailsAsync(quoteId);
+    }
+
+    private void CloseDetails()
+    {
+        _selectedQuote = null;
+    }
+
+    private async Task MarkSentAsync(int quoteId)
+    {
+        await MarkStatusAsync(quoteId, "Sent");
+    }
+
+    private async Task MarkAcceptedAsync(int quoteId)
+    {
+        var statusResult = await QuoteService.UpdateStatusAsync(quoteId, "Accepted");
+
+        if (!statusResult.Success)
+        {
+            ShowMessage(statusResult.Message, false);
+            return;
+        }
+
+        var invoiceResult = await InvoiceService.ConvertQuoteToInvoiceAsync(quoteId);
+
+        if (invoiceResult.Success)
+        {
+            ShowMessage(invoiceResult.Message, true);
+        }
+        else if (invoiceResult.InvoiceId.HasValue)
+        {
+            ShowMessage(invoiceResult.Message, false);
+        }
+        else
+        {
+            ShowMessage($"Quote accepted, but invoice was not created: {invoiceResult.Message}", false);
+        }
+
+        await LoadQuotesAsync();
+
+        if (_selectedQuote?.Id == quoteId)
+        {
+            _selectedQuote = await QuoteService.GetQuoteDetailsAsync(quoteId);
+        }
+    }
+
+    private async Task MarkCancelledAsync(int quoteId)
+    {
+        await MarkStatusAsync(quoteId, "Cancelled");
+    }
+
+    private async Task MarkStatusAsync(int quoteId, string status)
+    {
+        var result = await QuoteService.UpdateStatusAsync(quoteId, status);
+
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            await LoadQuotesAsync();
+
+            if (_selectedQuote?.Id == quoteId)
+            {
+                _selectedQuote = await QuoteService.GetQuoteDetailsAsync(quoteId);
+            }
+        }
+    }
+
+    private void GoToInvoices()
+    {
+        NavigationManager.NavigateTo("/invoices");
+    }
+
+    private string Money(decimal value)
+    {
+        return $"{CurrencyLabel} {value:0.00}";
+    }
+
+    private void ShowMessage(string message, bool success)
+    {
+        _message = message;
+        _isSuccess = success;
+    }
+
+    private void ClearMessage()
+    {
+        _message = null;
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "Draft" => "draft",
+            "Sent" => "sent",
+            "Accepted" => "accepted",
+            "Cancelled" => "cancelled",
+            _ => "draft"
+        };
+    }
+
+    private class SelectedQuoteItem
+    {
+        public int ProductId { get; set; }
+        public string ProductName { get; set; } = string.Empty;
+        public string SKU { get; set; } = string.Empty;
+        public decimal SellingPrice { get; set; }
+        public decimal Quantity { get; set; } = 1;
+    }
+}

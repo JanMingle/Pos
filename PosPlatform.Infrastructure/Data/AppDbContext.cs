@@ -56,6 +56,12 @@ namespace PosPlatform.Infrastructure.Data
 
         public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
+        public DbSet<Quote> Quotes => Set<Quote>();
+        public DbSet<QuoteItem> QuoteItems => Set<QuoteItem>();
+
+        public DbSet<Invoice> Invoices => Set<Invoice>();
+        public DbSet<InvoiceItem> InvoiceItems => Set<InvoiceItem>();
+
 
 
         protected override void OnModelCreating(ModelBuilder builder)
@@ -1055,6 +1061,230 @@ namespace PosPlatform.Infrastructure.Data
                 entity.HasOne(x => x.User)
                     .WithMany()
                     .HasForeignKey(x => x.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+            builder.Entity<Quote>(entity =>
+            {
+                entity.ToTable("Quotes");
+
+                entity.Property(x => x.QuoteNumber)
+                    .HasMaxLength(80)
+                    .IsRequired();
+
+                entity.Property(x => x.CustomerName)
+                    .HasMaxLength(150);
+
+                entity.Property(x => x.CustomerPhone)
+                    .HasMaxLength(50);
+
+                entity.Property(x => x.CustomerEmail)
+                    .HasMaxLength(150);
+
+                entity.Property(x => x.Status)
+                    .HasMaxLength(40)
+                    .IsRequired();
+
+                entity.Property(x => x.Notes)
+                    .HasMaxLength(500);
+
+                entity.Property(x => x.Terms)
+                    .HasMaxLength(800);
+
+                entity.Property(x => x.CreatedByName)
+                    .HasMaxLength(150)
+                    .IsRequired();
+
+                entity.Property(x => x.Subtotal)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.DiscountAmount)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.TaxAmount)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.TotalAmount)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.HasIndex(x => new { x.TenantId, x.QuoteNumber })
+                    .IsUnique();
+
+                entity.HasOne(x => x.Tenant)
+                    .WithMany()
+                    .HasForeignKey(x => x.TenantId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Branch)
+                    .WithMany()
+                    .HasForeignKey(x => x.BranchId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Customer)
+                    .WithMany()
+                    .HasForeignKey(x => x.CustomerId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasOne(x => x.CreatedByUser)
+                    .WithMany()
+                    .HasForeignKey(x => x.CreatedByUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            builder.Entity<QuoteItem>(entity =>
+            {
+                entity.ToTable("QuoteItems");
+
+                entity.Property(x => x.ProductName)
+                    .HasMaxLength(150)
+                    .IsRequired();
+
+                entity.Property(x => x.SKU)
+                    .HasMaxLength(80)
+                    .IsRequired();
+
+                entity.Property(x => x.ProductType)
+                    .HasMaxLength(50)
+                    .IsRequired();
+
+                entity.Property(x => x.UnitOfMeasure)
+                    .HasMaxLength(50);
+
+                entity.Property(x => x.Quantity)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.UnitPrice)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.LineTotal)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.HasOne(x => x.Quote)
+                    .WithMany(x => x.QuoteItems)
+                    .HasForeignKey(x => x.QuoteId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(x => x.Product)
+                    .WithMany()
+                    .HasForeignKey(x => x.ProductId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            builder.Entity<Invoice>(entity =>
+            {
+                entity.ToTable("Invoices");
+
+                entity.Property(x => x.InvoiceNumber)
+                    .HasMaxLength(80)
+                    .IsRequired();
+
+                entity.Property(x => x.CustomerName)
+                    .HasMaxLength(150);
+
+                entity.Property(x => x.CustomerPhone)
+                    .HasMaxLength(50);
+
+                entity.Property(x => x.CustomerEmail)
+                    .HasMaxLength(150);
+
+                entity.Property(x => x.Status)
+                    .HasMaxLength(40)
+                    .IsRequired();
+
+                entity.Property(x => x.Notes)
+                    .HasMaxLength(500);
+
+                entity.Property(x => x.Terms)
+                    .HasMaxLength(800);
+
+                entity.Property(x => x.CreatedByName)
+                    .HasMaxLength(150)
+                    .IsRequired();
+
+                entity.Property(x => x.Subtotal)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.DiscountAmount)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.TaxAmount)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.TotalAmount)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.AmountPaid)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.BalanceDue)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.HasIndex(x => new { x.TenantId, x.InvoiceNumber })
+                    .IsUnique();
+
+                entity.HasIndex(x => x.QuoteId);
+
+                entity.HasOne(x => x.Tenant)
+                    .WithMany()
+                    .HasForeignKey(x => x.TenantId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Branch)
+                    .WithMany()
+                    .HasForeignKey(x => x.BranchId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Quote)
+                    .WithMany()
+                    .HasForeignKey(x => x.QuoteId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasOne(x => x.Customer)
+                    .WithMany()
+                    .HasForeignKey(x => x.CustomerId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasOne(x => x.CreatedByUser)
+                    .WithMany()
+                    .HasForeignKey(x => x.CreatedByUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            builder.Entity<InvoiceItem>(entity =>
+            {
+                entity.ToTable("InvoiceItems");
+
+                entity.Property(x => x.ProductName)
+                    .HasMaxLength(150)
+                    .IsRequired();
+
+                entity.Property(x => x.SKU)
+                    .HasMaxLength(80)
+                    .IsRequired();
+
+                entity.Property(x => x.ProductType)
+                    .HasMaxLength(50)
+                    .IsRequired();
+
+                entity.Property(x => x.UnitOfMeasure)
+                    .HasMaxLength(50);
+
+                entity.Property(x => x.Quantity)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.UnitPrice)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.LineTotal)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.HasOne(x => x.Invoice)
+                    .WithMany(x => x.InvoiceItems)
+                    .HasForeignKey(x => x.InvoiceId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(x => x.Product)
+                    .WithMany()
+                    .HasForeignKey(x => x.ProductId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
 

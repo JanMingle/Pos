@@ -71,6 +71,8 @@ namespace PosPlatform.Web.Services
                 "stock-transfers" => role is "Manager" or "Inventory User",
                 "barcode-labels" => role is "Manager" or "Inventory User",
                 "audit-trail" => role is "Owner" or "Admin" or "Manager",
+                "quotes" => role is "Sales User" or "Manager" or "Accounting User",
+                "invoices" => role is "Sales User" or "Manager" or "Accounting User",
                 "users" => false,
                 "settings" => false,
 

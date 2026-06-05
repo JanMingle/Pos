@@ -1,0 +1,817 @@
+﻿@page "/invoices"
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@layout MainLayout
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using PosPlatform.Web.Components.Layout
+@using PosPlatform.Web.Models.Invoices
+@using PosPlatform.Web.Models.Settings
+@using PosPlatform.Web.Services
+@inject InvoiceService InvoiceService
+@inject BusinessSettingsService BusinessSettingsService
+@inject UserAccessService UserAccessService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Invoices</PageTitle>
+
+<section class="invoices-page">
+    <div class="invoices-header">
+        <div>
+            <div class="invoices-kicker">
+                <i class="bi bi-receipt"></i>
+                Customer billing
+            </div>
+            <h1>Invoices</h1>
+            <p>View invoices created from accepted quotes.</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="invoices-alert @(_isSuccess ? "success" : "danger")">
+            <i class="bi @(_isSuccess ? "bi-check-circle" : "bi-exclamation-triangle")"></i>
+            <span>@_message</span>
+            <button type="button" @onclick="ClearMessage">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    }
+
+    <div class="invoices-settings-strip">
+        <div>
+            <span>Business</span>
+            <strong>@_settings.BusinessName</strong>
+        </div>
+
+        <div>
+            <span>Invoices Showing</span>
+            <strong>@_invoices.Count</strong>
+        </div>
+
+        <div>
+            <span>Total Value</span>
+            <strong>@Money(_invoices.Sum(x => x.TotalAmount))</strong>
+        </div>
+
+        <div>
+            <span>Balance Due</span>
+            <strong>@Money(_invoices.Sum(x => x.BalanceDue))</strong>
+        </div>
+    </div>
+
+    <div class="invoices-control-panel">
+        <input type="date" @bind="_fromDate" />
+        <input type="date" @bind="_toDate" />
+
+        <select @bind="_statusFilter">
+            <option value="all">All statuses</option>
+            <option value="Unpaid">Unpaid</option>
+            <option value="Partially Paid">Partially Paid</option>
+            <option value="Paid">Paid</option>
+            <option value="Cancelled">Cancelled</option>
+        </select>
+
+        <div class="invoices-search">
+            <i class="bi bi-search"></i>
+            <input @bind="_searchTerm"
+                   @bind:event="oninput"
+                   placeholder="Search invoice, quote or customer" />
+        </div>
+
+        <button type="button" class="invoices-secondary-btn" @onclick="LoadInvoicesAsync">
+            <i class="bi bi-filter"></i>
+            Filter
+        </button>
+
+        <button type="button" class="invoices-ghost-btn" @onclick="ResetFiltersAsync">
+            <i class="bi bi-arrow-counterclockwise"></i>
+            Reset
+        </button>
+    </div>
+
+    <div class="invoices-table-card">
+        <div class="invoices-table-header">
+            <div>
+                <h2>Invoice List</h2>
+                <p>Latest matching invoices.</p>
+            </div>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="invoices-empty">
+                <strong>Loading invoices...</strong>
+                <span>Please wait.</span>
+            </div>
+        }
+        else if (_invoices.Count == 0)
+        {
+            <div class="invoices-empty">
+                <strong>No invoices found</strong>
+                <span>Accepted quotes can be converted into invoices.</span>
+            </div>
+        }
+        else
+        {
+            <div class="invoices-table-wrap">
+                <table class="invoices-table">
+                    <thead>
+                        <tr>
+                            <th>Invoice</th>
+                            <th>Quote</th>
+                            <th>Customer</th>
+                            <th>Date</th>
+                            <th>Due</th>
+                            <th>Items</th>
+                            <th>Total</th>
+                            <th>Paid</th>
+                            <th>Balance</th>
+                            <th>Status</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var invoice in _invoices)
+                        {
+                            <tr>
+                                <td><strong>@invoice.InvoiceNumber</strong></td>
+                                <td>@(invoice.QuoteNumber ?? "-")</td>
+                                <td>@invoice.CustomerName</td>
+                                <td>@invoice.InvoiceDate.ToString("yyyy-MM-dd")</td>
+                                <td>@(invoice.DueDate?.ToString("yyyy-MM-dd") ?? "-")</td>
+                                <td>@invoice.ItemCount</td>
+                                <td class="invoices-money">@Money(invoice.TotalAmount)</td>
+                                <td>@Money(invoice.AmountPaid)</td>
+                                <td class="invoices-money">@Money(invoice.BalanceDue)</td>
+                                <td>
+                                    <span class="invoices-pill @GetStatusClass(invoice.Status)">
+                                        @invoice.Status
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <button type="button" class="invoices-mini-btn" @onclick="() => ViewInvoiceAsync(invoice.Id)">
+                                        View
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>
+
+@if (_selectedInvoice != null)
+{
+    <div class="invoices-modal-backdrop">
+        <div class="invoices-modal">
+            <div class="invoices-modal-header">
+                <div>
+                    <span>@_selectedInvoice.Status</span>
+                    <h4>@_selectedInvoice.InvoiceNumber</h4>
+                    <p>@(_selectedInvoice.CustomerName ?? "Walk-in / Unsaved") · @Money(_selectedInvoice.TotalAmount)</p>
+                </div>
+
+                <button type="button" class="invoices-close-btn" @onclick="CloseDetails">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div class="invoices-detail-grid">
+                <div>
+                    <span>Invoice Date</span>
+                    <strong>@_selectedInvoice.InvoiceDate.ToString("yyyy-MM-dd")</strong>
+                </div>
+
+                <div>
+                    <span>Due Date</span>
+                    <strong>@(_selectedInvoice.DueDate?.ToString("yyyy-MM-dd") ?? "-")</strong>
+                </div>
+
+                <div>
+                    <span>Quote</span>
+                    <strong>@(_selectedInvoice.QuoteNumber ?? "-")</strong>
+                </div>
+
+                <div>
+                    <span>Customer Phone</span>
+                    <strong>@(_selectedInvoice.CustomerPhone ?? "-")</strong>
+                </div>
+
+                <div>
+                    <span>Amount Paid</span>
+                    <strong>@Money(_selectedInvoice.AmountPaid)</strong>
+                </div>
+
+                <div>
+                    <span>Balance Due</span>
+                    <strong>@Money(_selectedInvoice.BalanceDue)</strong>
+                </div>
+            </div>
+
+            <div class="invoices-table-wrap">
+                <table class="invoices-table compact">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>SKU</th>
+                            <th>Qty</th>
+                            <th>Unit</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var item in _selectedInvoice.Items)
+                        {
+                            <tr>
+                                <td>@item.ProductName</td>
+                                <td>@item.SKU</td>
+                                <td>@item.Quantity</td>
+                                <td>@Money(item.UnitPrice)</td>
+                                <td>@Money(item.LineTotal)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="invoices-summary">
+                <div>
+                    <span>Subtotal</span>
+                    <strong>@Money(_selectedInvoice.Subtotal)</strong>
+                </div>
+
+                <div>
+                    <span>Discount</span>
+                    <strong>@Money(_selectedInvoice.DiscountAmount)</strong>
+                </div>
+
+                <div>
+                    <span>Tax</span>
+                    <strong>@Money(_selectedInvoice.TaxAmount)</strong>
+                </div>
+
+                <div>
+                    <span>Total</span>
+                    <strong>@Money(_selectedInvoice.TotalAmount)</strong>
+                </div>
+
+                <div>
+                    <span>Balance Due</span>
+                    <strong>@Money(_selectedInvoice.BalanceDue)</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .invoices-page {
+        animation: invoicesIn .22s ease both;
+    }
+
+    .invoices-header {
+        margin-bottom: 18px;
+    }
+
+    .invoices-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 750;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+
+    .invoices-header h1 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 1.45rem;
+        font-weight: 680;
+        letter-spacing: -.03em;
+    }
+
+    .invoices-header p {
+        margin: 6px 0 0;
+        color: #64748b;
+        font-size: .88rem;
+    }
+
+    .invoices-alert {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        font-size: .84rem;
+        font-weight: 600;
+        border: 1px solid;
+    }
+
+        .invoices-alert.success {
+            color: #166534;
+            background: #f0fdf4;
+            border-color: #bbf7d0;
+        }
+
+        .invoices-alert.danger {
+            color: #991b1b;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+        .invoices-alert span {
+            flex: 1;
+        }
+
+        .invoices-alert button {
+            border: 0;
+            background: transparent;
+            color: inherit;
+        }
+
+    .invoices-settings-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+        .invoices-settings-strip div {
+            padding: 13px;
+            border-radius: 16px;
+            background: #fff;
+            border: 1px solid #e7edf5;
+            box-shadow: 0 12px 28px rgba(15,23,42,.04);
+        }
+
+        .invoices-settings-strip span,
+        .invoices-settings-strip strong {
+            display: block;
+        }
+
+        .invoices-settings-strip span {
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .invoices-settings-strip strong {
+            margin-top: 4px;
+            color: #0f172a;
+            font-size: .84rem;
+            font-weight: 720;
+        }
+
+    .invoices-control-panel {
+        display: grid;
+        grid-template-columns: 150px 150px 170px minmax(240px, 1fr) auto auto;
+        gap: 10px;
+        padding: 14px;
+        margin-bottom: 16px;
+        border-radius: 18px;
+        background: #fff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+    }
+
+        .invoices-control-panel input,
+        .invoices-control-panel select {
+            width: 100%;
+            min-height: 40px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            color: #0f172a;
+            padding: 0 12px;
+            font-size: .84rem;
+            outline: none;
+        }
+
+    .invoices-search {
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 13px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        color: #94a3b8;
+    }
+
+        .invoices-search input {
+            width: 100%;
+            border: 0;
+            outline: none;
+            background: transparent;
+            color: #0f172a;
+            font-size: .84rem;
+        }
+
+    .invoices-secondary-btn,
+    .invoices-ghost-btn,
+    .invoices-mini-btn {
+        min-height: 38px;
+        border-radius: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 650;
+        border: 0;
+        white-space: nowrap;
+    }
+
+    .invoices-secondary-btn {
+        color: #2563eb;
+        background: #eef5ff;
+    }
+
+    .invoices-ghost-btn {
+        color: #475569;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+    }
+
+    .invoices-mini-btn {
+        min-height: 30px;
+        color: #2563eb;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        padding: 0 10px;
+    }
+
+    .invoices-table-card {
+        overflow: hidden;
+        border-radius: 20px;
+        background: #fff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+    }
+
+    .invoices-table-header {
+        padding: 17px 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .invoices-table-header h2 {
+            margin: 0;
+            color: #0f172a;
+            font-size: .92rem;
+            font-weight: 720;
+        }
+
+        .invoices-table-header p {
+            margin: 4px 0 0;
+            color: #94a3b8;
+            font-size: .76rem;
+        }
+
+    .invoices-table-wrap {
+        overflow-x: auto;
+    }
+
+    .invoices-table {
+        width: 100%;
+        min-width: 1080px;
+        border-collapse: collapse;
+    }
+
+        .invoices-table.compact {
+            min-width: 650px;
+        }
+
+        .invoices-table th {
+            padding: 12px 16px;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: .7rem;
+            font-weight: 750;
+            text-transform: uppercase;
+            border-bottom: 1px solid #e7edf5;
+            white-space: nowrap;
+        }
+
+        .invoices-table td {
+            padding: 14px 16px;
+            color: #334155;
+            font-size: .82rem;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+
+    .invoices-money {
+        color: #0f172a;
+        font-weight: 750;
+    }
+
+    .invoices-pill {
+        display: inline-flex;
+        min-height: 27px;
+        align-items: center;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 750;
+    }
+
+        .invoices-pill.unpaid {
+            color: #dc2626;
+            background: #fef2f2;
+        }
+
+        .invoices-pill.partial {
+            color: #d97706;
+            background: #fffbeb;
+        }
+
+        .invoices-pill.paid {
+            color: #15803d;
+            background: #ecfdf5;
+        }
+
+        .invoices-pill.cancelled {
+            color: #64748b;
+            background: #f1f5f9;
+        }
+
+    .invoices-empty {
+        margin: 18px;
+        padding: 34px 20px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px dashed #dbe3ef;
+        text-align: center;
+    }
+
+        .invoices-empty strong,
+        .invoices-empty span {
+            display: block;
+        }
+
+        .invoices-empty strong {
+            color: #0f172a;
+            font-size: .9rem;
+        }
+
+        .invoices-empty span {
+            margin-top: 4px;
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+    .invoices-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1050;
+        padding: 20px;
+        background: rgba(15, 23, 42, .44);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .invoices-modal {
+        width: 100%;
+        max-width: 960px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+        padding: 22px;
+        border-radius: 22px;
+        background: #fff;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, .24);
+    }
+
+    .invoices-modal-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding-bottom: 16px;
+        margin-bottom: 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .invoices-modal-header span {
+            color: #2563eb;
+            font-size: .72rem;
+            font-weight: 750;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+        .invoices-modal-header h4 {
+            margin: 3px 0 0;
+            color: #0f172a;
+            font-size: 1.05rem;
+            font-weight: 720;
+        }
+
+        .invoices-modal-header p {
+            margin: 5px 0 0;
+            color: #64748b;
+            font-size: .84rem;
+        }
+
+    .invoices-close-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        color: #64748b;
+    }
+
+    .invoices-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+        .invoices-detail-grid div {
+            padding: 13px;
+            border-radius: 16px;
+            background: #f8fafc;
+            border: 1px solid #e7edf5;
+        }
+
+        .invoices-detail-grid span,
+        .invoices-detail-grid strong {
+            display: block;
+        }
+
+        .invoices-detail-grid span {
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .invoices-detail-grid strong {
+            margin-top: 4px;
+            color: #0f172a;
+            font-size: .84rem;
+        }
+
+    .invoices-summary {
+        display: grid;
+        gap: 8px;
+        margin: 14px 0;
+        padding: 14px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+    }
+
+        .invoices-summary div {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .invoices-summary span {
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+        .invoices-summary strong {
+            color: #0f172a;
+            font-size: .86rem;
+        }
+
+    @@keyframes invoicesIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width: 1199px) {
+        .invoices-control-panel,
+        .invoices-settings-strip,
+        .invoices-detail-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .invoices-modal-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .invoices-control-panel button {
+            width: 100%;
+        }
+    }
+</style>
+
+@code {
+    private BusinessSettingsFormModel _settings = new();
+    private List<InvoiceListItemViewModel> _invoices = new();
+
+    private bool _loading = true;
+
+    private DateTime? _fromDate = DateTime.Today.AddDays(-30);
+    private DateTime? _toDate = DateTime.Today;
+    private string _statusFilter = "all";
+    private string? _searchTerm;
+
+    private string? _message;
+    private bool _isSuccess;
+
+    private InvoiceDetailsViewModel? _selectedInvoice;
+
+    private string CurrencyLabel =>
+        string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
+            ? "R"
+            : _settings.CurrencySymbol;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserAccessService.CanAccessAsync("invoices"))
+        {
+            NavigationManager.NavigateTo("/dashboard");
+            return;
+        }
+
+        _settings = await BusinessSettingsService.GetSettingsAsync();
+        await LoadInvoicesAsync();
+    }
+
+    private async Task LoadInvoicesAsync()
+    {
+        _loading = true;
+
+        _invoices = await InvoiceService.GetInvoicesAsync(
+            _fromDate,
+            _toDate,
+            _statusFilter,
+            _searchTerm);
+
+        _loading = false;
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        _fromDate = DateTime.Today.AddDays(-30);
+        _toDate = DateTime.Today;
+        _statusFilter = "all";
+        _searchTerm = null;
+
+        await LoadInvoicesAsync();
+    }
+
+    private async Task ViewInvoiceAsync(int invoiceId)
+    {
+        _selectedInvoice = await InvoiceService.GetInvoiceDetailsAsync(invoiceId);
+    }
+
+    private void CloseDetails()
+    {
+        _selectedInvoice = null;
+    }
+
+    private string Money(decimal value)
+    {
+        return $"{CurrencyLabel} {value:0.00}";
+    }
+
+    private void ShowMessage(string message, bool success)
+    {
+        _message = message;
+        _isSuccess = success;
+    }
+
+    private void ClearMessage()
+    {
+        _message = null;
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "Unpaid" => "unpaid",
+            "Partially Paid" => "partial",
+            "Paid" => "paid",
+            "Cancelled" => "cancelled",
+            _ => "unpaid"
+        };
+    }
+}

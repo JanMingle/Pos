@@ -11,15 +11,18 @@ namespace PosPlatform.Web.Services
         private readonly AppDbContext _db;
         private readonly TenantContextService _tenantContext;
         private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly AuditLogService _auditLogService;
 
         public StockPurchaseService(
             AppDbContext db,
             TenantContextService tenantContext,
-            IHttpContextAccessor httpContextAccessor)
+            IHttpContextAccessor httpContextAccessor,
+            AuditLogService auditLogService)
         {
             _db = db;
             _tenantContext = tenantContext;
             _httpContextAccessor = httpContextAccessor;
+            _auditLogService = auditLogService;
         }
 
         public async Task<List<PurchaseProductOptionViewModel>> GetStockProductOptionsAsync()
@@ -158,12 +161,19 @@ namespace PosPlatform.Web.Services
                 return (false, "Unit cost cannot be negative.");
             }
 
-            var supplierExists = await _db.Suppliers.AnyAsync(x =>
-                x.Id == model.SupplierId &&
-                x.TenantId == tenantId.Value &&
-                x.IsActive);
+            if (model.TaxAmount < 0)
+            {
+                return (false, "Tax amount cannot be negative.");
+            }
 
-            if (!supplierExists)
+            var supplier = await _db.Suppliers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.Id == model.SupplierId &&
+                    x.TenantId == tenantId.Value &&
+                    x.IsActive);
+
+            if (supplier == null)
             {
                 return (false, "Supplier not found or inactive.");
             }
@@ -195,6 +205,9 @@ namespace PosPlatform.Web.Services
             {
                 return (false, "Only stock-tracked products can be received.");
             }
+
+            StockPurchase? completedPurchase = null;
+            var auditItems = new List<object>();
 
             await using var tx = await _db.Database.BeginTransactionAsync();
 
@@ -231,6 +244,7 @@ namespace PosPlatform.Web.Services
 
                     var before = product.QuantityInStock;
                     var after = before + item.Quantity;
+                    var oldCostPrice = product.CostPrice;
                     var lineTotal = item.Quantity * item.UnitCost;
 
                     _db.StockPurchaseItems.Add(new StockPurchaseItem
@@ -271,12 +285,28 @@ namespace PosPlatform.Web.Services
                         Notes = $"Stock received from purchase {purchase.PurchaseNumber}",
                         CreatedAt = DateTime.UtcNow
                     });
+
+                    auditItems.Add(new
+                    {
+                        ProductId = product.Id,
+                        product.ProductName,
+                        product.SKU,
+                        QuantityReceived = item.Quantity,
+                        UnitCost = item.UnitCost,
+                        LineTotal = lineTotal,
+                        UnitOfMeasure = product.UnitOfMeasure,
+                        QuantityBefore = before,
+                        QuantityAfter = after,
+                        CostPriceBefore = oldCostPrice,
+                        CostPriceAfter = product.CostPrice,
+                        CostPriceUpdated = model.UpdateProductCostPrice
+                    });
                 }
 
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
 
-                return (true, $"Stock purchase received successfully. Purchase: {purchase.PurchaseNumber}");
+                completedPurchase = purchase;
             }
             catch (Exception ex)
             {
@@ -284,6 +314,38 @@ namespace PosPlatform.Web.Services
 
                 return (false, $"Stock purchase failed: {ex.Message}");
             }
+
+            if (completedPurchase != null)
+            {
+                await _auditLogService.LogAsync(
+                    module: "Stock Purchases",
+                    action: "Create",
+                    entityName: "StockPurchase",
+                    entityId: completedPurchase.Id,
+                    summary: $"Received stock purchase {completedPurchase.PurchaseNumber} from {supplier.SupplierName}. Total {completedPurchase.TotalAmount:0.00}.",
+                    oldValues: null,
+                    newValues: new
+                    {
+                        completedPurchase.Id,
+                        completedPurchase.PurchaseNumber,
+                        completedPurchase.BranchId,
+                        SupplierId = supplier.Id,
+                        SupplierName = supplier.SupplierName,
+                        completedPurchase.SupplierInvoiceNumber,
+                        completedPurchase.PurchaseDate,
+                        completedPurchase.Subtotal,
+                        completedPurchase.TaxAmount,
+                        completedPurchase.TotalAmount,
+                        completedPurchase.Status,
+                        completedPurchase.Notes,
+                        completedPurchase.CreatedByUserId,
+                        completedPurchase.CreatedByName,
+                        UpdateProductCostPrice = model.UpdateProductCostPrice,
+                        Items = auditItems
+                    });
+            }
+
+            return (true, $"Stock purchase received successfully. Purchase: {completedPurchase?.PurchaseNumber}");
         }
 
         private int? GetCurrentUserId()
@@ -307,4 +369,4 @@ namespace PosPlatform.Web.Services
             return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         }
     }
-} 
+}

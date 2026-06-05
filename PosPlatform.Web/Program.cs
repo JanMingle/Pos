@@ -42,6 +42,8 @@ builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<BranchService>();
 builder.Services.AddScoped<StockTransferService>();
 builder.Services.AddScoped<AuditLogService>();
+builder.Services.AddScoped<QuoteService>();
+builder.Services.AddScoped<InvoiceService>();
 
 var app = builder.Build();
 
