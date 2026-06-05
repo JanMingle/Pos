@@ -11,15 +11,18 @@ namespace PosPlatform.Web.Services
         private readonly AppDbContext _db;
         private readonly TenantContextService _tenantContext;
         private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly AuditLogService _auditLogService;
 
         public StockTransferService(
             AppDbContext db,
             TenantContextService tenantContext,
-            IHttpContextAccessor httpContextAccessor)
+            IHttpContextAccessor httpContextAccessor,
+            AuditLogService auditLogService)
         {
             _db = db;
             _tenantContext = tenantContext;
             _httpContextAccessor = httpContextAccessor;
+            _auditLogService = auditLogService;
         }
 
         public async Task<List<StockTransferProductOptionViewModel>> GetSourceProductsAsync(int sourceBranchId)
@@ -149,22 +152,26 @@ namespace PosPlatform.Web.Services
                 return (false, "Source and destination branches cannot be the same.");
             }
 
-            var sourceBranchExists = await _db.Branches.AnyAsync(x =>
-                x.Id == model.SourceBranchId &&
-                x.TenantId == tenantId.Value &&
-                x.IsActive);
+            var sourceBranch = await _db.Branches
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.Id == model.SourceBranchId &&
+                    x.TenantId == tenantId.Value &&
+                    x.IsActive);
 
-            if (!sourceBranchExists)
+            if (sourceBranch == null)
             {
                 return (false, "Source branch was not found or is inactive.");
             }
 
-            var destinationBranchExists = await _db.Branches.AnyAsync(x =>
-                x.Id == model.DestinationBranchId &&
-                x.TenantId == tenantId.Value &&
-                x.IsActive);
+            var destinationBranch = await _db.Branches
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.Id == model.DestinationBranchId &&
+                    x.TenantId == tenantId.Value &&
+                    x.IsActive);
 
-            if (!destinationBranchExists)
+            if (destinationBranch == null)
             {
                 return (false, "Destination branch was not found or is inactive.");
             }
@@ -216,6 +223,9 @@ namespace PosPlatform.Web.Services
                     return (false, $"Not enough stock for {product.ProductName}. Available: {product.QuantityInStock:0.##}");
                 }
             }
+
+            StockTransfer? completedTransfer = null;
+            var transferItemsAudit = new List<object>();
 
             await using var tx = await _db.Database.BeginTransactionAsync();
 
@@ -305,24 +315,59 @@ namespace PosPlatform.Web.Services
                         Notes = $"Transferred in via {transfer.TransferNumber}",
                         CreatedAt = DateTime.UtcNow
                     });
+
+                    transferItemsAudit.Add(new
+                    {
+                        ProductName = sourceProduct.ProductName,
+                        SKU = sourceProduct.SKU,
+                        Quantity = item.Quantity,
+                        UnitOfMeasure = sourceProduct.UnitOfMeasure,
+                        SourceProductId = sourceProduct.Id,
+                        TargetProductId = targetProduct.Id,
+                        SourceBranchId = model.SourceBranchId,
+                        DestinationBranchId = model.DestinationBranchId,
+                        SourceQuantityBefore = sourceBefore,
+                        SourceQuantityAfter = sourceAfter,
+                        DestinationQuantityBefore = destinationBefore,
+                        DestinationQuantityAfter = destinationAfter
+                    });
                 }
 
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
 
-                return (true, $"Stock transfer completed successfully. Transfer: {transfer.TransferNumber}");
+                completedTransfer = transfer;
             }
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
-
-                var inner = ex.InnerException?.Message;
-                var message = string.IsNullOrWhiteSpace(inner)
-                    ? ex.Message
-                    : $"{ex.Message} | INNER: {inner}";
-
-                return (false, $"Stock transfer failed: {message}");
+                return (false, $"Stock transfer failed: {ex.Message}");
             }
+
+            if (completedTransfer != null)
+            {
+                var totalQuantity = groupedItems.Sum(x => x.Quantity);
+
+                await _auditLogService.LogAsync(
+                    module: "Stock Transfers",
+                    action: "Transfer",
+                    entityName: "StockTransfer",
+                    entityId: completedTransfer.Id,
+                    summary: $"Transferred {totalQuantity:0.##} item(s) from {sourceBranch.Name} to {destinationBranch.Name}. Transfer {completedTransfer.TransferNumber}.",
+                    oldValues: null,
+                    newValues: new
+                    {
+                        completedTransfer.TransferNumber,
+                        SourceBranch = sourceBranch.Name,
+                        DestinationBranch = destinationBranch.Name,
+                        completedTransfer.TransferDate,
+                        completedTransfer.Status,
+                        completedTransfer.Notes,
+                        Items = transferItemsAudit
+                    });
+            }
+
+            return (true, $"Stock transfer completed successfully. Transfer: {completedTransfer?.TransferNumber}");
         }
 
         private async Task<Product> GetOrCreateDestinationProductAsync(Product sourceProduct, int tenantId, int destinationBranchId)

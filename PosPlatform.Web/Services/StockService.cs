@@ -9,11 +9,16 @@ namespace PosPlatform.Web.Services
     {
         private readonly AppDbContext _db;
         private readonly TenantContextService _tenantContext;
+        private readonly AuditLogService _auditLogService;
 
-        public StockService(AppDbContext db, TenantContextService tenantContext)
+        public StockService(
+            AppDbContext db,
+            TenantContextService tenantContext,
+            AuditLogService auditLogService)
         {
             _db = db;
             _tenantContext = tenantContext;
+            _auditLogService = auditLogService;
         }
 
         public async Task<bool> IsStockTrackingEnabledAsync()
@@ -241,6 +246,13 @@ namespace PosPlatform.Web.Services
                 return (false, "Stock tracking is disabled in Business Settings.");
             }
 
+            var adjustmentType = NormalizeAdjustmentType(model.AdjustmentType);
+
+            if (adjustmentType == null)
+            {
+                return (false, "Select a valid adjustment type.");
+            }
+
             var product = await _db.Products.FirstOrDefaultAsync(x =>
                 x.Id == model.ProductId &&
                 x.TenantId == tenantId.Value &&
@@ -261,45 +273,49 @@ namespace PosPlatform.Web.Services
                 return (false, "Services and digital products cannot be adjusted in stock.");
             }
 
-            if (model.AdjustmentType != "Correction" && model.Quantity <= 0)
+            if (adjustmentType != "Correction" && model.Quantity <= 0)
             {
                 return (false, "Quantity must be greater than zero.");
             }
 
-            if (model.AdjustmentType == "Correction" && model.NewQuantity < 0)
+            if (adjustmentType == "Correction" && model.NewQuantity < 0)
             {
                 return (false, "New quantity cannot be negative.");
             }
+
+            var before = product.QuantityInStock;
+            decimal after;
+            decimal movementQuantity;
+
+            if (adjustmentType == "Stock In")
+            {
+                after = before + model.Quantity;
+                movementQuantity = model.Quantity;
+            }
+            else if (adjustmentType == "Stock Out")
+            {
+                if (model.Quantity > before)
+                {
+                    return (false, $"Cannot remove more stock than available. Available: {before:0.##}");
+                }
+
+                after = before - model.Quantity;
+                movementQuantity = -model.Quantity;
+            }
+            else
+            {
+                after = model.NewQuantity;
+                movementQuantity = after - before;
+            }
+
+            var notes = string.IsNullOrWhiteSpace(model.Notes)
+                ? $"Manual {adjustmentType.ToLower()} adjustment."
+                : model.Notes.Trim();
 
             await using var transaction = await _db.Database.BeginTransactionAsync();
 
             try
             {
-                var before = product.QuantityInStock;
-                decimal after;
-                decimal movementQuantity;
-
-                if (model.AdjustmentType == "Stock In")
-                {
-                    after = before + model.Quantity;
-                    movementQuantity = model.Quantity;
-                }
-                else if (model.AdjustmentType == "Stock Out")
-                {
-                    if (model.Quantity > before)
-                    {
-                        return (false, $"Cannot remove more stock than available. Available: {before:0.##}");
-                    }
-
-                    after = before - model.Quantity;
-                    movementQuantity = -model.Quantity;
-                }
-                else
-                {
-                    after = model.NewQuantity;
-                    movementQuantity = after - before;
-                }
-
                 product.QuantityInStock = after;
                 product.UpdatedAt = DateTime.UtcNow;
 
@@ -308,20 +324,45 @@ namespace PosPlatform.Web.Services
                     TenantId = tenantId.Value,
                     BranchId = branchId,
                     ProductId = product.Id,
-                    MovementType = model.AdjustmentType,
+                    MovementType = adjustmentType,
                     Quantity = movementQuantity,
                     QuantityBefore = before,
                     QuantityAfter = after,
                     ReferenceType = "Manual",
                     ReferenceId = null,
-                    Notes = string.IsNullOrWhiteSpace(model.Notes)
-                        ? $"Manual {model.AdjustmentType.ToLower()} adjustment."
-                        : model.Notes.Trim(),
+                    Notes = notes,
                     CreatedAt = DateTime.UtcNow
                 });
 
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
+
+                await _auditLogService.LogAsync(
+                    module: "Stock",
+                    action: adjustmentType,
+                    entityName: "Product",
+                    entityId: product.Id,
+                    summary: $"{adjustmentType} for {product.ProductName} ({product.SKU}). Quantity changed from {before:0.##} to {after:0.##}.",
+                    oldValues: new
+                    {
+                        product.Id,
+                        product.ProductName,
+                        product.SKU,
+                        BranchId = product.BranchId,
+                        QuantityInStock = before
+                    },
+                    newValues: new
+                    {
+                        product.Id,
+                        product.ProductName,
+                        product.SKU,
+                        BranchId = product.BranchId,
+                        QuantityBefore = before,
+                        MovementQuantity = movementQuantity,
+                        QuantityAfter = after,
+                        AdjustmentType = adjustmentType,
+                        Notes = notes
+                    });
 
                 return (true, "Stock updated successfully.");
             }
@@ -330,6 +371,17 @@ namespace PosPlatform.Web.Services
                 await transaction.RollbackAsync();
                 return (false, $"Stock update failed: {ex.Message}");
             }
+        }
+
+        private static string? NormalizeAdjustmentType(string? value)
+        {
+            return value?.Trim() switch
+            {
+                "Stock In" => "Stock In",
+                "Stock Out" => "Stock Out",
+                "Correction" => "Correction",
+                _ => null
+            };
         }
     }
 }
