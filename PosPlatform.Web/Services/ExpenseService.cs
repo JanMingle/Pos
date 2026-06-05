@@ -11,15 +11,18 @@ namespace PosPlatform.Web.Services
         private readonly AppDbContext _db;
         private readonly TenantContextService _tenantContext;
         private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly AuditLogService _auditLogService;
 
         public ExpenseService(
             AppDbContext db,
             TenantContextService tenantContext,
-            IHttpContextAccessor httpContextAccessor)
+            IHttpContextAccessor httpContextAccessor,
+            AuditLogService auditLogService)
         {
             _db = db;
             _tenantContext = tenantContext;
             _httpContextAccessor = httpContextAccessor;
+            _auditLogService = auditLogService;
         }
 
         public async Task<List<ExpenseCategoryListItemViewModel>> GetCategoriesAsync(string? search, string statusFilter, int? branchId = null)
@@ -163,11 +166,13 @@ namespace PosPlatform.Web.Services
             }
 
             ExpenseCategory entity;
+            object? oldValues = null;
+            var isNew = !model.Id.HasValue || model.Id.Value <= 0;
 
-            if (model.Id.HasValue && model.Id.Value > 0)
+            if (!isNew)
             {
                 entity = await _db.ExpenseCategories.FirstOrDefaultAsync(x =>
-                    x.Id == model.Id.Value &&
+                    x.Id == model.Id!.Value &&
                     x.TenantId == tenantId.Value)
                     ?? new ExpenseCategory();
 
@@ -175,6 +180,14 @@ namespace PosPlatform.Web.Services
                 {
                     return (false, "Expense category not found.");
                 }
+
+                oldValues = new
+                {
+                    entity.CategoryName,
+                    entity.Description,
+                    entity.IsActive,
+                    entity.BranchId
+                };
             }
             else
             {
@@ -195,7 +208,24 @@ namespace PosPlatform.Web.Services
 
             await _db.SaveChangesAsync();
 
-            return (true, model.Id.HasValue ? "Expense category updated successfully." : "Expense category added successfully.");
+            await _auditLogService.LogAsync(
+                module: "Expenses",
+                action: isNew ? "Create" : "Update",
+                entityName: "ExpenseCategory",
+                entityId: entity.Id,
+                summary: isNew
+                    ? $"Created expense category {entity.CategoryName}."
+                    : $"Updated expense category {entity.CategoryName}.",
+                oldValues: oldValues,
+                newValues: new
+                {
+                    entity.CategoryName,
+                    entity.Description,
+                    entity.IsActive,
+                    entity.BranchId
+                });
+
+            return (true, isNew ? "Expense category added successfully." : "Expense category updated successfully.");
         }
 
         public async Task<(bool Success, string Message)> ToggleCategoryStatusAsync(int id)
@@ -216,10 +246,31 @@ namespace PosPlatform.Web.Services
                 return (false, "Expense category not found.");
             }
 
+            var oldValues = new
+            {
+                entity.CategoryName,
+                entity.IsActive
+            };
+
             entity.IsActive = !entity.IsActive;
             entity.UpdatedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
+
+            var action = entity.IsActive ? "Activate" : "Deactivate";
+
+            await _auditLogService.LogAsync(
+                module: "Expenses",
+                action: action,
+                entityName: "ExpenseCategory",
+                entityId: entity.Id,
+                summary: $"{action}d expense category {entity.CategoryName}.",
+                oldValues: oldValues,
+                newValues: new
+                {
+                    entity.CategoryName,
+                    entity.IsActive
+                });
 
             return (true, entity.IsActive ? "Expense category activated." : "Expense category deactivated.");
         }
@@ -242,6 +293,14 @@ namespace PosPlatform.Web.Services
                 return (false, "Expense category not found.");
             }
 
+            var oldValues = new
+            {
+                entity.CategoryName,
+                entity.Description,
+                entity.IsActive,
+                entity.BranchId
+            };
+
             var hasExpenses = await _db.Expenses.AnyAsync(x =>
                 x.TenantId == tenantId.Value &&
                 x.ExpenseCategoryId == entity.Id);
@@ -252,11 +311,36 @@ namespace PosPlatform.Web.Services
                 entity.UpdatedAt = DateTime.UtcNow;
                 await _db.SaveChangesAsync();
 
+                await _auditLogService.LogAsync(
+                    module: "Expenses",
+                    action: "Deactivate",
+                    entityName: "ExpenseCategory",
+                    entityId: entity.Id,
+                    summary: $"Deactivated expense category {entity.CategoryName} because it has expense history.",
+                    oldValues: oldValues,
+                    newValues: new
+                    {
+                        entity.CategoryName,
+                        entity.IsActive
+                    });
+
                 return (true, "Category has expense history, so it was deactivated instead of deleted.");
             }
 
+            var categoryName = entity.CategoryName;
+            var categoryId = entity.Id;
+
             _db.ExpenseCategories.Remove(entity);
             await _db.SaveChangesAsync();
+
+            await _auditLogService.LogAsync(
+                module: "Expenses",
+                action: "Delete",
+                entityName: "ExpenseCategory",
+                entityId: categoryId,
+                summary: $"Deleted expense category {categoryName}.",
+                oldValues: oldValues,
+                newValues: null);
 
             return (true, "Expense category deleted successfully.");
         }
@@ -354,12 +438,14 @@ namespace PosPlatform.Web.Services
                 return (false, "Tax amount cannot be negative.");
             }
 
-            var categoryExists = await _db.ExpenseCategories.AnyAsync(x =>
-                x.Id == model.ExpenseCategoryId &&
-                x.TenantId == tenantId.Value &&
-                x.IsActive);
+            var category = await _db.ExpenseCategories
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.Id == model.ExpenseCategoryId &&
+                    x.TenantId == tenantId.Value &&
+                    x.IsActive);
 
-            if (!categoryExists)
+            if (category == null)
             {
                 return (false, "Expense category not found or inactive.");
             }
@@ -367,11 +453,13 @@ namespace PosPlatform.Web.Services
             var total = model.Subtotal + model.TaxAmount;
 
             Expense entity;
+            object? oldValues = null;
+            var isNew = !model.Id.HasValue || model.Id.Value <= 0;
 
-            if (model.Id.HasValue && model.Id.Value > 0)
+            if (!isNew)
             {
                 entity = await _db.Expenses.FirstOrDefaultAsync(x =>
-                    x.Id == model.Id.Value &&
+                    x.Id == model.Id!.Value &&
                     x.TenantId == tenantId.Value)
                     ?? new Expense();
 
@@ -379,6 +467,22 @@ namespace PosPlatform.Web.Services
                 {
                     return (false, "Expense not found.");
                 }
+
+                oldValues = new
+                {
+                    entity.ExpenseNumber,
+                    entity.ExpenseCategoryId,
+                    entity.ExpenseDate,
+                    entity.VendorName,
+                    entity.ReferenceNumber,
+                    entity.PaymentMethod,
+                    entity.Subtotal,
+                    entity.TaxAmount,
+                    entity.TotalAmount,
+                    entity.Status,
+                    entity.Notes,
+                    entity.BranchId
+                };
             }
             else
             {
@@ -409,7 +513,33 @@ namespace PosPlatform.Web.Services
 
             await _db.SaveChangesAsync();
 
-            return (true, model.Id.HasValue ? "Expense updated successfully." : "Expense recorded successfully.");
+            await _auditLogService.LogAsync(
+                module: "Expenses",
+                action: isNew ? "Create" : "Update",
+                entityName: "Expense",
+                entityId: entity.Id,
+                summary: isNew
+                    ? $"Recorded expense {entity.ExpenseNumber} for {entity.TotalAmount:0.00}."
+                    : $"Updated expense {entity.ExpenseNumber} for {entity.TotalAmount:0.00}.",
+                oldValues: oldValues,
+                newValues: new
+                {
+                    entity.ExpenseNumber,
+                    CategoryName = category.CategoryName,
+                    entity.ExpenseCategoryId,
+                    entity.ExpenseDate,
+                    entity.VendorName,
+                    entity.ReferenceNumber,
+                    entity.PaymentMethod,
+                    entity.Subtotal,
+                    entity.TaxAmount,
+                    entity.TotalAmount,
+                    entity.Status,
+                    entity.Notes,
+                    entity.BranchId
+                });
+
+            return (true, isNew ? "Expense recorded successfully." : "Expense updated successfully.");
         }
 
         public async Task<ExpenseFormModel?> GetExpenseByIdAsync(int id)
@@ -453,17 +583,49 @@ namespace PosPlatform.Web.Services
                 return (false, "Tenant not found.");
             }
 
-            var entity = await _db.Expenses.FirstOrDefaultAsync(x =>
-                x.Id == id &&
-                x.TenantId == tenantId.Value);
+            var entity = await _db.Expenses
+                .Include(x => x.ExpenseCategory)
+                .FirstOrDefaultAsync(x =>
+                    x.Id == id &&
+                    x.TenantId == tenantId.Value);
 
             if (entity == null)
             {
                 return (false, "Expense not found.");
             }
 
+            var oldValues = new
+            {
+                entity.ExpenseNumber,
+                CategoryName = entity.ExpenseCategory?.CategoryName,
+                entity.ExpenseCategoryId,
+                entity.ExpenseDate,
+                entity.VendorName,
+                entity.ReferenceNumber,
+                entity.PaymentMethod,
+                entity.Subtotal,
+                entity.TaxAmount,
+                entity.TotalAmount,
+                entity.Status,
+                entity.Notes,
+                entity.BranchId
+            };
+
+            var expenseNumber = entity.ExpenseNumber;
+            var expenseId = entity.Id;
+            var amount = entity.TotalAmount;
+
             _db.Expenses.Remove(entity);
             await _db.SaveChangesAsync();
+
+            await _auditLogService.LogAsync(
+                module: "Expenses",
+                action: "Delete",
+                entityName: "Expense",
+                entityId: expenseId,
+                summary: $"Deleted expense {expenseNumber} for {amount:0.00}.",
+                oldValues: oldValues,
+                newValues: null);
 
             return (true, "Expense deleted successfully.");
         }

@@ -11,15 +11,18 @@ namespace PosPlatform.Web.Services
         private readonly AppDbContext _db;
         private readonly TenantContextService _tenantContext;
         private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly AuditLogService _auditLogService;
 
         public RefundService(
             AppDbContext db,
             TenantContextService tenantContext,
-            IHttpContextAccessor httpContextAccessor)
+            IHttpContextAccessor httpContextAccessor,
+            AuditLogService auditLogService)
         {
             _db = db;
             _tenantContext = tenantContext;
             _httpContextAccessor = httpContextAccessor;
+            _auditLogService = auditLogService;
         }
 
         public async Task<RefundableSaleViewModel?> GetRefundableSaleAsync(int saleId)
@@ -56,38 +59,38 @@ namespace PosPlatform.Web.Services
                 CustomerName = sale.CustomerName,
                 TotalAmount = sale.TotalAmount,
                 Items = sale.SaleItems
-    .OrderBy(x => x.Id)
-    .Select(x =>
-    {
-        var alreadyReturned = returnedQuantities.TryGetValue(x.Id, out var qty)
-            ? qty
-            : 0;
+                    .OrderBy(x => x.Id)
+                    .Select(x =>
+                    {
+                        var alreadyReturned = returnedQuantities.TryGetValue(x.Id, out var qty)
+                            ? qty
+                            : 0;
 
-        var remaining = Math.Max(0, x.Quantity - alreadyReturned);
+                        var remaining = Math.Max(0, x.Quantity - alreadyReturned);
 
-        var product = _db.Products
-            .AsNoTracking()
-            .FirstOrDefault(p => p.Id == x.ProductId && p.TenantId == tenantId.Value);
+                        var product = _db.Products
+                            .AsNoTracking()
+                            .FirstOrDefault(p => p.Id == x.ProductId && p.TenantId == tenantId.Value);
 
-        return new RefundableSaleItemViewModel
-        {
-            SaleItemId = x.Id,
-            ProductId = x.ProductId,
-            ProductName = x.ProductName,
-            SKU = x.SKU,
+                        return new RefundableSaleItemViewModel
+                        {
+                            SaleItemId = x.Id,
+                            ProductId = x.ProductId,
+                            ProductName = x.ProductName,
+                            SKU = x.SKU,
 
-            ProductType = product?.ProductType ?? "Physical Product",
-            TrackStock = product?.TrackStock ?? false,
-            UnitOfMeasure = product?.UnitOfMeasure,
+                            ProductType = product?.ProductType ?? "Physical Product",
+                            TrackStock = product?.TrackStock ?? false,
+                            UnitOfMeasure = product?.UnitOfMeasure,
 
-            QuantitySold = x.Quantity,
-            QuantityAlreadyReturned = alreadyReturned,
-            QuantityRemaining = remaining,
-            UnitPrice = x.UnitPrice
-        };
-    })
-    .Where(x => x.QuantityRemaining > 0)
-    .ToList()
+                            QuantitySold = x.Quantity,
+                            QuantityAlreadyReturned = alreadyReturned,
+                            QuantityRemaining = remaining,
+                            UnitPrice = x.UnitPrice
+                        };
+                    })
+                    .Where(x => x.QuantityRemaining > 0)
+                    .ToList()
             };
         }
 
@@ -101,11 +104,11 @@ namespace PosPlatform.Web.Services
             }
 
             var query = _db.SaleReturns
-     .AsNoTracking()
-     .Include(x => x.Sale)
-     .Where(x =>
-         x.TenantId == tenantId.Value &&
-         (!branchId.HasValue || x.BranchId == branchId.Value));
+                .AsNoTracking()
+                .Include(x => x.Sale)
+                .Where(x =>
+                    x.TenantId == tenantId.Value &&
+                    (!branchId.HasValue || x.BranchId == branchId.Value));
 
             if (fromDate.HasValue)
             {
@@ -183,6 +186,14 @@ namespace PosPlatform.Web.Services
                 return Fail("This sale has already been fully refunded or voided.");
             }
 
+            var oldSaleValues = new
+            {
+                sale.Id,
+                sale.SaleNumber,
+                sale.Status,
+                sale.TotalAmount
+            };
+
             var returnedQuantities = await GetReturnedQuantitiesAsync(sale.Id);
 
             var requestedItems = request.Items
@@ -243,6 +254,11 @@ namespace PosPlatform.Web.Services
                     return Fail("A void must include all remaining items on the sale.");
                 }
             }
+
+            SaleReturn? completedReturn = null;
+            decimal completedRefundTotal = 0;
+            var auditItems = new List<object>();
+            var stockAudit = new List<object>();
 
             await using var tx = await _db.Database.BeginTransactionAsync();
 
@@ -308,6 +324,17 @@ namespace PosPlatform.Web.Services
                         CreatedAt = DateTime.UtcNow
                     });
 
+                    auditItems.Add(new
+                    {
+                        saleItem.ProductId,
+                        saleItem.ProductName,
+                        saleItem.SKU,
+                        QuantityReturned = requestItem.Quantity,
+                        saleItem.UnitPrice,
+                        LineTotal = lineTotal,
+                        Restocked = request.RestockItems && product != null && product.TrackStock
+                    });
+
                     if (request.RestockItems && product != null && product.TrackStock)
                     {
                         var before = product.QuantityInStock;
@@ -329,6 +356,16 @@ namespace PosPlatform.Web.Services
                             ReferenceId = saleReturn.Id,
                             Notes = $"{returnType} for sale {sale.SaleNumber}",
                             CreatedAt = DateTime.UtcNow
+                        });
+
+                        stockAudit.Add(new
+                        {
+                            product.Id,
+                            product.ProductName,
+                            product.SKU,
+                            QuantityBefore = before,
+                            QuantityReturned = requestItem.Quantity,
+                            QuantityAfter = after
                         });
                     }
                 }
@@ -356,14 +393,8 @@ namespace PosPlatform.Web.Services
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
 
-                return new RefundResult
-                {
-                    Success = true,
-                    Message = $"{returnType} completed successfully.",
-                    SaleReturnId = saleReturn.Id,
-                    ReturnNumber = saleReturn.ReturnNumber,
-                    TotalRefundAmount = refundTotal
-                };
+                completedReturn = saleReturn;
+                completedRefundTotal = refundTotal;
             }
             catch (Exception ex)
             {
@@ -371,6 +402,41 @@ namespace PosPlatform.Web.Services
 
                 return Fail($"Refund failed: {ex.Message}");
             }
+
+            if (completedReturn != null)
+            {
+                await _auditLogService.LogAsync(
+                    module: "Refunds",
+                    action: "Refund",
+                    entityName: "SaleReturn",
+                    entityId: completedReturn.Id,
+                    summary: $"{returnType} processed for sale {sale.SaleNumber}. Return {completedReturn.ReturnNumber}. Amount {completedRefundTotal:0.00}.",
+                    oldValues: oldSaleValues,
+                    newValues: new
+                    {
+                        completedReturn.ReturnNumber,
+                        SaleId = sale.Id,
+                        sale.SaleNumber,
+                        SaleStatusAfter = sale.Status,
+                        ReturnType = returnType,
+                        RefundMethod = refundMethod,
+                        completedReturn.Status,
+                        completedReturn.Reason,
+                        completedReturn.RestockItems,
+                        TotalRefundAmount = completedRefundTotal,
+                        Items = auditItems,
+                        StockRestocked = stockAudit
+                    });
+            }
+
+            return new RefundResult
+            {
+                Success = true,
+                Message = $"{returnType} completed successfully.",
+                SaleReturnId = completedReturn?.Id,
+                ReturnNumber = completedReturn?.ReturnNumber,
+                TotalRefundAmount = completedRefundTotal
+            };
         }
 
         private async Task<Dictionary<int, decimal>> GetReturnedQuantitiesAsync(int saleId)

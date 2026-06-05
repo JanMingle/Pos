@@ -11,15 +11,18 @@ namespace PosPlatform.Web.Services
         private readonly AppDbContext _db;
         private readonly TenantContextService _tenantContext;
         private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly AuditLogService _auditLogService;
 
         public CashierShiftService(
             AppDbContext db,
             TenantContextService tenantContext,
-            IHttpContextAccessor httpContextAccessor)
+            IHttpContextAccessor httpContextAccessor,
+            AuditLogService auditLogService)
         {
             _db = db;
             _tenantContext = tenantContext;
             _httpContextAccessor = httpContextAccessor;
+            _auditLogService = auditLogService;
         }
 
         public async Task<CashierShiftViewModel?> GetOpenShiftAsync()
@@ -113,7 +116,7 @@ namespace PosPlatform.Web.Services
                 return (false, "You already have an open shift.");
             }
 
-            _db.CashierShifts.Add(new CashierShift
+            var shift = new CashierShift
             {
                 TenantId = tenantId.Value,
                 BranchId = branchId,
@@ -128,9 +131,30 @@ namespace PosPlatform.Web.Services
                 OpenedAt = DateTime.UtcNow,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
-            });
+            };
 
+            _db.CashierShifts.Add(shift);
             await _db.SaveChangesAsync();
+
+            await _auditLogService.LogAsync(
+                module: "Cashier Shift",
+                action: "Open",
+                entityName: "CashierShift",
+                entityId: shift.Id,
+                summary: $"Opened cashier shift for {cashierName} with opening cash {shift.OpeningCash:0.00}.",
+                oldValues: null,
+                newValues: new
+                {
+                    shift.Id,
+                    shift.BranchId,
+                    shift.CashierUserId,
+                    shift.CashierName,
+                    shift.OpeningCash,
+                    shift.ExpectedCash,
+                    shift.OpeningNotes,
+                    shift.Status,
+                    shift.OpenedAt
+                });
 
             return (true, "Shift opened successfully.");
         }
@@ -173,6 +197,16 @@ namespace PosPlatform.Web.Services
                 return (false, "You do not have an open shift.");
             }
 
+            var oldValues = new
+            {
+                shift.Id,
+                shift.OpeningCash,
+                shift.CashSales,
+                shift.CashIn,
+                shift.CashOut,
+                shift.ExpectedCash
+            };
+
             var movement = new CashierShiftCashMovement
             {
                 TenantId = tenantId.Value,
@@ -213,6 +247,27 @@ namespace PosPlatform.Web.Services
 
             await _db.SaveChangesAsync();
 
+            await _auditLogService.LogAsync(
+                module: "Cashier Shift",
+                action: movementType,
+                entityName: "CashierShiftCashMovement",
+                entityId: movement.Id,
+                summary: $"{movementType} of {movement.Amount:0.00} recorded for shift #{shift.Id}. Reason: {movement.Reason}.",
+                oldValues: oldValues,
+                newValues: new
+                {
+                    movement.Id,
+                    movement.CashierShiftId,
+                    movement.BranchId,
+                    movement.MovementType,
+                    movement.Amount,
+                    movement.Reason,
+                    movement.Notes,
+                    shift.CashIn,
+                    shift.CashOut,
+                    shift.ExpectedCash
+                });
+
             return (true, $"{movementType} recorded successfully.");
         }
 
@@ -235,6 +290,21 @@ namespace PosPlatform.Web.Services
             {
                 return (false, "You do not have an open shift.");
             }
+
+            var oldValues = new
+            {
+                shift.Id,
+                shift.Status,
+                shift.OpenedAt,
+                shift.OpeningCash,
+                shift.CashSales,
+                shift.CardSales,
+                shift.EftSales,
+                shift.TotalSales,
+                shift.CashIn,
+                shift.CashOut,
+                shift.ExpectedCash
+            };
 
             var totals = await CalculateShiftTotalsAsync(
                 tenantId.Value,
@@ -262,6 +332,32 @@ namespace PosPlatform.Web.Services
             shift.UpdatedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
+
+            await _auditLogService.LogAsync(
+                module: "Cashier Shift",
+                action: "Close",
+                entityName: "CashierShift",
+                entityId: shift.Id,
+                summary: $"Closed cashier shift #{shift.Id}. Expected cash {shift.ExpectedCash:0.00}, counted {shift.ClosingCash:0.00}, difference {shift.CashDifference:0.00}.",
+                oldValues: oldValues,
+                newValues: new
+                {
+                    shift.Id,
+                    shift.Status,
+                    shift.OpenedAt,
+                    shift.ClosedAt,
+                    shift.OpeningCash,
+                    shift.CashSales,
+                    shift.CardSales,
+                    shift.EftSales,
+                    shift.TotalSales,
+                    shift.CashIn,
+                    shift.CashOut,
+                    shift.ExpectedCash,
+                    shift.ClosingCash,
+                    shift.CashDifference,
+                    shift.ClosingNotes
+                });
 
             return (true, "Shift closed successfully.");
         }

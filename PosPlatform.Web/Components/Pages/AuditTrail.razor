@@ -82,6 +82,7 @@
             <option value="Stock In">Stock In</option>
             <option value="Stock Out">Stock Out</option>
             <option value="Correction">Correction</option>
+            <option value="Refunds">Refunds</option>
         </select>
 
         <div class="audit-search">
@@ -738,6 +739,8 @@
             "Stock In" => "cash-in",
             "Stock Out" => "cash-out",
             "Correction" => "update",
+            "Close" => "update",
+            "Void" => "refund",
             _ => "default"
         };
     }
