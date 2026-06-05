@@ -1,7 +1,6 @@
 ﻿@using PosPlatform.Web.Services
 @inject UserAccessService UserAccessService
 
-
 <aside class="pos-sidebar">
     <div class="pos-sidebar-brand">
         <div class="pos-brand-logo">P</div>
@@ -20,7 +19,7 @@
             <span class="pos-nav-text">Dashboard</span>
         </NavLink>
 
-        @if (_canProducts || _canStock || _canSales || _canBranches)
+        @if (_canProducts || _canBarcodeLabels || _canStock || _canSales || _canBranches)
         {
             <div class="pos-nav-section">Operations</div>
         }
@@ -30,6 +29,14 @@
             <NavLink href="/products" class="pos-nav-link">
                 <span class="pos-nav-icon"><i class="bi bi-box-seam"></i></span>
                 <span class="pos-nav-text">Products</span>
+            </NavLink>
+        }
+
+        @if (_canBarcodeLabels)
+        {
+            <NavLink href="/barcode-labels" class="pos-nav-link">
+                <span class="pos-nav-icon"><i class="bi bi-upc-scan"></i></span>
+                <span class="pos-nav-text">Barcode Labels</span>
             </NavLink>
         }
 
@@ -151,6 +158,7 @@
     private string _roleName = "Loading...";
 
     private bool _canProducts;
+    private bool _canBarcodeLabels;
     private bool _canStock;
     private bool _canSales;
     private bool _canBranches;
@@ -169,6 +177,7 @@
         _roleName = await UserAccessService.GetCurrentRoleAsync();
 
         _canProducts = await UserAccessService.CanAccessAsync("products");
+        _canBarcodeLabels = await UserAccessService.CanAccessAsync("barcode-labels");
         _canStock = await UserAccessService.CanAccessAsync("stock");
         _canSales = await UserAccessService.CanAccessAsync("sales");
         _canBranches = await UserAccessService.CanAccessAsync("branches");

@@ -1,0 +1,987 @@
+﻿@page "/barcode-labels"
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@layout MainLayout
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
+@using PosPlatform.Web.Components.Layout
+@using PosPlatform.Web.Models.Products
+@using PosPlatform.Web.Models.Settings
+@using PosPlatform.Web.Services
+@inject ProductService ProductService
+@inject BusinessSettingsService BusinessSettingsService
+@inject UserAccessService UserAccessService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+
+<PageTitle>Barcode Labels</PageTitle>
+
+<section class="labels-page">
+    <div class="labels-header">
+        <div>
+            <div class="labels-kicker">
+                <i class="bi bi-upc-scan"></i>
+                Barcode printing
+            </div>
+            <h1>Barcode Labels</h1>
+            <p>Search products, add them to a print queue, choose quantity and print barcode labels.</p>
+        </div>
+
+        <button type="button"
+                class="labels-primary-btn"
+                disabled="@(_queue.Count == 0)"
+                @onclick="PrintLabelsAsync">
+            <i class="bi bi-printer"></i>
+            Print Labels
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="labels-alert @(_isSuccess ? "success" : "danger")">
+            <i class="bi @(_isSuccess ? "bi-check-circle" : "bi-exclamation-triangle")"></i>
+            <span>@_message</span>
+            <button type="button" @onclick="ClearMessage">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    }
+
+    <div class="labels-settings-strip">
+        <div>
+            <span>Business</span>
+            <strong>@_settings.BusinessName</strong>
+        </div>
+
+        <div>
+            <span>Currency</span>
+            <strong>@_settings.CurrencyCode · @CurrencyLabel</strong>
+        </div>
+
+        <div>
+            <span>Products</span>
+            <strong>@_products.Count loaded</strong>
+        </div>
+
+        <div>
+            <span>Queue</span>
+            <strong>@TotalLabels label@((TotalLabels == 1) ? "" : "s")</strong>
+        </div>
+    </div>
+
+    <div class="labels-barcode-row">
+        <div class="labels-barcode-box">
+            <i class="bi bi-upc-scan"></i>
+            <input @bind="_barcodeValue"
+                   @bind:event="oninput"
+                   @onkeydown="HandleBarcodeKeyDown"
+                   placeholder="Scan barcode or type SKU, then press Enter" />
+        </div>
+
+        <button type="button"
+                class="labels-primary-btn"
+                disabled="@_barcodeScanning"
+                @onclick="ScanBarcodeAsync">
+            <i class="bi bi-upc"></i>
+            @(_barcodeScanning ? "Checking..." : "Find Item")
+        </button>
+    </div>
+
+    <div class="labels-control-panel">
+        <div class="labels-search">
+            <i class="bi bi-search"></i>
+            <input @bind="_searchTerm"
+                   @bind:event="oninput"
+                   placeholder="Search by product name, SKU, barcode or type" />
+        </div>
+
+        <button type="button" class="labels-secondary-btn" @onclick="LoadProductsAsync">
+            <i class="bi bi-search"></i>
+            Search
+        </button>
+
+        <button type="button" class="labels-ghost-btn" @onclick="ResetSearchAsync">
+            <i class="bi bi-arrow-counterclockwise"></i>
+            Reset
+        </button>
+    </div>
+
+    <div class="labels-grid">
+        <div class="labels-panel">
+            <div class="labels-panel-header">
+                <div>
+                    <h2>Products</h2>
+                    <p>Select products to add to the label queue.</p>
+                </div>
+            </div>
+
+            @if (_loading)
+            {
+                <div class="labels-empty">
+                    <strong>Loading products...</strong>
+                    <span>Please wait while we fetch catalogue items.</span>
+                </div>
+            }
+            else if (_products.Count == 0)
+            {
+                <div class="labels-empty">
+                    <strong>No products found</strong>
+                    <span>Search by product name, SKU or barcode.</span>
+                </div>
+            }
+            else
+            {
+                <div class="labels-table-wrap">
+                    <table class="labels-table">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>SKU</th>
+                                <th>Barcode</th>
+                                <th>Price</th>
+                                <th>Status</th>
+                                <th class="text-end">Action</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var item in _products)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="labels-product-cell">
+                                            <div class="labels-avatar">@GetInitials(item.ProductName)</div>
+                                            <div>
+                                                <strong>@item.ProductName</strong>
+                                                <span>@item.ProductType</span>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <span class="labels-code">@item.SKU</span>
+                                    </td>
+
+                                    <td>
+                                        <span class="labels-code">
+                                            @(string.IsNullOrWhiteSpace(item.Barcode) ? "No barcode" : item.Barcode)
+                                        </span>
+                                    </td>
+
+                                    <td class="labels-price">@Money(item.SellingPrice)</td>
+
+                                    <td>
+                                        <span class="labels-pill @(item.IsActive ? "active" : "inactive")">
+                                            @(item.IsActive ? "Active" : "Inactive")
+                                        </span>
+                                    </td>
+
+                                    <td class="text-end">
+                                        <button type="button"
+                                                class="labels-mini-btn"
+                                                disabled="@string.IsNullOrWhiteSpace(GetPrintableCode(item))"
+                                                @onclick="() => AddToQueue(item)">
+                                            Add Label
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <div class="labels-panel">
+            <div class="labels-panel-header">
+                <div>
+                    <h2>Print Queue</h2>
+                    <p>@_queue.Count product@((_queue.Count == 1) ? "" : "s") selected.</p>
+                </div>
+
+                @if (_queue.Count > 0)
+                {
+                    <button type="button" class="labels-ghost-btn small" @onclick="ClearQueue">
+                        Clear
+                    </button>
+                }
+            </div>
+
+            @if (_queue.Count == 0)
+            {
+                <div class="labels-empty">
+                    <strong>No labels selected</strong>
+                    <span>Add products from the list to prepare labels for printing.</span>
+                </div>
+            }
+            else
+            {
+                <div class="labels-queue">
+                    @foreach (var item in _queue)
+                    {
+                        <div class="labels-queue-item">
+                            <div>
+                                <strong>@item.ProductName</strong>
+                                <span>@item.Code</span>
+                                <small>@Money(item.SellingPrice)</small>
+                            </div>
+
+                            <div class="labels-qty-box">
+                                <label>Qty</label>
+                                <input type="number" min="1" max="500" @bind="item.Quantity" />
+                            </div>
+
+                            <button type="button" class="labels-remove-btn" @onclick="() => RemoveFromQueue(item)">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    }
+                </div>
+
+                <div class="labels-print-footer">
+                    <div>
+                        <span>Total labels</span>
+                        <strong>@TotalLabels</strong>
+                    </div>
+
+                    <button type="button" class="labels-primary-btn" @onclick="PrintLabelsAsync">
+                        <i class="bi bi-printer"></i>
+                        Print Labels
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+</section>
+
+<style>
+    .labels-page {
+        animation: labelsIn .22s ease both;
+    }
+
+    .labels-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 18px;
+        margin-bottom: 18px;
+    }
+
+    .labels-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 750;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+
+    .labels-header h1 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 1.45rem;
+        font-weight: 680;
+        letter-spacing: -.03em;
+    }
+
+    .labels-header p {
+        margin: 6px 0 0;
+        color: #64748b;
+        font-size: .88rem;
+    }
+
+    .labels-primary-btn,
+    .labels-secondary-btn,
+    .labels-ghost-btn,
+    .labels-mini-btn {
+        min-height: 38px;
+        border-radius: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 650;
+        border: 0;
+        white-space: nowrap;
+        text-decoration: none;
+    }
+
+    .labels-primary-btn {
+        color: #ffffff;
+        background: #111827;
+        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+    }
+
+        .labels-primary-btn:disabled,
+        .labels-mini-btn:disabled {
+            opacity: .55;
+            cursor: not-allowed;
+        }
+
+    .labels-secondary-btn {
+        color: #2563eb;
+        background: #eef5ff;
+    }
+
+    .labels-ghost-btn {
+        color: #475569;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+    }
+
+        .labels-ghost-btn.small {
+            min-height: 32px;
+            padding: 0 10px;
+            font-size: .74rem;
+        }
+
+    .labels-mini-btn {
+        min-height: 30px;
+        color: #2563eb;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        padding: 0 10px;
+    }
+
+    .labels-alert {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        font-size: .84rem;
+        font-weight: 600;
+        border: 1px solid;
+    }
+
+        .labels-alert.success {
+            color: #166534;
+            background: #f0fdf4;
+            border-color: #bbf7d0;
+        }
+
+        .labels-alert.danger {
+            color: #991b1b;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+        .labels-alert span {
+            flex: 1;
+        }
+
+        .labels-alert button {
+            border: 0;
+            background: transparent;
+            color: inherit;
+        }
+
+    .labels-settings-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+        .labels-settings-strip div {
+            padding: 13px;
+            border-radius: 16px;
+            background: #ffffff;
+            border: 1px solid #e7edf5;
+            box-shadow: 0 12px 28px rgba(15,23,42,.04);
+        }
+
+        .labels-settings-strip span,
+        .labels-settings-strip strong {
+            display: block;
+        }
+
+        .labels-settings-strip span {
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .labels-settings-strip strong {
+            margin-top: 4px;
+            color: #0f172a;
+            font-size: .84rem;
+            font-weight: 720;
+        }
+
+    .labels-barcode-row,
+    .labels-control-panel {
+        display: grid;
+        grid-template-columns: minmax(240px, 1fr) auto auto;
+        gap: 10px;
+        padding: 14px;
+        margin-bottom: 16px;
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+    }
+
+    .labels-barcode-row {
+        grid-template-columns: minmax(240px, 1fr) auto;
+    }
+
+    .labels-barcode-box {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 13px;
+        border-radius: 14px;
+        background: #ecfdf5;
+        border: 1px solid #bbf7d0;
+        color: #15803d;
+    }
+
+    .labels-search {
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 13px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        color: #94a3b8;
+    }
+
+        .labels-barcode-box input,
+        .labels-search input {
+            width: 100%;
+            border: 0;
+            outline: none;
+            background: transparent;
+            color: #0f172a;
+            font-size: .9rem;
+        }
+
+    .labels-barcode-box input {
+        font-weight: 650;
+    }
+
+    .labels-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(340px, .65fr);
+        gap: 16px;
+        align-items: start;
+    }
+
+    .labels-panel {
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        border-radius: 20px;
+        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        overflow: hidden;
+    }
+
+    .labels-panel-header {
+        padding: 17px 18px;
+        border-bottom: 1px solid #edf2f7;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+    }
+
+        .labels-panel-header h2 {
+            margin: 0;
+            color: #0f172a;
+            font-size: .92rem;
+            font-weight: 720;
+        }
+
+        .labels-panel-header p {
+            margin: 4px 0 0;
+            color: #94a3b8;
+            font-size: .76rem;
+        }
+
+    .labels-table-wrap {
+        overflow-x: auto;
+    }
+
+    .labels-table {
+        width: 100%;
+        min-width: 840px;
+        border-collapse: collapse;
+    }
+
+        .labels-table th {
+            padding: 12px 16px;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: .7rem;
+            font-weight: 750;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            border-bottom: 1px solid #e7edf5;
+            white-space: nowrap;
+        }
+
+        .labels-table td {
+            padding: 14px 16px;
+            color: #334155;
+            font-size: .82rem;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+
+    .labels-product-cell {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+    }
+
+    .labels-avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 14px;
+        background: #eef5ff;
+        color: #2563eb;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .78rem;
+        font-weight: 750;
+    }
+
+    .labels-product-cell strong,
+    .labels-product-cell span {
+        display: block;
+    }
+
+    .labels-product-cell strong {
+        color: #0f172a;
+        font-size: .85rem;
+        font-weight: 720;
+    }
+
+    .labels-product-cell span {
+        margin-top: 2px;
+        color: #94a3b8;
+        font-size: .72rem;
+    }
+
+    .labels-code {
+        display: inline-flex;
+        min-height: 27px;
+        align-items: center;
+        padding: 0 9px;
+        border-radius: 999px;
+        color: #475569;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+        font-size: .72rem;
+        font-weight: 650;
+    }
+
+    .labels-price {
+        color: #0f172a;
+        font-weight: 750;
+    }
+
+    .labels-pill {
+        display: inline-flex;
+        min-height: 27px;
+        align-items: center;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 750;
+    }
+
+        .labels-pill.active {
+            color: #15803d;
+            background: #ecfdf5;
+        }
+
+        .labels-pill.inactive {
+            color: #64748b;
+            background: #f1f5f9;
+        }
+
+    .labels-queue {
+        padding: 14px 18px;
+        display: grid;
+        gap: 10px;
+    }
+
+    .labels-queue-item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 76px auto;
+        gap: 10px;
+        align-items: center;
+        padding: 13px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px solid #e7edf5;
+    }
+
+        .labels-queue-item strong,
+        .labels-queue-item span,
+        .labels-queue-item small {
+            display: block;
+        }
+
+        .labels-queue-item strong {
+            color: #0f172a;
+            font-size: .84rem;
+            font-weight: 720;
+        }
+
+        .labels-queue-item span {
+            margin-top: 3px;
+            color: #64748b;
+            font-size: .72rem;
+        }
+
+        .labels-queue-item small {
+            margin-top: 4px;
+            color: #111827;
+            font-size: .78rem;
+            font-weight: 750;
+        }
+
+    .labels-qty-box label {
+        display: block;
+        margin-bottom: 4px;
+        color: #64748b;
+        font-size: .68rem;
+        font-weight: 700;
+    }
+
+    .labels-qty-box input {
+        width: 70px;
+        min-height: 34px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        padding: 0 9px;
+        font-size: .84rem;
+        outline: none;
+    }
+
+    .labels-remove-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 11px;
+        border: 1px solid #fecaca;
+        background: #fef2f2;
+        color: #dc2626;
+    }
+
+    .labels-print-footer {
+        padding: 14px 18px 18px;
+        border-top: 1px solid #edf2f7;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+    }
+
+        .labels-print-footer span,
+        .labels-print-footer strong {
+            display: block;
+        }
+
+        .labels-print-footer span {
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .labels-print-footer strong {
+            margin-top: 3px;
+            color: #0f172a;
+            font-size: .96rem;
+            font-weight: 750;
+        }
+
+    .labels-empty {
+        margin: 18px;
+        padding: 34px 20px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px dashed #dbe3ef;
+        text-align: center;
+    }
+
+        .labels-empty strong,
+        .labels-empty span {
+            display: block;
+        }
+
+        .labels-empty strong {
+            color: #0f172a;
+            font-size: .9rem;
+        }
+
+        .labels-empty span {
+            margin-top: 4px;
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+    @@keyframes labelsIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width: 1199px) {
+        .labels-grid,
+        .labels-settings-strip {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .labels-header,
+        .labels-panel-header,
+        .labels-print-footer {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+            .labels-header .labels-primary-btn,
+            .labels-print-footer .labels-primary-btn {
+                width: 100%;
+            }
+
+        .labels-barcode-row,
+        .labels-control-panel {
+            grid-template-columns: 1fr;
+        }
+
+            .labels-barcode-row button,
+            .labels-control-panel button {
+                width: 100%;
+            }
+
+        .labels-queue-item {
+            grid-template-columns: 1fr;
+        }
+
+        .labels-remove-btn {
+            width: 100%;
+        }
+    }
+</style>
+
+@code {
+    private BusinessSettingsFormModel _settings = new();
+    private List<ProductListItemViewModel> _products = new();
+    private List<BarcodeLabelQueueItem> _queue = new();
+
+    private bool _loading = true;
+    private bool _barcodeScanning;
+
+    private string? _searchTerm;
+    private string? _barcodeValue;
+
+    private string? _message;
+    private bool _isSuccess;
+
+    private string CurrencyLabel =>
+        string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
+            ? "R"
+            : _settings.CurrencySymbol;
+
+    private int TotalLabels =>
+        _queue.Sum(x => x.Quantity < 1 ? 0 : x.Quantity);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserAccessService.CanAccessAsync("barcode-labels"))
+        {
+            NavigationManager.NavigateTo("/dashboard");
+            return;
+        }
+
+        _settings = await BusinessSettingsService.GetSettingsAsync();
+        await LoadProductsAsync();
+    }
+
+    private async Task LoadProductsAsync()
+    {
+        _loading = true;
+        _products = await ProductService.GetProductsAsync(_searchTerm);
+        _loading = false;
+    }
+
+    private async Task HandleBarcodeKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ScanBarcodeAsync();
+        }
+    }
+
+    private async Task ScanBarcodeAsync()
+    {
+        var code = _barcodeValue?.Trim();
+
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            ShowMessage("Scan or type a barcode/SKU first.", false);
+            return;
+        }
+
+        _barcodeScanning = true;
+
+        _searchTerm = code;
+        await LoadProductsAsync();
+
+        _barcodeScanning = false;
+
+        if (_products.Count == 0)
+        {
+            ShowMessage($"No item found for barcode or SKU: {code}", false);
+            return;
+        }
+
+        if (_products.Count == 1)
+        {
+            AddToQueue(_products[0]);
+            _barcodeValue = null;
+            ShowMessage($"{_products[0].ProductName} added to label queue.", true);
+            return;
+        }
+
+        _barcodeValue = null;
+        ShowMessage($"{_products.Count} items found for: {code}. Select the correct one.", true);
+    }
+
+    private async Task ResetSearchAsync()
+    {
+        _searchTerm = null;
+        _barcodeValue = null;
+        await LoadProductsAsync();
+    }
+
+    private void AddToQueue(ProductListItemViewModel product)
+    {
+        var code = GetPrintableCode(product);
+
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            ShowMessage("This product does not have a barcode or SKU to print.", false);
+            return;
+        }
+
+        var existing = _queue.FirstOrDefault(x => x.ProductId == product.Id);
+
+        if (existing != null)
+        {
+            existing.Quantity += 1;
+            ShowMessage($"{product.ProductName} label quantity increased.", true);
+            return;
+        }
+
+        _queue.Add(new BarcodeLabelQueueItem
+        {
+            ProductId = product.Id,
+            ProductName = product.ProductName,
+            SKU = product.SKU,
+            Barcode = product.Barcode,
+            Code = code,
+            SellingPrice = product.SellingPrice,
+            Quantity = 1
+        });
+
+        ShowMessage($"{product.ProductName} added to label queue.", true);
+    }
+
+    private void RemoveFromQueue(BarcodeLabelQueueItem item)
+    {
+        _queue.Remove(item);
+    }
+
+    private void ClearQueue()
+    {
+        _queue.Clear();
+    }
+
+    private async Task PrintLabelsAsync()
+    {
+        var printable = _queue
+            .Where(x => x.Quantity > 0 && !string.IsNullOrWhiteSpace(x.Code))
+            .ToList();
+
+        if (printable.Count == 0)
+        {
+            ShowMessage("Add at least one label before printing.", false);
+            return;
+        }
+
+        await JS.InvokeVoidAsync("barcodeLabels.print", printable, CurrencyLabel);
+    }
+
+    private string? GetPrintableCode(ProductListItemViewModel product)
+    {
+        return !string.IsNullOrWhiteSpace(product.Barcode)
+            ? product.Barcode.Trim()
+            : !string.IsNullOrWhiteSpace(product.SKU)
+                ? product.SKU.Trim()
+                : null;
+    }
+
+    private string Money(decimal value)
+    {
+        return $"{CurrencyLabel} {value:0.00}";
+    }
+
+    private void ShowMessage(string message, bool success)
+    {
+        _message = message;
+        _isSuccess = success;
+    }
+
+    private void ClearMessage()
+    {
+        _message = null;
+    }
+
+    private string GetInitials(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "P";
+        }
+
+        var words = value
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Take(2)
+            .Select(x => x[0].ToString().ToUpper());
+
+        return string.Join("", words);
+    }
+
+    private class BarcodeLabelQueueItem
+    {
+        public int ProductId { get; set; }
+        public string ProductName { get; set; } = string.Empty;
+        public string SKU { get; set; } = string.Empty;
+        public string? Barcode { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public decimal SellingPrice { get; set; }
+        public int Quantity { get; set; } = 1;
+    }
+}

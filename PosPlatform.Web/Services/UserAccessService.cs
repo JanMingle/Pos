@@ -69,6 +69,7 @@ namespace PosPlatform.Web.Services
                 "expenses" => role is "Manager" or "Accounting User",
 
                 "stock-transfers" => role is "Manager" or "Inventory User",
+                "barcode-labels" => role is "Manager" or "Inventory User",
                 "users" => false,
                 "settings" => false,
 
