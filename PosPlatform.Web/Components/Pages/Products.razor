@@ -13,6 +13,7 @@
 @inject BusinessSettingsService BusinessSettingsService
 @inject UserAccessService UserAccessService
 @inject NavigationManager NavigationManager
+@using Microsoft.AspNetCore.Components.Web
 
 <PageTitle>Products</PageTitle>
 
@@ -129,6 +130,24 @@
                     <strong>@Money(InventoryValue)</strong>
                 </div>
             </div>
+        </div>
+
+        <div class="catalog-barcode-row">
+            <div class="catalog-barcode-box">
+                <i class="bi bi-upc-scan"></i>
+                <input @bind="_barcodeValue"
+                       @bind:event="oninput"
+                       @onkeydown="HandleBarcodeKeyDown"
+                       placeholder="Scan barcode or type SKU, then press Enter" />
+            </div>
+
+            <button type="button"
+                    class="catalog-primary-btn"
+                    disabled="@_barcodeScanning"
+                    @onclick="ScanBarcodeAsync">
+                <i class="bi bi-upc"></i>
+                @(_barcodeScanning ? "Checking..." : "Find Item")
+            </button>
         </div>
 
         <div class="catalog-control-panel">
@@ -1495,6 +1514,14 @@
                 width: 100%;
             }
 
+        .catalog-barcode-row {
+            grid-template-columns: 1fr;
+        }
+
+            .catalog-barcode-row button {
+                width: 100%;
+            }
+
         .catalog-settings-strip,
         .catalog-summary-grid,
         .catalog-control-panel,
@@ -1524,6 +1551,45 @@
                 width: 100%;
             }
     }
+
+    .catalog-barcode-row {
+        display: grid;
+        grid-template-columns: minmax(240px, 1fr) auto;
+        gap: 10px;
+        padding: 14px;
+        margin-bottom: 16px;
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+    }
+
+    .catalog-barcode-box {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 13px;
+        border-radius: 14px;
+        background: #ecfdf5;
+        border: 1px solid #bbf7d0;
+        color: #15803d;
+    }
+
+        .catalog-barcode-box input {
+            width: 100%;
+            border: 0;
+            outline: none;
+            background: transparent;
+            color: #0f172a;
+            font-size: .9rem;
+            font-weight: 650;
+        }
+
+            .catalog-barcode-box input::placeholder {
+                color: #64748b;
+                font-weight: 500;
+            }
 </style>
 
 @code {
@@ -1535,6 +1601,8 @@
     private bool _loading = true;
     private string? _searchTerm;
     private string _statusFilter = "all";
+    private string? _barcodeValue;
+    private bool _barcodeScanning;
     private string? _message;
     private bool _isSuccess;
     private bool _showModal;
@@ -1643,6 +1711,43 @@
         _loading = true;
         _products = await ProductService.GetProductsAsync(_searchTerm);
         _loading = false;
+    }
+
+    private async Task HandleBarcodeKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ScanBarcodeAsync();
+        }
+    }
+
+    private async Task ScanBarcodeAsync()
+    {
+        var code = _barcodeValue?.Trim();
+
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            ShowMessage("Scan or type a barcode/SKU first.", false);
+            return;
+        }
+
+        _barcodeScanning = true;
+
+        _searchTerm = code;
+        _statusFilter = "all";
+
+        await LoadProducts();
+
+        _barcodeScanning = false;
+
+        if (VisibleProducts.Count == 0)
+        {
+            ShowMessage($"No item found for barcode or SKU: {code}", false);
+            return;
+        }
+
+        ShowMessage($"{VisibleProducts.Count} item found for: {code}", true);
+        _barcodeValue = null;
     }
 
     private async Task LoadCategories()
@@ -1768,6 +1873,7 @@
     private async Task ClearFilters()
     {
         _searchTerm = null;
+        _barcodeValue = null;
         _statusFilter = "all";
         await LoadProducts();
     }
