@@ -50,6 +50,7 @@ builder.Services.Configure<EmailSettings>(
 
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<DocumentEmailService>();
+builder.Services.AddScoped<CustomerStatementService>();
 
 var app = builder.Build();
 

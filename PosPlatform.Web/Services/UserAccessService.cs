@@ -73,6 +73,7 @@ namespace PosPlatform.Web.Services
                 "audit-trail" => role is "Owner" or "Admin" or "Manager",
                 "quotes" => role is "Sales User" or "Manager" or "Accounting User",
                 "invoices" => role is "Sales User" or "Manager" or "Accounting User",
+                "customer-statements" => role is "Sales User" or "Manager" or "Accounting User",
                 "users" => false,
                 "settings" => false,
 
