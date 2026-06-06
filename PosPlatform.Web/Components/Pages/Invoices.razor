@@ -12,6 +12,7 @@
 @inject BusinessSettingsService BusinessSettingsService
 @inject UserAccessService UserAccessService
 @inject NavigationManager NavigationManager
+@inject DocumentEmailService DocumentEmailService
 
 <PageTitle>Invoices</PageTitle>
 
@@ -158,6 +159,9 @@
                                     <button type="button" class="invoices-mini-btn" @onclick="() => PrintInvoice(invoice.Id)">
                                         Print
                                     </button>
+                                    <button type="button" class="invoices-mini-btn" @onclick="() => SendInvoiceEmailAsync(invoice.Id)">
+                                        Email
+                                    </button>
                                 </td>
                             </tr>
                         }
@@ -217,6 +221,10 @@
                 <button type="button" class="invoices-secondary-btn full" @onclick="() => PrintInvoice(_selectedInvoice.Id)">
                     <i class="bi bi-printer"></i>
                     Print Invoice
+                </button>
+                <button type="button" class="invoices-secondary-btn full" @onclick="() => SendInvoiceEmailAsync(_selectedInvoice.Id)">
+                    <i class="bi bi-envelope"></i>
+                    Email Invoice
                 </button>
             </div>
 
@@ -1090,5 +1098,20 @@
     private void PrintInvoice(int invoiceId)
     {
         NavigationManager.NavigateTo($"/invoices/print/{invoiceId}");
+    }
+    private async Task SendInvoiceEmailAsync(int invoiceId)
+    {
+        var result = await DocumentEmailService.SendInvoiceEmailAsync(invoiceId);
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            await LoadInvoicesAsync();
+
+            if (_selectedInvoice?.Id == invoiceId)
+            {
+                _selectedInvoice = await InvoiceService.GetInvoiceDetailsAsync(invoiceId);
+            }
+        }
     }
 }

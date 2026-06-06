@@ -6,6 +6,7 @@ using PosPlatform.Web.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using PosPlatform.Domain.Entities;
+using PosPlatform.Web.Models.Email;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,6 +45,11 @@ builder.Services.AddScoped<StockTransferService>();
 builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<QuoteService>();
 builder.Services.AddScoped<InvoiceService>();
+builder.Services.Configure<EmailSettings>(
+    builder.Configuration.GetSection("EmailSettings"));
+
+builder.Services.AddScoped<EmailService>();
+builder.Services.AddScoped<DocumentEmailService>();
 
 var app = builder.Build();
 

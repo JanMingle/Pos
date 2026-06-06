@@ -13,6 +13,7 @@
 @inject BusinessSettingsService BusinessSettingsService
 @inject UserAccessService UserAccessService
 @inject NavigationManager NavigationManager
+@inject DocumentEmailService DocumentEmailService
 
 <PageTitle>Quotes</PageTitle>
 
@@ -403,6 +404,11 @@
                 <button type="button" class="quotes-secondary-btn full" @onclick="() => PrintQuote(_selectedQuote.Id)">
                     <i class="bi bi-printer"></i>
                     Print Quote
+                </button>
+
+                <button type="button" class="quotes-secondary-btn full" @onclick="() => SendQuoteEmailAsync(_selectedQuote.Id)">
+                    <i class="bi bi-envelope"></i>
+                    Email Quote
                 </button>
             </div>
 
@@ -1502,5 +1508,20 @@
     private void PrintQuote(int quoteId)
     {
         NavigationManager.NavigateTo($"/quotes/print/{quoteId}");
+    }
+    private async Task SendQuoteEmailAsync(int quoteId)
+    {
+        var result = await DocumentEmailService.SendQuoteEmailAsync(quoteId);
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            await LoadQuotesAsync();
+
+            if (_selectedQuote?.Id == quoteId)
+            {
+                _selectedQuote = await QuoteService.GetQuoteDetailsAsync(quoteId);
+            }
+        }
     }
 }
