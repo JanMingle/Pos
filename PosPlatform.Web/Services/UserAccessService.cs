@@ -74,6 +74,9 @@ namespace PosPlatform.Web.Services
                 "quotes" => role is "Sales User" or "Manager" or "Accounting User",
                 "invoices" => role is "Sales User" or "Manager" or "Accounting User",
                 "customer-statements" => role is "Sales User" or "Manager" or "Accounting User",
+                "overdue-invoices" => role is "Sales User" or "Manager" or "Accounting User",
+                "invoice-follow-ups" => role is "Sales User" or "Manager" or "Accounting User",
+                "product-variants" => role is "Inventory User" or "Manager",
                 "users" => false,
                 "settings" => false,
 

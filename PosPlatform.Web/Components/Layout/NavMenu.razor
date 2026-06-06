@@ -19,7 +19,7 @@
             <span class="pos-nav-text">Dashboard</span>
         </NavLink>
 
-        @if (_canProducts || _canBarcodeLabels || _canStock || _canSales || _canQuotes || _canInvoices || _canCustomers || _canCustomerStatements || _canBranches)
+        @if (_canProducts || _canBarcodeLabels || _canStock || _canSales || _canQuotes || _canInvoices || _canOverdueInvoices || _canInvoiceFollowUps || _canCustomers || _canCustomerStatements || _canBranches)
         {
             <div class="pos-nav-section">Operations</div>
         }
@@ -85,6 +85,22 @@
             <NavLink href="/invoices" class="pos-nav-link">
                 <span class="pos-nav-icon"><i class="bi bi-receipt"></i></span>
                 <span class="pos-nav-text">Invoices</span>
+            </NavLink>
+        }
+
+        @if (_canOverdueInvoices)
+        {
+            <NavLink href="/overdue-invoices" class="pos-nav-link">
+                <span class="pos-nav-icon"><i class="bi bi-exclamation-octagon"></i></span>
+                <span class="pos-nav-text">Overdue Invoices</span>
+            </NavLink>
+        }
+
+        @if (_canInvoiceFollowUps)
+        {
+            <NavLink href="/invoice-follow-ups" class="pos-nav-link">
+                <span class="pos-nav-icon"><i class="bi bi-calendar-check"></i></span>
+                <span class="pos-nav-text">Invoice Follow-ups</span>
             </NavLink>
         }
 
@@ -207,6 +223,8 @@
     private bool _canQuotes;
     private bool _canInvoices;
     private bool _canCustomerStatements;
+    private bool _canOverdueInvoices;
+    private bool _canInvoiceFollowUps;
 
     protected override async Task OnInitializedAsync()
     {
@@ -230,5 +248,7 @@
         _canQuotes = await UserAccessService.CanAccessAsync("quotes");
         _canInvoices = await UserAccessService.CanAccessAsync("invoices");
         _canCustomerStatements = await UserAccessService.CanAccessAsync("customer-statements");
+        _canOverdueInvoices = await UserAccessService.CanAccessAsync("overdue-invoices");
+        _canInvoiceFollowUps = await UserAccessService.CanAccessAsync("invoice-follow-ups");
     }
 }

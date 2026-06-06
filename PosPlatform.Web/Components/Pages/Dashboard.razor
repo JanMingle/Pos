@@ -9,6 +9,7 @@
 @using PosPlatform.Web.Services
 @inject DashboardService DashboardService
 @inject BusinessSettingsService BusinessSettingsService
+@using PosPlatform.Web.Components.Shared
 
 <PageTitle>Dashboard</PageTitle>
 
@@ -23,6 +24,8 @@
             <h1>@Greeting, @_settings.BusinessName</h1>
             <p>Today’s business health, cashier status, low stock alerts and recent activity in one place.</p>
 
+            <QuoteInvoiceDashboardCards />
+            
             <div class="dash-branch-badge">
                 <i class="bi bi-shop"></i>
                 Showing: @_dashboard.SelectedBranchName

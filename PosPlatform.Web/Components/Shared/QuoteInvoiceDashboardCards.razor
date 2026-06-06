@@ -1,0 +1,243 @@
+﻿@using PosPlatform.Web.Models.Dashboard
+@using PosPlatform.Web.Services
+@inject QuoteInvoiceDashboardService QuoteInvoiceDashboardService
+@inject NavigationManager NavigationManager
+
+@if (_loading)
+{
+    <div class="qi-dashboard-card qi-loading">
+        <span>Loading finance snapshot...</span>
+    </div>
+}
+else
+{
+    <section class="qi-dashboard-section">
+        <div class="qi-dashboard-header">
+            <div>
+                <span>Finance snapshot</span>
+                <h2>Quotes & Invoices</h2>
+                <p>Last 30 days, plus current outstanding balances.</p>
+            </div>
+
+            <div class="qi-dashboard-actions">
+                <button type="button" @onclick="GoToQuotes">Quotes</button>
+                <button type="button" @onclick="GoToInvoices">Invoices</button>
+            </div>
+        </div>
+
+        <div class="qi-dashboard-grid">
+            <button type="button" class="qi-dashboard-card" @onclick="GoToQuotes">
+                <span>Quote Value</span>
+                <strong>@Money(_data.QuoteValue)</strong>
+                <p>@_data.QuoteCount quote(s), @_data.AcceptedQuoteCount accepted</p>
+            </button>
+
+            <button type="button" class="qi-dashboard-card" @onclick="GoToInvoices">
+                <span>Invoice Value</span>
+                <strong>@Money(_data.InvoiceValue)</strong>
+                <p>@_data.InvoiceCount invoice(s) in period</p>
+            </button>
+
+            <button type="button" class="qi-dashboard-card warning" @onclick="GoToInvoices">
+                <span>Outstanding Balance</span>
+                <strong>@Money(_data.OutstandingBalance)</strong>
+                <p>@_data.UnpaidInvoiceCount unpaid, @_data.PartiallyPaidInvoiceCount partial</p>
+            </button>
+
+            <button type="button" class="qi-dashboard-card danger" @onclick="GoToOverdue">
+                <span>Overdue Balance</span>
+                <strong>@Money(_data.OverdueBalance)</strong>
+                <p>@_data.OverdueInvoiceCount overdue invoice(s)</p>
+            </button>
+
+            <button type="button" class="qi-dashboard-card success" @onclick="GoToInvoices">
+                <span>Payments This Month</span>
+                <strong>@Money(_data.PaymentsReceivedThisMonth)</strong>
+                <p>@_data.PaidInvoiceCount paid invoice(s) in period</p>
+            </button>
+        </div>
+    </section>
+}
+
+<style>
+    .qi-dashboard-section {
+        margin-bottom: 18px;
+        animation: qiIn .22s ease both;
+    }
+
+    .qi-dashboard-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 16px;
+        margin-bottom: 12px;
+    }
+
+        .qi-dashboard-header span {
+            display: block;
+            color: #2563eb;
+            font-size: .72rem;
+            font-weight: 750;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .qi-dashboard-header h2 {
+            margin: 0;
+            color: #0f172a;
+            font-size: 1rem;
+            font-weight: 720;
+        }
+
+        .qi-dashboard-header p {
+            margin: 4px 0 0;
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+    .qi-dashboard-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+        .qi-dashboard-actions button {
+            min-height: 34px;
+            border-radius: 10px;
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            color: #334155;
+            padding: 0 12px;
+            font-size: .78rem;
+            font-weight: 650;
+        }
+
+    .qi-dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .qi-dashboard-card {
+        text-align: left;
+        border: 1px solid #e7edf5;
+        background: #fff;
+        border-radius: 18px;
+        padding: 14px;
+        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+        min-height: 112px;
+        cursor: pointer;
+    }
+
+        .qi-dashboard-card span {
+            display: block;
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 680;
+        }
+
+        .qi-dashboard-card strong {
+            display: block;
+            margin-top: 7px;
+            color: #0f172a;
+            font-size: 1.05rem;
+            font-weight: 760;
+        }
+
+        .qi-dashboard-card p {
+            margin: 6px 0 0;
+            color: #94a3b8;
+            font-size: .74rem;
+            line-height: 1.35;
+        }
+
+        .qi-dashboard-card.warning strong {
+            color: #d97706;
+        }
+
+        .qi-dashboard-card.danger strong {
+            color: #dc2626;
+        }
+
+        .qi-dashboard-card.success strong {
+            color: #15803d;
+        }
+
+    .qi-loading {
+        margin-bottom: 18px;
+        color: #64748b;
+        font-size: .84rem;
+    }
+
+    @@keyframes qiIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width: 1199px) {
+        .qi-dashboard-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .qi-dashboard-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+
+    @@media (max-width: 640px) {
+        .qi-dashboard-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .qi-dashboard-actions {
+            width: 100%;
+        }
+
+            .qi-dashboard-actions button {
+                width: 100%;
+            }
+    }
+</style>
+
+@code {
+    private QuoteInvoiceDashboardViewModel _data = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _data = await QuoteInvoiceDashboardService.GetDashboardAsync();
+        _loading = false;
+    }
+
+    private string Money(decimal value)
+    {
+        var symbol = string.IsNullOrWhiteSpace(_data.CurrencySymbol)
+            ? "R"
+            : _data.CurrencySymbol;
+
+        return $"{symbol} {value:0.00}";
+    }
+
+    private void GoToQuotes()
+    {
+        NavigationManager.NavigateTo("/quotes");
+    }
+
+    private void GoToInvoices()
+    {
+        NavigationManager.NavigateTo("/invoices");
+    }
+
+    private void GoToOverdue()
+    {
+        NavigationManager.NavigateTo("/overdue-invoices");
+    }
+}

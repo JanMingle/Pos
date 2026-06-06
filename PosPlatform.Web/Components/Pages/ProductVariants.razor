@@ -1,0 +1,781 @@
+﻿@page "/product-variants/{ProductId:int}"
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@layout MainLayout
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using PosPlatform.Web.Components.Layout
+@using PosPlatform.Web.Models.Products
+@using PosPlatform.Web.Services
+@inject ProductVariantService ProductVariantService
+@inject UserAccessService UserAccessService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Product Variants</PageTitle>
+
+<section class="variants-page">
+    <div class="variants-header">
+        <div>
+            <div class="variants-kicker">
+                <i class="bi bi-layers"></i>
+                Product setup
+            </div>
+            <h1>Product Variants</h1>
+            <p>@_productName</p>
+        </div>
+
+        <div class="variants-header-actions">
+            <button type="button" class="variants-secondary-btn" @onclick="BackToProducts">
+                <i class="bi bi-arrow-left"></i>
+                Back
+            </button>
+
+            <button type="button" class="variants-primary-btn" @onclick="OpenCreate">
+                <i class="bi bi-plus-circle"></i>
+                Add Variant
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="variants-alert @(_isSuccess ? "success" : "danger")">
+            <i class="bi @(_isSuccess ? "bi-check-circle" : "bi-exclamation-triangle")"></i>
+            <span>@_message</span>
+            <button type="button" @onclick="ClearMessage">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    }
+
+    <div class="variants-summary-grid">
+        <div>
+            <span>Total Variants</span>
+            <strong>@_variants.Count</strong>
+            <p>All variants linked to product</p>
+        </div>
+
+        <div>
+            <span>Active Variants</span>
+            <strong>@_variants.Count(x => x.IsActive)</strong>
+            <p>Available for future selling</p>
+        </div>
+
+        <div>
+            <span>Total Variant Stock</span>
+            <strong>@_variants.Sum(x => x.QuantityInStock)</strong>
+            <p>Combined variant quantity</p>
+        </div>
+
+        <div>
+            <span>Low Stock Variants</span>
+            <strong>@_variants.Count(x => x.QuantityInStock <= x.ReorderLevel)</strong>
+            <p>Needs attention</p>
+        </div>
+    </div>
+
+    <div class="variants-table-card">
+        <div class="variants-table-header">
+            <div>
+                <h2>Variant List</h2>
+                <p>Manage size, color, SKU, barcode, price and stock per variant.</p>
+            </div>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="variants-empty">
+                <strong>Loading variants...</strong>
+                <span>Please wait.</span>
+            </div>
+        }
+        else if (_variants.Count == 0)
+        {
+            <div class="variants-empty">
+                <strong>No variants yet</strong>
+                <span>Add sizes, colors or other product options here.</span>
+            </div>
+        }
+        else
+        {
+            <div class="variants-table-wrap">
+                <table class="variants-table">
+                    <thead>
+                        <tr>
+                            <th>Variant</th>
+                            <th>Size</th>
+                            <th>Color</th>
+                            <th>SKU</th>
+                            <th>Barcode</th>
+                            <th>Cost</th>
+                            <th>Price</th>
+                            <th>Stock</th>
+                            <th>Status</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var variant in _variants)
+                        {
+                            <tr>
+                                <td><strong>@variant.VariantName</strong></td>
+                                <td>@(variant.Size ?? "-")</td>
+                                <td>@(variant.Color ?? "-")</td>
+                                <td>@variant.SKU</td>
+                                <td>@(variant.Barcode ?? "-")</td>
+                                <td>@Money(variant.CostPrice)</td>
+                                <td class="variants-money">@Money(variant.SellingPrice)</td>
+                                <td>
+                                    <span class="@GetStockClass(variant)">
+                                        @variant.QuantityInStock
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="variants-pill @(variant.IsActive ? "active" : "inactive")">
+                                        @(variant.IsActive ? "Active" : "Inactive")
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <button type="button" class="variants-mini-btn" @onclick="() => EditVariantAsync(variant.Id)">
+                                        Edit
+                                    </button>
+
+                                    <button type="button" class="variants-danger-mini-btn" @onclick="() => DeleteVariantAsync(variant.Id)">
+                                        Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>
+
+@if (_showModal)
+{
+    <div class="variants-modal-backdrop">
+        <div class="variants-modal">
+            <div class="variants-modal-header">
+                <div>
+                    <span>@(_form.Id == 0 ? "New Variant" : "Edit Variant")</span>
+                    <h4>@_productName</h4>
+                    <p>Capture the variant options and stock details.</p>
+                </div>
+
+                <button type="button" class="variants-close-btn" @onclick="CloseModal">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div class="variants-form-grid">
+                <div>
+                    <label>Variant Name</label>
+                    <input @bind="_form.VariantName" placeholder="Example: Black / Large" />
+                </div>
+
+                <div>
+                    <label>SKU</label>
+                    <input @bind="_form.SKU" placeholder="Unique variant SKU" />
+                </div>
+
+                <div>
+                    <label>Size</label>
+                    <input @bind="_form.Size" placeholder="Example: S, M, L, XL" />
+                </div>
+
+                <div>
+                    <label>Color</label>
+                    <input @bind="_form.Color" placeholder="Example: Black" />
+                </div>
+
+                <div>
+                    <label>Barcode</label>
+                    <input @bind="_form.Barcode" placeholder="Optional barcode" />
+                </div>
+
+                <div>
+                    <label>Status</label>
+                    <select @bind="_form.IsActive">
+                        <option value="true">Active</option>
+                        <option value="false">Inactive</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Cost Price</label>
+                    <input type="number" min="0" step="0.01" @bind="_form.CostPrice" />
+                </div>
+
+                <div>
+                    <label>Selling Price</label>
+                    <input type="number" min="0" step="0.01" @bind="_form.SellingPrice" />
+                </div>
+
+                <div>
+                    <label>Quantity In Stock</label>
+                    <input type="number" min="0" step="0.01" @bind="_form.QuantityInStock" />
+                </div>
+
+                <div>
+                    <label>Reorder Level</label>
+                    <input type="number" min="0" step="0.01" @bind="_form.ReorderLevel" />
+                </div>
+            </div>
+
+            <button type="button" class="variants-primary-btn full mt" disabled="@_saving" @onclick="SaveVariantAsync">
+                <i class="bi bi-check-circle"></i>
+                @(_saving ? "Saving..." : "Save Variant")
+            </button>
+        </div>
+    </div>
+}
+
+<style>
+    .variants-page {
+        animation: variantsIn .22s ease both;
+    }
+
+    .variants-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        align-items: flex-end;
+        margin-bottom: 18px;
+    }
+
+    .variants-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 750;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+
+    .variants-header h1 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 1.45rem;
+        font-weight: 680;
+        letter-spacing: -.03em;
+    }
+
+    .variants-header p {
+        margin: 6px 0 0;
+        color: #64748b;
+        font-size: .88rem;
+    }
+
+    .variants-header-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .variants-primary-btn,
+    .variants-secondary-btn,
+    .variants-mini-btn,
+    .variants-danger-mini-btn {
+        min-height: 38px;
+        border-radius: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 650;
+        border: 0;
+        white-space: nowrap;
+    }
+
+    .variants-primary-btn {
+        color: #fff;
+        background: #111827;
+        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+    }
+
+        .variants-primary-btn:disabled {
+            opacity: .55;
+            cursor: not-allowed;
+        }
+
+    .variants-secondary-btn {
+        color: #2563eb;
+        background: #eef5ff;
+    }
+
+    .variants-mini-btn {
+        min-height: 30px;
+        color: #2563eb;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        padding: 0 10px;
+    }
+
+    .variants-danger-mini-btn {
+        min-height: 30px;
+        color: #dc2626;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        padding: 0 10px;
+    }
+
+    .variants-alert {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        font-size: .84rem;
+        font-weight: 600;
+        border: 1px solid;
+    }
+
+        .variants-alert.success {
+            color: #166534;
+            background: #f0fdf4;
+            border-color: #bbf7d0;
+        }
+
+        .variants-alert.danger {
+            color: #991b1b;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+        .variants-alert span {
+            flex: 1;
+        }
+
+        .variants-alert button {
+            border: 0;
+            background: transparent;
+            color: inherit;
+        }
+
+    .variants-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+        .variants-summary-grid div,
+        .variants-table-card {
+            border-radius: 20px;
+            background: #fff;
+            border: 1px solid #e7edf5;
+            box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        }
+
+        .variants-summary-grid div {
+            padding: 14px;
+        }
+
+        .variants-summary-grid span {
+            display: block;
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .variants-summary-grid strong {
+            display: block;
+            margin-top: 5px;
+            color: #0f172a;
+            font-size: 1rem;
+            font-weight: 760;
+        }
+
+        .variants-summary-grid p {
+            margin: 4px 0 0;
+            color: #94a3b8;
+            font-size: .74rem;
+        }
+
+    .variants-table-card {
+        overflow: hidden;
+    }
+
+    .variants-table-header {
+        padding: 17px 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .variants-table-header h2 {
+            margin: 0;
+            color: #0f172a;
+            font-size: .92rem;
+            font-weight: 720;
+        }
+
+        .variants-table-header p {
+            margin: 4px 0 0;
+            color: #94a3b8;
+            font-size: .76rem;
+        }
+
+    .variants-table-wrap {
+        overflow-x: auto;
+    }
+
+    .variants-table {
+        width: 100%;
+        min-width: 1080px;
+        border-collapse: collapse;
+    }
+
+        .variants-table th {
+            padding: 12px 16px;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: .7rem;
+            font-weight: 750;
+            text-transform: uppercase;
+            border-bottom: 1px solid #e7edf5;
+            white-space: nowrap;
+        }
+
+        .variants-table td {
+            padding: 14px 16px;
+            color: #334155;
+            font-size: .82rem;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+
+    .variants-money {
+        color: #0f172a;
+        font-weight: 760;
+    }
+
+    .variants-pill,
+    .variants-stock-ok,
+    .variants-stock-low {
+        display: inline-flex;
+        min-height: 27px;
+        align-items: center;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 750;
+    }
+
+        .variants-pill.active {
+            color: #15803d;
+            background: #ecfdf5;
+        }
+
+        .variants-pill.inactive {
+            color: #64748b;
+            background: #f1f5f9;
+        }
+
+    .variants-stock-ok {
+        color: #15803d;
+        background: #ecfdf5;
+    }
+
+    .variants-stock-low {
+        color: #dc2626;
+        background: #fef2f2;
+    }
+
+    .variants-empty {
+        margin: 18px;
+        padding: 34px 20px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px dashed #dbe3ef;
+        text-align: center;
+    }
+
+        .variants-empty strong,
+        .variants-empty span {
+            display: block;
+        }
+
+        .variants-empty strong {
+            color: #0f172a;
+            font-size: .9rem;
+        }
+
+        .variants-empty span {
+            margin-top: 4px;
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+    .variants-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1050;
+        padding: 20px;
+        background: rgba(15, 23, 42, .44);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .variants-modal {
+        width: 100%;
+        max-width: 780px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+        padding: 22px;
+        border-radius: 22px;
+        background: #fff;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, .24);
+    }
+
+    .variants-modal-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding-bottom: 16px;
+        margin-bottom: 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .variants-modal-header span {
+            color: #2563eb;
+            font-size: .72rem;
+            font-weight: 750;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+        .variants-modal-header h4 {
+            margin: 3px 0 0;
+            color: #0f172a;
+            font-size: 1.05rem;
+            font-weight: 720;
+        }
+
+        .variants-modal-header p {
+            margin: 5px 0 0;
+            color: #64748b;
+            font-size: .84rem;
+        }
+
+    .variants-close-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        color: #64748b;
+    }
+
+    .variants-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+        .variants-form-grid label {
+            display: block;
+            margin-bottom: 5px;
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .variants-form-grid input,
+        .variants-form-grid select {
+            width: 100%;
+            min-height: 40px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            color: #0f172a;
+            padding: 0 12px;
+            font-size: .84rem;
+            outline: none;
+        }
+
+    .full {
+        width: 100%;
+    }
+
+    .mt {
+        margin-top: 14px;
+    }
+
+    @@keyframes variantsIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width: 1199px) {
+        .variants-header,
+        .variants-header-actions {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .variants-summary-grid,
+        .variants-form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .variants-header-actions,
+        .variants-header-actions button {
+            width: 100%;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public int ProductId { get; set; }
+
+    private string _productName = "Product";
+    private List<ProductVariantViewModel> _variants = new();
+
+    private bool _loading = true;
+    private bool _saving;
+    private bool _showModal;
+
+    private ProductVariantFormModel _form = new();
+
+    private string? _message;
+    private bool _isSuccess;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserAccessService.CanAccessAsync("product-variants"))
+        {
+            NavigationManager.NavigateTo("/dashboard");
+            return;
+        }
+
+        var header = await ProductVariantService.GetProductHeaderAsync(ProductId);
+
+        if (!header.Success)
+        {
+            _message = header.Message;
+            _isSuccess = false;
+            _loading = false;
+            return;
+        }
+
+        _productName = header.ProductName;
+        await LoadVariantsAsync();
+    }
+
+    private async Task LoadVariantsAsync()
+    {
+        _loading = true;
+        _variants = await ProductVariantService.GetVariantsAsync(ProductId);
+        _loading = false;
+    }
+
+    private void OpenCreate()
+    {
+        _form = new ProductVariantFormModel
+        {
+            ProductId = ProductId,
+            VariantName = "",
+            SKU = "",
+            IsActive = true
+        };
+
+        _showModal = true;
+    }
+
+    private async Task EditVariantAsync(int id)
+    {
+        var model = await ProductVariantService.GetVariantForEditAsync(id);
+
+        if (model == null)
+        {
+            ShowMessage("Variant could not be loaded.", false);
+            return;
+        }
+
+        _form = model;
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+    }
+
+    private async Task SaveVariantAsync()
+    {
+        if (_saving)
+        {
+            return;
+        }
+
+        _saving = true;
+
+        var result = await ProductVariantService.SaveVariantAsync(_form);
+
+        _saving = false;
+
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            _showModal = false;
+            await LoadVariantsAsync();
+        }
+    }
+
+    private async Task DeleteVariantAsync(int id)
+    {
+        var result = await ProductVariantService.DeleteVariantAsync(id);
+
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            await LoadVariantsAsync();
+        }
+    }
+
+    private void BackToProducts()
+    {
+        NavigationManager.NavigateTo("/products");
+    }
+
+    private string Money(decimal value)
+    {
+        return $"R {value:0.00}";
+    }
+
+    private string GetStockClass(ProductVariantViewModel variant)
+    {
+        return variant.QuantityInStock <= variant.ReorderLevel
+            ? "variants-stock-low"
+            : "variants-stock-ok";
+    }
+
+    private void ShowMessage(string message, bool success)
+    {
+        _message = message;
+        _isSuccess = success;
+    }
+
+    private void ClearMessage()
+    {
+        _message = null;
+    }
+}

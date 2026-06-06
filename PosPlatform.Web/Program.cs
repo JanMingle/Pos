@@ -51,6 +51,10 @@ builder.Services.Configure<EmailSettings>(
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<DocumentEmailService>();
 builder.Services.AddScoped<CustomerStatementService>();
+builder.Services.AddScoped<OverdueInvoiceService>();
+builder.Services.AddScoped<QuoteInvoiceDashboardService>();
+builder.Services.AddScoped<InvoiceFollowUpService>();
+builder.Services.AddScoped<ProductVariantService>();
 
 var app = builder.Build();
 

@@ -39,6 +39,12 @@
         public string? Terms { get; set; }
 
         public int CreatedByUserId { get; set; }
+
+        public string FollowUpStatus { get; set; } = "Not Started";
+        public DateTime? LastFollowUpAt { get; set; }
+        public DateTime? NextFollowUpDate { get; set; }
+        public string? FollowUpNotes { get; set; }
+        public int FollowUpCount { get; set; }
         public ApplicationUser? CreatedByUser { get; set; }
 
         public string CreatedByName { get; set; } = string.Empty;
@@ -48,5 +54,7 @@
 
         public ICollection<InvoiceItem> InvoiceItems { get; set; } = new List<InvoiceItem>();
         public ICollection<InvoicePayment> Payments { get; set; } = new List<InvoicePayment>();
+
+
     }
 }

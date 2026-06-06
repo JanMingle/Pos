@@ -30,5 +30,6 @@ namespace PosPlatform.Domain.Entities
         public string? UnitOfMeasure { get; set; } = "Each";
 
         public int? DurationMinutes { get; set; }
+        public ICollection<ProductVariant> Variants { get; set; } = new List<ProductVariant>();
     }
 }

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PosPlatform.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using PosPlatform.Infrastructure.Data;
 namespace PosPlatform.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260606113407_AddInvoiceFollowUpTracking")]
+    partial class AddInvoiceFollowUpTracking
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1256,81 +1259,6 @@ namespace PosPlatform.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("ProductCategories", (string)null);
-                });
-
-            modelBuilder.Entity("PosPlatform.Domain.Entities.ProductVariant", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Barcode")
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
-                    b.Property<int?>("BranchId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Color")
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
-                    b.Property<decimal>("CostPrice")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("ProductId")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("QuantityInStock")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("ReorderLevel")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("SKU")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
-                    b.Property<decimal>("SellingPrice")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("Size")
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
-                    b.Property<int>("TenantId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("VariantName")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BranchId");
-
-                    b.HasIndex("ProductId");
-
-                    b.HasIndex("TenantId", "ProductId");
-
-                    b.HasIndex("TenantId", "BranchId", "SKU")
-                        .IsUnique()
-                        .HasFilter("[BranchId] IS NOT NULL");
-
-                    b.ToTable("ProductVariants", (string)null);
                 });
 
             modelBuilder.Entity("PosPlatform.Domain.Entities.Quote", b =>
@@ -2731,32 +2659,6 @@ namespace PosPlatform.Infrastructure.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("PosPlatform.Domain.Entities.ProductVariant", b =>
-                {
-                    b.HasOne("PosPlatform.Domain.Entities.Branch", "Branch")
-                        .WithMany()
-                        .HasForeignKey("BranchId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("PosPlatform.Domain.Entities.Product", "Product")
-                        .WithMany("Variants")
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("PosPlatform.Domain.Entities.Tenant", "Tenant")
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Branch");
-
-                    b.Navigation("Product");
-
-                    b.Navigation("Tenant");
-                });
-
             modelBuilder.Entity("PosPlatform.Domain.Entities.Quote", b =>
                 {
                     b.HasOne("PosPlatform.Domain.Entities.Branch", "Branch")
@@ -3173,11 +3075,6 @@ namespace PosPlatform.Infrastructure.Migrations
             modelBuilder.Entity("PosPlatform.Domain.Entities.Permission", b =>
                 {
                     b.Navigation("RolePermissions");
-                });
-
-            modelBuilder.Entity("PosPlatform.Domain.Entities.Product", b =>
-                {
-                    b.Navigation("Variants");
                 });
 
             modelBuilder.Entity("PosPlatform.Domain.Entities.ProductCategory", b =>

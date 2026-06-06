@@ -64,6 +64,8 @@ namespace PosPlatform.Infrastructure.Data
 
         public DbSet<InvoicePayment> InvoicePayments => Set<InvoicePayment>();
 
+        public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
+
 
 
         protected override void OnModelCreating(ModelBuilder builder)
@@ -303,7 +305,61 @@ namespace PosPlatform.Infrastructure.Data
       .OnDelete(DeleteBehavior.Restrict);
             });
 
-           
+            builder.Entity<ProductVariant>(entity =>
+            {
+                entity.ToTable("ProductVariants");
+
+                entity.Property(x => x.VariantName)
+                    .HasMaxLength(150)
+                    .IsRequired();
+
+                entity.Property(x => x.Size)
+                    .HasMaxLength(80);
+
+                entity.Property(x => x.Color)
+                    .HasMaxLength(80);
+
+                entity.Property(x => x.SKU)
+                    .HasMaxLength(80)
+                    .IsRequired();
+
+                entity.Property(x => x.Barcode)
+                    .HasMaxLength(80);
+
+                entity.Property(x => x.CostPrice)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.SellingPrice)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.QuantityInStock)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.Property(x => x.ReorderLevel)
+                    .HasColumnType("decimal(18,2)");
+
+                entity.HasIndex(x => new { x.TenantId, x.BranchId, x.SKU })
+                    .IsUnique();
+
+                entity.HasIndex(x => new { x.TenantId, x.ProductId });
+
+                entity.HasOne(x => x.Tenant)
+                    .WithMany()
+                    .HasForeignKey(x => x.TenantId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Branch)
+                    .WithMany()
+                    .HasForeignKey(x => x.BranchId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.Product)
+                    .WithMany(x => x.Variants)
+                    .HasForeignKey(x => x.ProductId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+
             builder.Entity<SaleItem>(entity =>
             {
                 entity.ToTable("SaleItems");
@@ -405,6 +461,7 @@ namespace PosPlatform.Infrastructure.Data
                 entity.Property(x => x.Status)
                       .HasMaxLength(40)
                       .IsRequired();
+
 
                 entity.HasIndex(x => new { x.TenantId, x.SaleNumber }).IsUnique();
 
@@ -1092,6 +1149,8 @@ namespace PosPlatform.Infrastructure.Data
                 entity.Property(x => x.Terms)
                     .HasMaxLength(800);
 
+              
+
                 entity.Property(x => x.CreatedByName)
                     .HasMaxLength(150)
                     .IsRequired();
@@ -1196,6 +1255,14 @@ namespace PosPlatform.Infrastructure.Data
                     .HasMaxLength(500);
 
                 entity.Property(x => x.Terms)
+                    .HasMaxLength(800);
+
+                entity.Property(x => x.FollowUpStatus)
+    .HasMaxLength(50)
+    .HasDefaultValue("Not Started")
+    .IsRequired();
+
+                entity.Property(x => x.FollowUpNotes)
                     .HasMaxLength(800);
 
                 entity.Property(x => x.CreatedByName)
@@ -1333,6 +1400,8 @@ namespace PosPlatform.Infrastructure.Data
                     .HasForeignKey(x => x.ReceivedByUserId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
+
+
 
         }
     }

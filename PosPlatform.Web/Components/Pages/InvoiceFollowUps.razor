@@ -1,0 +1,873 @@
+﻿@page "/invoice-follow-ups"
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@layout MainLayout
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using PosPlatform.Web.Components.Layout
+@using PosPlatform.Web.Models.Invoices
+@using PosPlatform.Web.Models.Settings
+@using PosPlatform.Web.Services
+@inject InvoiceFollowUpService InvoiceFollowUpService
+@inject InvoiceService InvoiceService
+@inject BusinessSettingsService BusinessSettingsService
+@inject UserAccessService UserAccessService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Invoice Follow-ups</PageTitle>
+
+<section class="follow-page">
+    <div class="follow-header">
+        <div>
+            <div class="follow-kicker">
+                <i class="bi bi-calendar-check"></i>
+                Collection reminders
+            </div>
+            <h1>Invoice Follow-ups</h1>
+            <p>Track customer follow-ups for unpaid and partially paid invoices.</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="follow-alert @(_isSuccess ? "success" : "danger")">
+            <i class="bi @(_isSuccess ? "bi-check-circle" : "bi-exclamation-triangle")"></i>
+            <span>@_message</span>
+            <button type="button" @onclick="ClearMessage">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    }
+
+    <div class="follow-summary-grid">
+        <div>
+            <span>Outstanding</span>
+            <strong>@_summary.TotalOutstanding</strong>
+            <p>@Money(_summary.OutstandingBalance) due</p>
+        </div>
+
+        <div>
+            <span>Due for Follow-up</span>
+            <strong>@_summary.DueForFollowUp</strong>
+            <p>Today or overdue</p>
+        </div>
+
+        <div>
+            <span>Promised to Pay</span>
+            <strong>@_summary.PromisedToPay</strong>
+            <p>Invoices marked promised</p>
+        </div>
+
+        <div>
+            <span>Escalated</span>
+            <strong>@_summary.Escalated</strong>
+            <p>Needs urgent attention</p>
+        </div>
+    </div>
+
+    <div class="follow-control-panel">
+        <div class="follow-search">
+            <i class="bi bi-search"></i>
+            <input @bind="_searchTerm"
+                   @bind:event="oninput"
+                   placeholder="Search invoice, customer, phone or email" />
+        </div>
+
+        <select @bind="_followUpStatusFilter">
+            <option value="all">All follow-up statuses</option>
+            <option value="Not Started">Not Started</option>
+            <option value="Contacted">Contacted</option>
+            <option value="Promised to Pay">Promised to Pay</option>
+            <option value="No Response">No Response</option>
+            <option value="Disputed">Disputed</option>
+            <option value="Escalated">Escalated</option>
+        </select>
+
+        <select @bind="_reminderFilter">
+            <option value="all">All reminders</option>
+            <option value="due-today">Due today</option>
+            <option value="overdue-follow-up">Follow-up overdue</option>
+            <option value="no-follow-up-date">No follow-up date</option>
+            <option value="overdue-invoice">Invoice overdue</option>
+        </select>
+
+        <button type="button" class="follow-secondary-btn" @onclick="LoadFollowUpsAsync">
+            <i class="bi bi-filter"></i>
+            Filter
+        </button>
+
+        <button type="button" class="follow-ghost-btn" @onclick="ResetFiltersAsync">
+            <i class="bi bi-arrow-counterclockwise"></i>
+            Reset
+        </button>
+    </div>
+
+    <div class="follow-table-card">
+        <div class="follow-table-header">
+            <div>
+                <h2>Follow-up List</h2>
+                <p>Outstanding invoices that may need collection follow-up.</p>
+            </div>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="follow-empty">
+                <strong>Loading follow-ups...</strong>
+                <span>Please wait.</span>
+            </div>
+        }
+        else if (_items.Count == 0)
+        {
+            <div class="follow-empty">
+                <strong>No follow-ups found</strong>
+                <span>No outstanding invoices match the selected filters.</span>
+            </div>
+        }
+        else
+        {
+            <div class="follow-table-wrap">
+                <table class="follow-table">
+                    <thead>
+                        <tr>
+                            <th>Invoice</th>
+                            <th>Customer</th>
+                            <th>Contact</th>
+                            <th>Due</th>
+                            <th>Balance</th>
+                            <th>Follow-up</th>
+                            <th>Next</th>
+                            <th>Count</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var item in _items)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@item.InvoiceNumber</strong>
+                                    <span class="follow-muted">@item.Status</span>
+                                </td>
+
+                                <td>@item.CustomerName</td>
+
+                                <td>
+                                    <span class="follow-muted">@(!string.IsNullOrWhiteSpace(item.CustomerPhone) ? item.CustomerPhone : "-")</span>
+                                    <span class="follow-muted">@(!string.IsNullOrWhiteSpace(item.CustomerEmail) ? item.CustomerEmail : "-")</span>
+                                </td>
+
+                                <td>
+                                    @(item.DueDate?.ToString("yyyy-MM-dd") ?? "-")
+                                    @if (item.DaysOverdue > 0)
+                                    {
+                                        <span class="follow-muted danger">@item.DaysOverdue day(s) overdue</span>
+                                    }
+                                </td>
+
+                                <td class="follow-money">@Money(item.BalanceDue)</td>
+
+                                <td>
+                                    <span class="follow-pill @GetFollowStatusClass(item.FollowUpStatus)">
+                                        @item.FollowUpStatus
+                                    </span>
+
+                                    @if (item.LastFollowUpAt.HasValue)
+                                    {
+                                        <span class="follow-muted">Last: @item.LastFollowUpAt.Value.ToString("yyyy-MM-dd")</span>
+                                    }
+                                </td>
+
+                                <td>
+                                    @if (item.NextFollowUpDate.HasValue)
+                                    {
+                                        <span class="@GetNextFollowUpClass(item.NextFollowUpDate.Value)">
+                                            @item.NextFollowUpDate.Value.ToString("yyyy-MM-dd")
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="follow-muted">Not set</span>
+                                    }
+                                </td>
+
+                                <td>@item.FollowUpCount</td>
+
+                                <td class="text-end">
+                                    <button type="button" class="follow-mini-btn" @onclick="() => OpenFollowUpModal(item)">
+                                        Update
+                                    </button>
+
+                                    <button type="button" class="follow-mini-btn" @onclick="() => ViewInvoice(item.Id)">
+                                        Invoice
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>
+
+@if (_showFollowModal)
+{
+    <div class="follow-modal-backdrop">
+        <div class="follow-modal">
+            <div class="follow-modal-header">
+                <div>
+                    <span>Follow-up</span>
+                    <h4>@_activeInvoiceNumber</h4>
+                    <p>Balance due: @Money(_activeBalanceDue)</p>
+                </div>
+
+                <button type="button" class="follow-close-btn" @onclick="CloseFollowUpModal">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div class="follow-form-grid">
+                <div>
+                    <label>Status</label>
+                    <select @bind="_followModel.FollowUpStatus">
+                        <option value="Contacted">Contacted</option>
+                        <option value="Promised to Pay">Promised to Pay</option>
+                        <option value="No Response">No Response</option>
+                        <option value="Disputed">Disputed</option>
+                        <option value="Escalated">Escalated</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Next Follow-up Date</label>
+                    <input type="date" @bind="_followModel.NextFollowUpDate" />
+                </div>
+
+                <div class="span-2">
+                    <label>Notes</label>
+                    <textarea @bind="_followModel.FollowUpNotes" placeholder="Example: Customer promised to pay on Friday."></textarea>
+                </div>
+            </div>
+
+            <button type="button" class="follow-primary-btn full mt" disabled="@_saving" @onclick="SaveFollowUpAsync">
+                <i class="bi bi-check-circle"></i>
+                @(_saving ? "Saving..." : "Save Follow-up")
+            </button>
+        </div>
+    </div>
+}
+
+<style>
+    .follow-page {
+        animation: followIn .22s ease both;
+    }
+
+    .follow-header {
+        margin-bottom: 18px;
+    }
+
+    .follow-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 750;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+
+    .follow-header h1 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 1.45rem;
+        font-weight: 680;
+        letter-spacing: -.03em;
+    }
+
+    .follow-header p {
+        margin: 6px 0 0;
+        color: #64748b;
+        font-size: .88rem;
+    }
+
+    .follow-alert {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        font-size: .84rem;
+        font-weight: 600;
+        border: 1px solid;
+    }
+
+        .follow-alert.success {
+            color: #166534;
+            background: #f0fdf4;
+            border-color: #bbf7d0;
+        }
+
+        .follow-alert.danger {
+            color: #991b1b;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+        .follow-alert span {
+            flex: 1;
+        }
+
+        .follow-alert button {
+            border: 0;
+            background: transparent;
+            color: inherit;
+        }
+
+    .follow-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+        .follow-summary-grid div,
+        .follow-table-card {
+            border-radius: 20px;
+            background: #fff;
+            border: 1px solid #e7edf5;
+            box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        }
+
+        .follow-summary-grid div {
+            padding: 14px;
+        }
+
+        .follow-summary-grid span {
+            display: block;
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .follow-summary-grid strong {
+            display: block;
+            margin-top: 5px;
+            color: #0f172a;
+            font-size: 1rem;
+            font-weight: 760;
+        }
+
+        .follow-summary-grid p {
+            margin: 4px 0 0;
+            color: #94a3b8;
+            font-size: .74rem;
+        }
+
+    .follow-control-panel {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) 190px 190px auto auto;
+        gap: 10px;
+        padding: 14px;
+        margin-bottom: 16px;
+        border-radius: 18px;
+        background: #fff;
+        border: 1px solid #e7edf5;
+        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+    }
+
+        .follow-control-panel select,
+        .follow-form-grid input,
+        .follow-form-grid select,
+        .follow-form-grid textarea {
+            width: 100%;
+            min-height: 40px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            color: #0f172a;
+            padding: 0 12px;
+            font-size: .84rem;
+            outline: none;
+        }
+
+    .follow-search {
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 13px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        color: #94a3b8;
+    }
+
+        .follow-search input {
+            width: 100%;
+            border: 0;
+            outline: none;
+            background: transparent;
+            color: #0f172a;
+            font-size: .84rem;
+        }
+
+    .follow-primary-btn,
+    .follow-secondary-btn,
+    .follow-ghost-btn,
+    .follow-mini-btn {
+        min-height: 38px;
+        border-radius: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 650;
+        border: 0;
+        white-space: nowrap;
+    }
+
+    .follow-primary-btn {
+        color: #fff;
+        background: #111827;
+        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+    }
+
+        .follow-primary-btn:disabled {
+            opacity: .55;
+            cursor: not-allowed;
+        }
+
+    .follow-secondary-btn {
+        color: #2563eb;
+        background: #eef5ff;
+    }
+
+    .follow-ghost-btn {
+        color: #475569;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+    }
+
+    .follow-mini-btn {
+        min-height: 30px;
+        color: #2563eb;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        padding: 0 10px;
+    }
+
+    .follow-table-card {
+        overflow: hidden;
+    }
+
+    .follow-table-header {
+        padding: 17px 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .follow-table-header h2 {
+            margin: 0;
+            color: #0f172a;
+            font-size: .92rem;
+            font-weight: 720;
+        }
+
+        .follow-table-header p {
+            margin: 4px 0 0;
+            color: #94a3b8;
+            font-size: .76rem;
+        }
+
+    .follow-table-wrap {
+        overflow-x: auto;
+    }
+
+    .follow-table {
+        width: 100%;
+        min-width: 1120px;
+        border-collapse: collapse;
+    }
+
+        .follow-table th {
+            padding: 12px 16px;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: .7rem;
+            font-weight: 750;
+            text-transform: uppercase;
+            border-bottom: 1px solid #e7edf5;
+            white-space: nowrap;
+        }
+
+        .follow-table td {
+            padding: 14px 16px;
+            color: #334155;
+            font-size: .82rem;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+
+    .follow-muted {
+        display: block;
+        color: #64748b;
+        font-size: .74rem;
+        margin-top: 2px;
+    }
+
+        .follow-muted.danger {
+            color: #dc2626;
+        }
+
+    .follow-money {
+        color: #0f172a;
+        font-weight: 760;
+    }
+
+    .follow-pill,
+    .follow-next-due,
+    .follow-next-overdue {
+        display: inline-flex;
+        min-height: 27px;
+        align-items: center;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 750;
+    }
+
+        .follow-pill.not-started {
+            color: #64748b;
+            background: #f1f5f9;
+        }
+
+        .follow-pill.contacted {
+            color: #2563eb;
+            background: #eff6ff;
+        }
+
+        .follow-pill.promised {
+            color: #15803d;
+            background: #ecfdf5;
+        }
+
+        .follow-pill.no-response {
+            color: #d97706;
+            background: #fffbeb;
+        }
+
+        .follow-pill.disputed,
+        .follow-pill.escalated {
+            color: #dc2626;
+            background: #fef2f2;
+        }
+
+    .follow-next-due {
+        color: #2563eb;
+        background: #eff6ff;
+    }
+
+    .follow-next-overdue {
+        color: #dc2626;
+        background: #fef2f2;
+    }
+
+    .follow-empty {
+        margin: 18px;
+        padding: 34px 20px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px dashed #dbe3ef;
+        text-align: center;
+    }
+
+        .follow-empty strong,
+        .follow-empty span {
+            display: block;
+        }
+
+        .follow-empty strong {
+            color: #0f172a;
+            font-size: .9rem;
+        }
+
+        .follow-empty span {
+            margin-top: 4px;
+            color: #64748b;
+            font-size: .78rem;
+        }
+
+    .follow-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1050;
+        padding: 20px;
+        background: rgba(15, 23, 42, .44);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .follow-modal {
+        width: 100%;
+        max-width: 650px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+        padding: 22px;
+        border-radius: 22px;
+        background: #fff;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, .24);
+    }
+
+    .follow-modal-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding-bottom: 16px;
+        margin-bottom: 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .follow-modal-header span {
+            color: #2563eb;
+            font-size: .72rem;
+            font-weight: 750;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+        .follow-modal-header h4 {
+            margin: 3px 0 0;
+            color: #0f172a;
+            font-size: 1.05rem;
+            font-weight: 720;
+        }
+
+        .follow-modal-header p {
+            margin: 5px 0 0;
+            color: #64748b;
+            font-size: .84rem;
+        }
+
+    .follow-close-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        color: #64748b;
+    }
+
+    .follow-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+        .follow-form-grid label {
+            display: block;
+            margin-bottom: 5px;
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .follow-form-grid textarea {
+            min-height: 90px;
+            padding: 10px 12px;
+            resize: vertical;
+        }
+
+    .span-2 {
+        grid-column: span 2;
+    }
+
+    .full {
+        width: 100%;
+    }
+
+    .mt {
+        margin-top: 14px;
+    }
+
+    @@keyframes followIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width: 1199px) {
+        .follow-summary-grid,
+        .follow-control-panel,
+        .follow-form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .span-2 {
+            grid-column: span 1;
+        }
+
+        .follow-control-panel button {
+            width: 100%;
+        }
+    }
+</style>
+
+@code {
+    private BusinessSettingsFormModel _settings = new();
+    private List<InvoiceFollowUpItemViewModel> _items = new();
+    private InvoiceFollowUpSummaryViewModel _summary = new();
+
+    private bool _loading = true;
+    private bool _saving;
+
+    private string? _searchTerm;
+    private string _followUpStatusFilter = "all";
+    private string _reminderFilter = "all";
+
+    private string? _message;
+    private bool _isSuccess;
+
+    private bool _showFollowModal;
+    private UpdateInvoiceFollowUpModel _followModel = new();
+    private string _activeInvoiceNumber = string.Empty;
+    private decimal _activeBalanceDue;
+
+    private string CurrencyLabel =>
+        string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
+            ? "R"
+            : _settings.CurrencySymbol;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserAccessService.CanAccessAsync("invoice-follow-ups"))
+        {
+            NavigationManager.NavigateTo("/dashboard");
+            return;
+        }
+
+        _settings = await BusinessSettingsService.GetSettingsAsync();
+        await LoadFollowUpsAsync();
+    }
+
+    private async Task LoadFollowUpsAsync()
+    {
+        _loading = true;
+
+        _items = await InvoiceFollowUpService.GetFollowUpsAsync(
+            _searchTerm,
+            _followUpStatusFilter,
+            _reminderFilter);
+
+        _summary = InvoiceFollowUpService.BuildSummary(_items);
+
+        _loading = false;
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        _searchTerm = null;
+        _followUpStatusFilter = "all";
+        _reminderFilter = "all";
+
+        await LoadFollowUpsAsync();
+    }
+
+    private void OpenFollowUpModal(InvoiceFollowUpItemViewModel item)
+    {
+        _followModel = new UpdateInvoiceFollowUpModel
+        {
+            InvoiceId = item.Id,
+            FollowUpStatus = item.FollowUpStatus == "Not Started"
+                ? "Contacted"
+                : item.FollowUpStatus,
+            NextFollowUpDate = item.NextFollowUpDate ?? DateTime.Today.AddDays(2),
+            FollowUpNotes = item.FollowUpNotes
+        };
+
+        _activeInvoiceNumber = item.InvoiceNumber;
+        _activeBalanceDue = item.BalanceDue;
+        _showFollowModal = true;
+    }
+
+    private void CloseFollowUpModal()
+    {
+        _showFollowModal = false;
+    }
+
+    private async Task SaveFollowUpAsync()
+    {
+        if (_saving)
+        {
+            return;
+        }
+
+        _saving = true;
+
+        var result = await InvoiceFollowUpService.UpdateFollowUpAsync(_followModel);
+
+        _saving = false;
+
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            _showFollowModal = false;
+            await LoadFollowUpsAsync();
+        }
+    }
+
+    private void ViewInvoice(int invoiceId)
+    {
+        NavigationManager.NavigateTo($"/invoices/print/{invoiceId}");
+    }
+
+    private string Money(decimal value)
+    {
+        return $"{CurrencyLabel} {value:0.00}";
+    }
+
+    private string GetFollowStatusClass(string status)
+    {
+        return status switch
+        {
+            "Not Started" => "not-started",
+            "Contacted" => "contacted",
+            "Promised to Pay" => "promised",
+            "No Response" => "no-response",
+            "Disputed" => "disputed",
+            "Escalated" => "escalated",
+            _ => "not-started"
+        };
+    }
+
+    private string GetNextFollowUpClass(DateTime nextDate)
+    {
+        return nextDate.Date < DateTime.Today
+            ? "follow-next-overdue"
+            : "follow-next-due";
+    }
+
+    private void ShowMessage(string message, bool success)
+    {
+        _message = message;
+        _isSuccess = success;
+    }
+
+    private void ClearMessage()
+    {
+        _message = null;
+    }
+}

@@ -345,6 +345,11 @@
                                                 Edit
                                             </button>
 
+                                            <button type="button" class="row-action edit" @onclick="() => ManageVariants(item.Id)">
+                                                <i class="bi bi-layers"></i>
+                                                Variants
+                                            </button>
+
                                             <button type="button" class="row-action status" @onclick="() => ToggleStatus(item.Id)">
                                                 <i class="bi @(item.IsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
                                                 @(item.IsActive ? "Pause" : "Activate")
@@ -1963,5 +1968,9 @@
             .Select(x => x[0].ToString().ToUpper());
 
         return string.Join("", words);
+    }
+    private void ManageVariants(int productId)
+    {
+        NavigationManager.NavigateTo($"/product-variants/{productId}");
     }
 }
