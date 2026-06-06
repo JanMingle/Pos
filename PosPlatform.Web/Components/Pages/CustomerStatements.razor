@@ -106,10 +106,17 @@
                 <p>@(_statement.CustomerPhone ?? "-") · @(_statement.CustomerEmail ?? "-")</p>
             </div>
 
-            <button type="button" class="statement-secondary-btn" @onclick="ReloadStatementAsync">
-                <i class="bi bi-arrow-clockwise"></i>
-                Refresh
-            </button>
+            <div class="statement-profile-actions">
+                <button type="button" class="statement-secondary-btn" @onclick="ReloadStatementAsync">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    Refresh
+                </button>
+
+                <button type="button" class="statement-primary-btn" @onclick="PrintStatement">
+                    <i class="bi bi-printer"></i>
+                    Print / Save PDF
+                </button>
+            </div>
         </div>
 
         <div class="statement-summary-grid">
@@ -588,6 +595,28 @@
         }
     }
 
+    .statement-profile-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .statement-primary-btn {
+        min-height: 40px;
+        border-radius: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 650;
+        border: 0;
+        color: #fff;
+        background: #111827;
+        white-space: nowrap;
+    }
+
     @@media (max-width: 1199px) {
         .statement-form-grid,
         .statement-summary-grid {
@@ -600,6 +629,15 @@
         }
 
         .statement-secondary-btn {
+            width: 100%;
+        }
+
+        .statement-profile-actions {
+            width: 100%;
+            flex-direction: column;
+        }
+
+        .statement-primary-btn {
             width: 100%;
         }
     }
@@ -698,5 +736,34 @@
     private void ClearMessage()
     {
         _message = null;
+    }
+    private void PrintStatement()
+    {
+        if (!_selectedCustomerId.HasValue)
+        {
+            _message = "Select a customer first.";
+            return;
+        }
+
+        var url = $"/customer-statements/print/{_selectedCustomerId.Value}";
+
+        var query = new List<string>();
+
+        if (_fromDate.HasValue)
+        {
+            query.Add($"from={_fromDate.Value:yyyy-MM-dd}");
+        }
+
+        if (_toDate.HasValue)
+        {
+            query.Add($"to={_toDate.Value:yyyy-MM-dd}");
+        }
+
+        if (query.Count > 0)
+        {
+            url += "?" + string.Join("&", query);
+        }
+
+        NavigationManager.NavigateTo(url);
     }
 }

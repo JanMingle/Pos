@@ -1,0 +1,505 @@
+﻿@page "/customer-statements/print/{CustomerId:int}"
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@layout MainLayout
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.JSInterop
+@using PosPlatform.Web.Components.Layout
+@using PosPlatform.Web.Models.CustomerStatements
+@using PosPlatform.Web.Models.Settings
+@using PosPlatform.Web.Services
+@inject CustomerStatementService CustomerStatementService
+@inject BusinessSettingsService BusinessSettingsService
+@inject UserAccessService UserAccessService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+
+<PageTitle>Print Customer Statement</PageTitle>
+
+@if (_loading)
+{
+    <div class="print-loading">Loading customer statement...</div>
+}
+else if (_statement == null)
+{
+    <div class="print-loading">
+        <strong>Statement not found.</strong>
+        <button type="button" @onclick="BackToStatements">Back to Customer Statements</button>
+    </div>
+}
+else
+{
+    <section class="print-page">
+        <div class="print-toolbar">
+            <button type="button" class="print-secondary-btn" @onclick="BackToStatements">
+                <i class="bi bi-arrow-left"></i>
+                Back
+            </button>
+
+            <button type="button" class="print-primary-btn" @onclick="PrintAsync">
+                <i class="bi bi-printer"></i>
+                Print / Save PDF
+            </button>
+        </div>
+
+        <div class="print-sheet">
+            <div class="print-header">
+                <div>
+                    <h1>@_settings.BusinessName</h1>
+                    <p>@(_settings.Address ?? "")</p>
+                    <p>@(_settings.Phone ?? "") @(!string.IsNullOrWhiteSpace(_settings.Email) ? $" · {_settings.Email}" : "")</p>
+                </div>
+
+                <div class="print-document-title">
+                    <span>STATEMENT</span>
+                    <strong>@_statement.CustomerName</strong>
+                </div>
+            </div>
+
+            <div class="print-meta-grid">
+                <div>
+                    <span>Customer</span>
+                    <strong>@_statement.CustomerName</strong>
+                </div>
+
+                <div>
+                    <span>Phone</span>
+                    <strong>@(_statement.CustomerPhone ?? "-")</strong>
+                </div>
+
+                <div>
+                    <span>Email</span>
+                    <strong>@(_statement.CustomerEmail ?? "-")</strong>
+                </div>
+
+                <div>
+                    <span>From Date</span>
+                    <strong>@(_statement.FromDate?.ToString("yyyy-MM-dd") ?? "-")</strong>
+                </div>
+
+                <div>
+                    <span>To Date</span>
+                    <strong>@(_statement.ToDate?.ToString("yyyy-MM-dd") ?? "-")</strong>
+                </div>
+
+                <div>
+                    <span>Generated</span>
+                    <strong>@DateTime.Now.ToString("yyyy-MM-dd HH:mm")</strong>
+                </div>
+            </div>
+
+            <div class="print-summary-grid">
+                <div>
+                    <span>Total Invoices</span>
+                    <strong>@Money(_statement.TotalInvoices)</strong>
+                    <p>@_statement.InvoiceCount invoice(s)</p>
+                </div>
+
+                <div>
+                    <span>Total Payments</span>
+                    <strong>@Money(_statement.TotalPayments)</strong>
+                    <p>@_statement.PaymentCount payment(s)</p>
+                </div>
+
+                <div>
+                    <span>Balance Due</span>
+                    <strong>@Money(_statement.BalanceDue)</strong>
+                    <p>Outstanding balance</p>
+                </div>
+
+                <div>
+                    <span>Sales History</span>
+                    <strong>@Money(_statement.TotalSales)</strong>
+                    <p>@_statement.SalesCount sale(s)</p>
+                </div>
+            </div>
+
+            <div class="print-section-title">
+                <h2>Account Statement</h2>
+                <p>Invoices are shown as debits. Payments are shown as credits.</p>
+            </div>
+
+            @if (_statement.Lines.Count == 0)
+            {
+                <div class="print-empty">
+                    No invoices or payments found for this period.
+                </div>
+            }
+            else
+            {
+                <table class="print-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Reference</th>
+                            <th>Description</th>
+                            <th class="right">Debit</th>
+                            <th class="right">Credit</th>
+                            <th class="right">Balance</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var line in _statement.Lines)
+                        {
+                            <tr>
+                                <td>@line.Date.ToString("yyyy-MM-dd")</td>
+                                <td>@line.Type</td>
+                                <td>@line.Reference</td>
+                                <td>@line.Description</td>
+                                <td class="right">@Money(line.Debit)</td>
+                                <td class="right">@Money(line.Credit)</td>
+                                <td class="right strong">@Money(line.Balance)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+            <div class="print-section-title mt">
+                <h2>Sales History</h2>
+                <p>Completed POS sales linked to this customer.</p>
+            </div>
+
+            @if (_statement.SalesHistory.Count == 0)
+            {
+                <div class="print-empty">
+                    No linked sales found for this period.
+                </div>
+            }
+            else
+            {
+                <table class="print-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Sale Number</th>
+                            <th>Payment</th>
+                            <th>Status</th>
+                            <th class="right">Total</th>
+                            <th class="right">Paid</th>
+                            <th class="right">Change</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var sale in _statement.SalesHistory)
+                        {
+                            <tr>
+                                <td>@sale.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@sale.SaleNumber</td>
+                                <td>@sale.PaymentMethod</td>
+                                <td>@sale.Status</td>
+                                <td class="right strong">@Money(sale.TotalAmount)</td>
+                                <td class="right">@Money(sale.AmountPaid)</td>
+                                <td class="right">@Money(sale.ChangeAmount)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+            <div class="print-footer">
+                <p>@(_settings.ReceiptFooterMessage ?? "Thank you for your business.")</p>
+            </div>
+        </div>
+    </section>
+}
+
+<style>
+    .print-page {
+        padding: 20px 0 40px;
+    }
+
+    .print-loading {
+        padding: 30px;
+        color: #0f172a;
+    }
+
+    .print-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        max-width: 1100px;
+        margin: 0 auto 14px;
+    }
+
+    .print-primary-btn,
+    .print-secondary-btn {
+        min-height: 38px;
+        border-radius: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .82rem;
+        font-weight: 650;
+        border: 0;
+    }
+
+    .print-primary-btn {
+        color: #fff;
+        background: #111827;
+    }
+
+    .print-secondary-btn {
+        color: #334155;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+    }
+
+    .print-sheet {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 42px;
+        background: #fff;
+        border: 1px solid #e7edf5;
+        border-radius: 18px;
+        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        color: #0f172a;
+    }
+
+    .print-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 30px;
+        padding-bottom: 24px;
+        border-bottom: 2px solid #111827;
+    }
+
+        .print-header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 750;
+        }
+
+        .print-header p {
+            margin: 5px 0 0;
+            color: #64748b;
+            font-size: .86rem;
+        }
+
+    .print-document-title {
+        text-align: right;
+    }
+
+        .print-document-title span {
+            display: block;
+            font-size: 1.75rem;
+            font-weight: 800;
+            letter-spacing: .08em;
+        }
+
+        .print-document-title strong {
+            display: block;
+            margin-top: 6px;
+            color: #475569;
+            font-size: .88rem;
+        }
+
+    .print-meta-grid,
+    .print-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin: 22px 0;
+    }
+
+    .print-summary-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+        .print-meta-grid div,
+        .print-summary-grid div {
+            padding: 14px;
+            border-radius: 14px;
+            background: #f8fafc;
+            border: 1px solid #e7edf5;
+        }
+
+        .print-meta-grid span,
+        .print-summary-grid span {
+            display: block;
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .print-meta-grid strong,
+        .print-summary-grid strong {
+            display: block;
+            margin-top: 5px;
+            font-size: .92rem;
+        }
+
+        .print-summary-grid p {
+            margin: 4px 0 0;
+            color: #64748b;
+            font-size: .76rem;
+        }
+
+    .print-section-title {
+        margin: 26px 0 12px;
+    }
+
+        .print-section-title h2 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 750;
+        }
+
+        .print-section-title p {
+            margin: 5px 0 0;
+            color: #64748b;
+            font-size: .82rem;
+        }
+
+    .print-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+        .print-table th {
+            padding: 11px 10px;
+            background: #111827;
+            color: #fff;
+            text-align: left;
+            font-size: .72rem;
+            text-transform: uppercase;
+        }
+
+        .print-table td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #e7edf5;
+            font-size: .82rem;
+            color: #334155;
+            vertical-align: top;
+        }
+
+    .right {
+        text-align: right;
+    }
+
+    .strong {
+        color: #0f172a;
+        font-weight: 750;
+    }
+
+    .print-empty {
+        padding: 18px;
+        border-radius: 14px;
+        background: #f8fafc;
+        border: 1px dashed #dbe3ef;
+        color: #64748b;
+        font-size: .84rem;
+        text-align: center;
+    }
+
+    .print-footer {
+        margin-top: 28px;
+        padding-top: 16px;
+        border-top: 1px solid #e7edf5;
+        color: #64748b;
+        font-size: .78rem;
+    }
+
+    .mt {
+        margin-top: 32px;
+    }
+
+    @@media print {
+        .print-toolbar,
+        .pos-sidebar,
+        .pos-topbar,
+        .pos-sidebar-card {
+            display: none !important;
+        }
+
+        body {
+            background: #fff !important;
+        }
+
+        .print-page {
+            padding: 0 !important;
+        }
+
+        .print-sheet {
+            max-width: 100%;
+            margin: 0;
+            padding: 18px;
+            border: 0;
+            border-radius: 0;
+            box-shadow: none;
+        }
+
+        .print-meta-grid,
+        .print-summary-grid {
+            break-inside: avoid;
+        }
+
+        .print-table {
+            page-break-inside: auto;
+        }
+
+            .print-table tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+    }
+</style>
+
+@code {
+    [Parameter] public int CustomerId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "from")]
+    public DateTime? FromDate { get; set; }
+
+    [SupplyParameterFromQuery(Name = "to")]
+    public DateTime? ToDate { get; set; }
+
+    private BusinessSettingsFormModel _settings = new();
+    private CustomerStatementViewModel? _statement;
+    private bool _loading = true;
+
+    private string CurrencyLabel =>
+        string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
+            ? "R"
+            : _settings.CurrencySymbol;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserAccessService.CanAccessAsync("customer-statements"))
+        {
+            NavigationManager.NavigateTo("/dashboard");
+            return;
+        }
+
+        _settings = await BusinessSettingsService.GetSettingsAsync();
+
+        _statement = await CustomerStatementService.GetStatementAsync(
+            CustomerId,
+            FromDate,
+            ToDate);
+
+        _loading = false;
+    }
+
+    private async Task PrintAsync()
+    {
+        await JS.InvokeVoidAsync("window.print");
+    }
+
+    private void BackToStatements()
+    {
+        NavigationManager.NavigateTo("/customer-statements");
+    }
+
+    private string Money(decimal value)
+    {
+        return $"{CurrencyLabel} {value:0.00}";
+    }
+}
