@@ -27,5 +27,17 @@
         public string? UnitOfMeasure { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public int? SourceProductVariantId { get; set; }
+        public ProductVariant? SourceProductVariant { get; set; }
+
+        public int? TargetProductVariantId { get; set; }
+        public ProductVariant? TargetProductVariant { get; set; }
+
+        public string? VariantName { get; set; }
+        public string? VariantSize { get; set; }
+        public string? VariantColor { get; set; }
+        public string? VariantSKU { get; set; }
+        public string? VariantBarcode { get; set; }
     }
 }

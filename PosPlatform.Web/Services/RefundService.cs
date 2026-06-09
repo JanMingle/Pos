@@ -48,6 +48,18 @@ namespace PosPlatform.Web.Services
 
             var returnedQuantities = await GetReturnedQuantitiesAsync(sale.Id);
 
+            var productIds = sale.SaleItems
+                .Select(x => x.ProductId)
+                .Distinct()
+                .ToList();
+
+            var products = await _db.Products
+                .AsNoTracking()
+                .Where(x =>
+                    x.TenantId == tenantId.Value &&
+                    productIds.Contains(x.Id))
+                .ToDictionaryAsync(x => x.Id);
+
             return new RefundableSaleViewModel
             {
                 SaleId = sale.Id,
@@ -68,19 +80,28 @@ namespace PosPlatform.Web.Services
 
                         var remaining = Math.Max(0, x.Quantity - alreadyReturned);
 
-                        var product = _db.Products
-                            .AsNoTracking()
-                            .FirstOrDefault(p => p.Id == x.ProductId && p.TenantId == tenantId.Value);
+                        products.TryGetValue(x.ProductId, out var product);
+
+                        var isVariant = x.ProductVariantId.HasValue;
 
                         return new RefundableSaleItemViewModel
                         {
                             SaleItemId = x.Id,
+
                             ProductId = x.ProductId,
+                            ProductVariantId = x.ProductVariantId,
+
                             ProductName = x.ProductName,
-                            SKU = x.SKU,
+                            SKU = string.IsNullOrWhiteSpace(x.VariantSKU) ? x.SKU : x.VariantSKU,
+
+                            VariantName = x.VariantName,
+                            VariantSize = x.VariantSize,
+                            VariantColor = x.VariantColor,
+                            VariantSKU = x.VariantSKU,
+                            VariantBarcode = x.VariantBarcode,
 
                             ProductType = product?.ProductType ?? "Physical Product",
-                            TrackStock = product?.TrackStock ?? false,
+                            TrackStock = isVariant || (product?.TrackStock ?? false),
                             UnitOfMeasure = product?.UnitOfMeasure,
 
                             QuantitySold = x.Quantity,
@@ -294,9 +315,26 @@ namespace PosPlatform.Web.Services
                         x.Id == saleItem.ProductId &&
                         x.TenantId == tenantId.Value);
 
-                    var trackStock = product?.TrackStock ?? false;
-                    var productType = product?.ProductType ?? "Physical Product";
-                    var unitOfMeasure = product?.UnitOfMeasure;
+                    if (product == null)
+                    {
+                        await tx.RollbackAsync();
+                        return Fail("One of the products linked to this refund could not be found.");
+                    }
+
+                    ProductVariant? variant = null;
+
+                    if (saleItem.ProductVariantId.HasValue)
+                    {
+                        variant = await _db.ProductVariants.FirstOrDefaultAsync(x =>
+                            x.Id == saleItem.ProductVariantId.Value &&
+                            x.TenantId == tenantId.Value &&
+                            x.ProductId == product.Id);
+                    }
+
+                    var isVariant = variant != null;
+                    var trackStock = isVariant || product.TrackStock;
+                    var productType = product.ProductType;
+                    var unitOfMeasure = product.UnitOfMeasure;
 
                     var lineTotal = requestItem.Quantity * saleItem.UnitPrice;
                     var unitCost = saleItem.UnitCost;
@@ -310,7 +348,7 @@ namespace PosPlatform.Web.Services
                         SaleItemId = saleItem.Id,
                         ProductId = saleItem.ProductId,
                         ProductName = saleItem.ProductName,
-                        SKU = saleItem.SKU,
+                        SKU = string.IsNullOrWhiteSpace(saleItem.VariantSKU) ? saleItem.SKU : saleItem.VariantSKU,
                         Quantity = requestItem.Quantity,
                         UnitPrice = saleItem.UnitPrice,
                         LineTotal = lineTotal,
@@ -324,18 +362,48 @@ namespace PosPlatform.Web.Services
                         CreatedAt = DateTime.UtcNow
                     });
 
-                    auditItems.Add(new
-                    {
-                        saleItem.ProductId,
-                        saleItem.ProductName,
-                        saleItem.SKU,
-                        QuantityReturned = requestItem.Quantity,
-                        saleItem.UnitPrice,
-                        LineTotal = lineTotal,
-                        Restocked = request.RestockItems && product != null && product.TrackStock
-                    });
+                    var wasRestocked = false;
 
-                    if (request.RestockItems && product != null && product.TrackStock)
+                    if (request.RestockItems && variant != null)
+                    {
+                        var before = variant.QuantityInStock;
+                        var after = before + requestItem.Quantity;
+
+                        variant.QuantityInStock = after;
+                        variant.UpdatedAt = DateTime.UtcNow;
+
+                        _db.StockMovements.Add(new StockMovement
+                        {
+                            TenantId = tenantId.Value,
+                            BranchId = branchId,
+                            ProductId = product.Id,
+                            MovementType = returnType == "Void" ? "Void Return" : "Return",
+                            Quantity = requestItem.Quantity,
+                            QuantityBefore = before,
+                            QuantityAfter = after,
+                            ReferenceType = "SaleReturn",
+                            ReferenceId = saleReturn.Id,
+                            Notes = $"{returnType} for sale {sale.SaleNumber}: {product.ProductName} - {variant.VariantName}",
+                            CreatedAt = DateTime.UtcNow
+                        });
+
+                        stockAudit.Add(new
+                        {
+                            product.Id,
+                            product.ProductName,
+                            ProductVariantId = variant.Id,
+                            variant.VariantName,
+                            variant.Size,
+                            variant.Color,
+                            variant.SKU,
+                            QuantityBefore = before,
+                            QuantityReturned = requestItem.Quantity,
+                            QuantityAfter = after
+                        });
+
+                        wasRestocked = true;
+                    }
+                    else if (request.RestockItems && product.TrackStock)
                     {
                         var before = product.QuantityInStock;
                         var after = before + requestItem.Quantity;
@@ -367,7 +435,25 @@ namespace PosPlatform.Web.Services
                             QuantityReturned = requestItem.Quantity,
                             QuantityAfter = after
                         });
+
+                        wasRestocked = true;
                     }
+
+                    auditItems.Add(new
+                    {
+                        saleItem.ProductId,
+                        saleItem.ProductName,
+                        saleItem.SKU,
+                        saleItem.ProductVariantId,
+                        saleItem.VariantName,
+                        saleItem.VariantSize,
+                        saleItem.VariantColor,
+                        saleItem.VariantSKU,
+                        QuantityReturned = requestItem.Quantity,
+                        saleItem.UnitPrice,
+                        LineTotal = lineTotal,
+                        Restocked = wasRestocked
+                    });
                 }
 
                 saleReturn.TotalRefundAmount = refundTotal;
@@ -399,7 +485,6 @@ namespace PosPlatform.Web.Services
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
-
                 return Fail($"Refund failed: {ex.Message}");
             }
 

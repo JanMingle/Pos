@@ -34,7 +34,7 @@ namespace PosPlatform.Web.Services
                 return new List<StockTransferProductOptionViewModel>();
             }
 
-            return await _db.Products
+            var products = await _db.Products
                 .AsNoTracking()
                 .Where(x =>
                     x.TenantId == tenantId.Value &&
@@ -46,13 +46,63 @@ namespace PosPlatform.Web.Services
                 .Select(x => new StockTransferProductOptionViewModel
                 {
                     Id = x.Id,
+                    ProductId = x.Id,
+                    ProductVariantId = null,
+
                     ProductName = x.ProductName,
+                    DisplayName = x.ProductName,
+
                     SKU = x.SKU,
+                    CurrentStock = x.QuantityInStock,
                     QuantityInStock = x.QuantityInStock,
                     UnitOfMeasure = x.UnitOfMeasure,
                     CostPrice = x.CostPrice
                 })
                 .ToListAsync();
+
+            var variants = await _db.ProductVariants
+                .AsNoTracking()
+                .Include(x => x.Product)
+                .Where(x =>
+                    x.TenantId == tenantId.Value &&
+                    x.IsActive &&
+                    x.QuantityInStock > 0 &&
+                    x.Product != null &&
+                    x.Product.IsActive &&
+                    (x.BranchId == sourceBranchId || x.BranchId == null))
+                .OrderBy(x => x.Product!.ProductName)
+                .ThenBy(x => x.VariantName)
+                .Select(x => new StockTransferProductOptionViewModel
+                {
+                    Id = x.ProductId,
+                    ProductId = x.ProductId,
+                    ProductVariantId = x.Id,
+
+                    ProductName = x.Product != null ? x.Product.ProductName : "Product",
+                    DisplayName =
+                        (x.Product != null ? x.Product.ProductName : "Product") +
+                        " - " +
+                        x.VariantName,
+
+                    SKU = x.SKU,
+
+                    VariantName = x.VariantName,
+                    VariantSize = x.Size,
+                    VariantColor = x.Color,
+                    VariantSKU = x.SKU,
+                    VariantBarcode = x.Barcode,
+
+                    CurrentStock = x.QuantityInStock,
+                    QuantityInStock = x.QuantityInStock,
+                    UnitOfMeasure = x.Product != null ? x.Product.UnitOfMeasure : null,
+                    CostPrice = x.CostPrice
+                })
+                .ToListAsync();
+
+            return variants
+                .Concat(products)
+                .OrderBy(x => x.DisplayName)
+                .ToList();
         }
 
         public async Task<List<StockTransferHistoryRowViewModel>> GetTransfersAsync(
@@ -186,15 +236,29 @@ namespace PosPlatform.Web.Services
             }
 
             var groupedItems = model.Items
-                .GroupBy(x => x.ProductId)
+                .GroupBy(x => new
+                {
+                    x.ProductId,
+                    x.SourceProductVariantId
+                })
                 .Select(x => new CreateStockTransferItemModel
                 {
-                    ProductId = x.Key,
+                    ProductId = x.Key.ProductId,
+                    SourceProductVariantId = x.Key.SourceProductVariantId,
                     Quantity = x.Sum(i => i.Quantity)
                 })
                 .ToList();
 
-            var productIds = groupedItems.Select(x => x.ProductId).ToList();
+            var productIds = groupedItems
+                .Select(x => x.ProductId)
+                .Distinct()
+                .ToList();
+
+            var sourceVariantIds = groupedItems
+                .Where(x => x.SourceProductVariantId.HasValue)
+                .Select(x => x.SourceProductVariantId!.Value)
+                .Distinct()
+                .ToList();
 
             var sourceProducts = await _db.Products
                 .Where(x =>
@@ -209,6 +273,18 @@ namespace PosPlatform.Web.Services
                 return (false, "One or more products could not be found for the selected source branch.");
             }
 
+            var sourceVariants = await _db.ProductVariants
+                .Where(x =>
+                    x.TenantId == tenantId.Value &&
+                    sourceVariantIds.Contains(x.Id) &&
+                    (x.BranchId == model.SourceBranchId || x.BranchId == null))
+                .ToListAsync();
+
+            if (sourceVariants.Count != sourceVariantIds.Count)
+            {
+                return (false, "One or more variants could not be found for the selected source branch.");
+            }
+
             foreach (var item in groupedItems)
             {
                 var product = sourceProducts.First(x => x.Id == item.ProductId);
@@ -218,9 +294,36 @@ namespace PosPlatform.Web.Services
                     return (false, $"{product.ProductName} is inactive.");
                 }
 
-                if (product.QuantityInStock < item.Quantity)
+                if (item.SourceProductVariantId.HasValue)
                 {
-                    return (false, $"Not enough stock for {product.ProductName}. Available: {product.QuantityInStock:0.##}");
+                    var variant = sourceVariants.FirstOrDefault(x => x.Id == item.SourceProductVariantId.Value);
+
+                    if (variant == null)
+                    {
+                        return (false, "Selected variant could not be found.");
+                    }
+
+                    if (variant.ProductId != product.Id)
+                    {
+                        return (false, "Selected variant does not belong to the selected product.");
+                    }
+
+                    if (!variant.IsActive)
+                    {
+                        return (false, $"{product.ProductName} - {variant.VariantName} is inactive.");
+                    }
+
+                    if (variant.QuantityInStock < item.Quantity)
+                    {
+                        return (false, $"Not enough stock for {product.ProductName} - {variant.VariantName}. Available: {variant.QuantityInStock:0.##}");
+                    }
+                }
+                else
+                {
+                    if (product.QuantityInStock < item.Quantity)
+                    {
+                        return (false, $"Not enough stock for {product.ProductName}. Available: {product.QuantityInStock:0.##}");
+                    }
                 }
             }
 
@@ -253,30 +356,88 @@ namespace PosPlatform.Web.Services
                 {
                     var sourceProduct = sourceProducts.First(x => x.Id == item.ProductId);
 
+                    ProductVariant? sourceVariant = null;
+
+                    if (item.SourceProductVariantId.HasValue)
+                    {
+                        sourceVariant = sourceVariants.First(x => x.Id == item.SourceProductVariantId.Value);
+                    }
+
                     var targetProduct = await GetOrCreateDestinationProductAsync(
                         sourceProduct,
                         tenantId.Value,
                         model.DestinationBranchId);
 
-                    var sourceBefore = sourceProduct.QuantityInStock;
+                    ProductVariant? targetVariant = null;
+
+                    if (sourceVariant != null)
+                    {
+                        targetVariant = await GetOrCreateDestinationVariantAsync(
+                            sourceVariant,
+                            targetProduct,
+                            tenantId.Value,
+                            model.DestinationBranchId);
+                    }
+
+                    var sourceBefore = sourceVariant != null
+                        ? sourceVariant.QuantityInStock
+                        : sourceProduct.QuantityInStock;
+
                     var sourceAfter = sourceBefore - item.Quantity;
 
-                    var destinationBefore = targetProduct.QuantityInStock;
+                    var destinationBefore = targetVariant != null
+                        ? targetVariant.QuantityInStock
+                        : targetProduct.QuantityInStock;
+
                     var destinationAfter = destinationBefore + item.Quantity;
 
-                    sourceProduct.QuantityInStock = sourceAfter;
-                    sourceProduct.UpdatedAt = DateTime.UtcNow;
+                    if (sourceVariant != null)
+                    {
+                        sourceVariant.QuantityInStock = sourceAfter;
+                        sourceVariant.UpdatedAt = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        sourceProduct.QuantityInStock = sourceAfter;
+                        sourceProduct.UpdatedAt = DateTime.UtcNow;
+                    }
 
-                    targetProduct.QuantityInStock = destinationAfter;
-                    targetProduct.UpdatedAt = DateTime.UtcNow;
+                    if (targetVariant != null)
+                    {
+                        targetVariant.QuantityInStock = destinationAfter;
+                        targetVariant.UpdatedAt = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        targetProduct.QuantityInStock = destinationAfter;
+                        targetProduct.UpdatedAt = DateTime.UtcNow;
+                    }
+
+                    var displayName = sourceVariant == null
+                        ? sourceProduct.ProductName
+                        : $"{sourceProduct.ProductName} - {sourceVariant.VariantName}";
+
+                    var sku = sourceVariant?.SKU ?? sourceProduct.SKU;
 
                     _db.StockTransferItems.Add(new StockTransferItem
                     {
                         StockTransferId = transfer.Id,
+
                         SourceProductId = sourceProduct.Id,
                         TargetProductId = targetProduct.Id,
-                        ProductName = sourceProduct.ProductName,
-                        SKU = sourceProduct.SKU,
+
+                        SourceProductVariantId = sourceVariant?.Id,
+                        TargetProductVariantId = targetVariant?.Id,
+
+                        ProductName = displayName,
+                        SKU = sku,
+
+                        VariantName = sourceVariant?.VariantName,
+                        VariantSize = sourceVariant?.Size,
+                        VariantColor = sourceVariant?.Color,
+                        VariantSKU = sourceVariant?.SKU,
+                        VariantBarcode = sourceVariant?.Barcode,
+
                         Quantity = item.Quantity,
                         SourceQuantityBefore = sourceBefore,
                         SourceQuantityAfter = sourceAfter,
@@ -297,7 +458,9 @@ namespace PosPlatform.Web.Services
                         QuantityAfter = sourceAfter,
                         ReferenceType = "StockTransfer",
                         ReferenceId = transfer.Id,
-                        Notes = $"Transferred out via {transfer.TransferNumber}",
+                        Notes = sourceVariant == null
+                            ? $"Transferred out via {transfer.TransferNumber}"
+                            : $"Variant transferred out via {transfer.TransferNumber}: {sourceProduct.ProductName} - {sourceVariant.VariantName}",
                         CreatedAt = DateTime.UtcNow
                     });
 
@@ -312,7 +475,9 @@ namespace PosPlatform.Web.Services
                         QuantityAfter = destinationAfter,
                         ReferenceType = "StockTransfer",
                         ReferenceId = transfer.Id,
-                        Notes = $"Transferred in via {transfer.TransferNumber}",
+                        Notes = sourceVariant == null
+                            ? $"Transferred in via {transfer.TransferNumber}"
+                            : $"Variant transferred in via {transfer.TransferNumber}: {sourceProduct.ProductName} - {sourceVariant.VariantName}",
                         CreatedAt = DateTime.UtcNow
                     });
 
@@ -320,6 +485,14 @@ namespace PosPlatform.Web.Services
                     {
                         ProductName = sourceProduct.ProductName,
                         SKU = sourceProduct.SKU,
+
+                        SourceProductVariantId = sourceVariant?.Id,
+                        TargetProductVariantId = targetVariant?.Id,
+                        VariantName = sourceVariant?.VariantName,
+                        VariantSize = sourceVariant?.Size,
+                        VariantColor = sourceVariant?.Color,
+                        VariantSKU = sourceVariant?.SKU,
+
                         Quantity = item.Quantity,
                         UnitOfMeasure = sourceProduct.UnitOfMeasure,
                         SourceProductId = sourceProduct.Id,
@@ -415,6 +588,51 @@ namespace PosPlatform.Web.Services
             await _db.SaveChangesAsync();
 
             return targetProduct;
+        }
+
+        private async Task<ProductVariant> GetOrCreateDestinationVariantAsync(
+            ProductVariant sourceVariant,
+            Product targetProduct,
+            int tenantId,
+            int destinationBranchId)
+        {
+            var targetVariant = await _db.ProductVariants.FirstOrDefaultAsync(x =>
+                x.TenantId == tenantId &&
+                x.BranchId == destinationBranchId &&
+                x.SKU == sourceVariant.SKU);
+
+            if (targetVariant != null)
+            {
+                return targetVariant;
+            }
+
+            targetVariant = new ProductVariant
+            {
+                TenantId = tenantId,
+                BranchId = destinationBranchId,
+                ProductId = targetProduct.Id,
+
+                VariantName = sourceVariant.VariantName,
+                Size = sourceVariant.Size,
+                Color = sourceVariant.Color,
+                SKU = sourceVariant.SKU,
+                Barcode = sourceVariant.Barcode,
+
+                CostPrice = sourceVariant.CostPrice,
+                SellingPrice = sourceVariant.SellingPrice,
+                QuantityInStock = 0,
+                ReorderLevel = sourceVariant.ReorderLevel,
+
+                IsActive = true,
+
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            _db.ProductVariants.Add(targetVariant);
+            await _db.SaveChangesAsync();
+
+            return targetVariant;
         }
 
         private int? GetCurrentUserId()

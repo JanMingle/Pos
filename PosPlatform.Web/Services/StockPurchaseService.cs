@@ -35,7 +35,7 @@ namespace PosPlatform.Web.Services
                 return new List<PurchaseProductOptionViewModel>();
             }
 
-            return await _db.Products
+            var products = await _db.Products
                 .AsNoTracking()
                 .Where(x =>
                     x.TenantId == tenantId.Value &&
@@ -46,13 +46,60 @@ namespace PosPlatform.Web.Services
                 .Select(x => new PurchaseProductOptionViewModel
                 {
                     Id = x.Id,
+                    ProductId = x.Id,
+                    ProductVariantId = null,
+
                     ProductName = x.ProductName,
+                    DisplayName = x.ProductName,
+
                     SKU = x.SKU,
                     CurrentStock = x.QuantityInStock,
                     CostPrice = x.CostPrice,
                     UnitOfMeasure = x.UnitOfMeasure
                 })
                 .ToListAsync();
+
+            var variants = await _db.ProductVariants
+                .AsNoTracking()
+                .Include(x => x.Product)
+                .Where(x =>
+                    x.TenantId == tenantId.Value &&
+                    x.IsActive &&
+                    x.Product != null &&
+                    x.Product.IsActive &&
+                    (!branchId.HasValue || x.BranchId == null || x.BranchId == branchId.Value))
+                .OrderBy(x => x.Product!.ProductName)
+                .ThenBy(x => x.VariantName)
+                .Select(x => new PurchaseProductOptionViewModel
+                {
+                    Id = x.ProductId,
+                    ProductId = x.ProductId,
+                    ProductVariantId = x.Id,
+
+                    ProductName = x.Product != null ? x.Product.ProductName : "Product",
+                    DisplayName =
+                        (x.Product != null ? x.Product.ProductName : "Product") +
+                        " - " +
+                        x.VariantName,
+
+                    SKU = x.SKU,
+
+                    VariantName = x.VariantName,
+                    VariantSize = x.Size,
+                    VariantColor = x.Color,
+                    VariantSKU = x.SKU,
+                    VariantBarcode = x.Barcode,
+
+                    CurrentStock = x.QuantityInStock,
+                    CostPrice = x.CostPrice,
+                    UnitOfMeasure = x.Product != null ? x.Product.UnitOfMeasure : null
+                })
+                .ToListAsync();
+
+            return variants
+                .Concat(products)
+                .OrderBy(x => x.DisplayName)
+                .ToList();
         }
 
         public async Task<List<StockPurchaseListItemViewModel>> GetPurchasesAsync(
@@ -148,7 +195,7 @@ namespace PosPlatform.Web.Services
 
             if (model.Items.Any(x => x.ProductId <= 0))
             {
-                return (false, "Select product for every line.");
+                return (false, "Select product or variant for every line.");
             }
 
             if (model.Items.Any(x => x.Quantity <= 0))
@@ -179,16 +226,30 @@ namespace PosPlatform.Web.Services
             }
 
             var groupedItems = model.Items
-                .GroupBy(x => x.ProductId)
+                .GroupBy(x => new
+                {
+                    x.ProductId,
+                    x.ProductVariantId
+                })
                 .Select(x => new CreateStockPurchaseItemModel
                 {
-                    ProductId = x.Key,
+                    ProductId = x.Key.ProductId,
+                    ProductVariantId = x.Key.ProductVariantId,
                     Quantity = x.Sum(i => i.Quantity),
                     UnitCost = x.Last().UnitCost
                 })
                 .ToList();
 
-            var productIds = groupedItems.Select(x => x.ProductId).ToList();
+            var productIds = groupedItems
+                .Select(x => x.ProductId)
+                .Distinct()
+                .ToList();
+
+            var variantIds = groupedItems
+                .Where(x => x.ProductVariantId.HasValue)
+                .Select(x => x.ProductVariantId!.Value)
+                .Distinct()
+                .ToList();
 
             var products = await _db.Products
                 .Where(x =>
@@ -201,9 +262,49 @@ namespace PosPlatform.Web.Services
                 return (false, "One or more products could not be found.");
             }
 
-            if (products.Any(x => !x.TrackStock))
+            var variants = await _db.ProductVariants
+                .Where(x =>
+                    x.TenantId == tenantId.Value &&
+                    variantIds.Contains(x.Id))
+                .ToListAsync();
+
+            if (variants.Count != variantIds.Count)
             {
-                return (false, "Only stock-tracked products can be received.");
+                return (false, "One or more product variants could not be found.");
+            }
+
+            foreach (var item in groupedItems)
+            {
+                var product = products.FirstOrDefault(x => x.Id == item.ProductId);
+
+                if (product == null)
+                {
+                    return (false, "One or more products could not be found.");
+                }
+
+                if (item.ProductVariantId.HasValue)
+                {
+                    var variant = variants.FirstOrDefault(x => x.Id == item.ProductVariantId.Value);
+
+                    if (variant == null)
+                    {
+                        return (false, "One or more product variants could not be found.");
+                    }
+
+                    if (variant.ProductId != product.Id)
+                    {
+                        return (false, "A selected variant does not belong to the selected product.");
+                    }
+
+                    if (!variant.IsActive)
+                    {
+                        return (false, $"{product.ProductName} - {variant.VariantName} is inactive.");
+                    }
+                }
+                else if (!product.TrackStock)
+                {
+                    return (false, "Only stock-tracked products can be received.");
+                }
             }
 
             StockPurchase? completedPurchase = null;
@@ -241,18 +342,39 @@ namespace PosPlatform.Web.Services
                 foreach (var item in groupedItems)
                 {
                     var product = products.First(x => x.Id == item.ProductId);
+                    var variant = item.ProductVariantId.HasValue
+                        ? variants.First(x => x.Id == item.ProductVariantId.Value)
+                        : null;
 
-                    var before = product.QuantityInStock;
+                    var before = variant != null
+                        ? variant.QuantityInStock
+                        : product.QuantityInStock;
+
                     var after = before + item.Quantity;
-                    var oldCostPrice = product.CostPrice;
+                    var oldCostPrice = variant != null ? variant.CostPrice : product.CostPrice;
                     var lineTotal = item.Quantity * item.UnitCost;
+
+                    var itemName = variant == null
+                        ? product.ProductName
+                        : $"{product.ProductName} - {variant.VariantName}";
+
+                    var sku = variant?.SKU ?? product.SKU;
 
                     _db.StockPurchaseItems.Add(new StockPurchaseItem
                     {
                         StockPurchaseId = purchase.Id,
                         ProductId = product.Id,
-                        ProductName = product.ProductName,
-                        SKU = product.SKU,
+                        ProductVariantId = variant?.Id,
+
+                        ProductName = itemName,
+                        SKU = sku,
+
+                        VariantName = variant?.VariantName,
+                        VariantSize = variant?.Size,
+                        VariantColor = variant?.Color,
+                        VariantSKU = variant?.SKU,
+                        VariantBarcode = variant?.Barcode,
+
                         Quantity = item.Quantity,
                         UnitCost = item.UnitCost,
                         LineTotal = lineTotal,
@@ -262,14 +384,28 @@ namespace PosPlatform.Web.Services
                         CreatedAt = DateTime.UtcNow
                     });
 
-                    product.QuantityInStock = after;
-
-                    if (model.UpdateProductCostPrice)
+                    if (variant != null)
                     {
-                        product.CostPrice = item.UnitCost;
-                    }
+                        variant.QuantityInStock = after;
 
-                    product.UpdatedAt = DateTime.UtcNow;
+                        if (model.UpdateProductCostPrice)
+                        {
+                            variant.CostPrice = item.UnitCost;
+                        }
+
+                        variant.UpdatedAt = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        product.QuantityInStock = after;
+
+                        if (model.UpdateProductCostPrice)
+                        {
+                            product.CostPrice = item.UnitCost;
+                        }
+
+                        product.UpdatedAt = DateTime.UtcNow;
+                    }
 
                     _db.StockMovements.Add(new StockMovement
                     {
@@ -282,7 +418,9 @@ namespace PosPlatform.Web.Services
                         QuantityAfter = after,
                         ReferenceType = "StockPurchase",
                         ReferenceId = purchase.Id,
-                        Notes = $"Stock received from purchase {purchase.PurchaseNumber}",
+                        Notes = variant == null
+                            ? $"Stock received from purchase {purchase.PurchaseNumber}"
+                            : $"Variant stock received from purchase {purchase.PurchaseNumber}: {product.ProductName} - {variant.VariantName}",
                         CreatedAt = DateTime.UtcNow
                     });
 
@@ -291,6 +429,13 @@ namespace PosPlatform.Web.Services
                         ProductId = product.Id,
                         product.ProductName,
                         product.SKU,
+
+                        ProductVariantId = variant?.Id,
+                        VariantName = variant?.VariantName,
+                        VariantSize = variant?.Size,
+                        VariantColor = variant?.Color,
+                        VariantSKU = variant?.SKU,
+
                         QuantityReceived = item.Quantity,
                         UnitCost = item.UnitCost,
                         LineTotal = lineTotal,
@@ -298,7 +443,7 @@ namespace PosPlatform.Web.Services
                         QuantityBefore = before,
                         QuantityAfter = after,
                         CostPriceBefore = oldCostPrice,
-                        CostPriceAfter = product.CostPrice,
+                        CostPriceAfter = variant != null ? variant.CostPrice : product.CostPrice,
                         CostPriceUpdated = model.UpdateProductCostPrice
                     });
                 }
@@ -311,7 +456,6 @@ namespace PosPlatform.Web.Services
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
-
                 return (false, $"Stock purchase failed: {ex.Message}");
             }
 

@@ -21,10 +21,18 @@ namespace PosPlatform.Web.Models.Refunds
     public class RefundableSaleItemViewModel
     {
         public int SaleItemId { get; set; }
+
         public int ProductId { get; set; }
+        public int? ProductVariantId { get; set; }
 
         public string ProductName { get; set; } = string.Empty;
         public string SKU { get; set; } = string.Empty;
+
+        public string? VariantName { get; set; }
+        public string? VariantSize { get; set; }
+        public string? VariantColor { get; set; }
+        public string? VariantSKU { get; set; }
+        public string? VariantBarcode { get; set; }
 
         public string ProductType { get; set; } = "Physical Product";
         public bool TrackStock { get; set; }
@@ -36,6 +44,8 @@ namespace PosPlatform.Web.Models.Refunds
 
         public decimal UnitPrice { get; set; }
         public decimal RefundableAmount => QuantityRemaining * UnitPrice;
+
+        public bool IsVariant => ProductVariantId.HasValue;
     }
 
     public class CreateRefundRequest

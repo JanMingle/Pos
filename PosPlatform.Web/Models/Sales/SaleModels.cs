@@ -5,9 +5,21 @@ namespace PosPlatform.Web.Models.Sales
     public class SaleProductOptionViewModel
     {
         public int Id { get; set; }
+
+        public int ProductId { get; set; }
+        public int? ProductVariantId { get; set; }
+
         public string ProductName { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+
         public string SKU { get; set; } = string.Empty;
         public string? Barcode { get; set; }
+
+        public string? VariantName { get; set; }
+        public string? VariantSize { get; set; }
+        public string? VariantColor { get; set; }
+        public string? VariantSKU { get; set; }
+        public string? VariantBarcode { get; set; }
 
         public string ProductType { get; set; } = "Physical Product";
         public bool TrackStock { get; set; }
@@ -15,14 +27,17 @@ namespace PosPlatform.Web.Models.Sales
         public string? UnitOfMeasure { get; set; }
         public int? DurationMinutes { get; set; }
 
+        public decimal CostPrice { get; set; }
         public decimal SellingPrice { get; set; }
         public decimal QuantityInStock { get; set; }
+
         public bool IsActive { get; set; }
+
+        public bool IsVariant => ProductVariantId.HasValue;
     }
 
     public class CreateSaleRequest
     {
-
         public int? CustomerId { get; set; }
         public string PaymentMethod { get; set; } = "Cash";
 
@@ -48,6 +63,8 @@ namespace PosPlatform.Web.Models.Sales
     {
         public int ProductId { get; set; }
 
+        public int? ProductVariantId { get; set; }
+
         [Range(0.01, 999999999)]
         public decimal Quantity { get; set; }
     }
@@ -67,8 +84,19 @@ namespace PosPlatform.Web.Models.Sales
     public class SaleCartLineViewModel
     {
         public int ProductId { get; set; }
+        public int? ProductVariantId { get; set; }
+
         public string ProductName { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+
         public string SKU { get; set; } = string.Empty;
+        public string? Barcode { get; set; }
+
+        public string? VariantName { get; set; }
+        public string? VariantSize { get; set; }
+        public string? VariantColor { get; set; }
+        public string? VariantSKU { get; set; }
+        public string? VariantBarcode { get; set; }
 
         public string ProductType { get; set; } = "Physical Product";
         public bool TrackStock { get; set; }
@@ -80,13 +108,13 @@ namespace PosPlatform.Web.Models.Sales
         public decimal Quantity { get; set; } = 1;
         public decimal AvailableStock { get; set; }
 
+        public bool IsVariant => ProductVariantId.HasValue;
+
         public decimal LineTotal => UnitPrice * Quantity;
     }
 
     public class SaleReceiptViewModel
     {
-
-
         public int SaleId { get; set; }
         public string SaleNumber { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
@@ -112,6 +140,11 @@ namespace PosPlatform.Web.Models.Sales
     {
         public string ProductName { get; set; } = string.Empty;
         public string SKU { get; set; } = string.Empty;
+
+        public string? VariantName { get; set; }
+        public string? VariantSize { get; set; }
+        public string? VariantColor { get; set; }
+
         public decimal Quantity { get; set; }
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }

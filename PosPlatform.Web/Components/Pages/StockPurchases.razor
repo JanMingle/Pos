@@ -167,12 +167,12 @@
                                     <div>
                                         <label>Product</label>
                                         <select class="purchase-input"
-                                                value="@line.ProductId"
+                                                value="@GetLineOptionKey(line)"
                                                 @onchange="(e) => ProductChanged(line, e.Value?.ToString())">
                                             <option value="0">Select product</option>
                                             @foreach (var product in _products)
                                             {
-                                                <option value="@product.Id">
+                                                <option value="@product.OptionKey">
                                                     @GetProductOptionText(product)
                                                 </option>
                                             }
@@ -1071,18 +1071,28 @@
 
     private void ProductChanged(CreateStockPurchaseItemModel line, string? value)
     {
-        if (!int.TryParse(value, out var productId))
+        if (string.IsNullOrWhiteSpace(value))
         {
             line.ProductId = 0;
+            line.ProductVariantId = null;
             line.UnitCost = 0;
             return;
         }
 
-        line.ProductId = productId;
+        var product = _products.FirstOrDefault(x => x.OptionKey == value);
 
-        var product = _products.FirstOrDefault(x => x.Id == productId);
+        if (product == null)
+        {
+            line.ProductId = 0;
+            line.ProductVariantId = null;
+            line.UnitCost = 0;
+            return;
+        }
 
-        if (product != null && line.UnitCost <= 0)
+        line.ProductId = product.ProductId;
+        line.ProductVariantId = product.ProductVariantId;
+
+        if (line.UnitCost <= 0)
         {
             line.UnitCost = product.CostPrice;
         }
@@ -1119,10 +1129,23 @@
         return line.Quantity * line.UnitCost;
     }
 
+    private string GetLineOptionKey(CreateStockPurchaseItemModel line)
+    {
+        if (line.ProductVariantId.HasValue)
+        {
+            return $"v:{line.ProductVariantId.Value}";
+        }
+
+        return line.ProductId > 0 ? $"p:{line.ProductId}" : "";
+    }
+
     private string GetProductOptionText(PurchaseProductOptionViewModel product)
     {
         var unit = string.IsNullOrWhiteSpace(product.UnitOfMeasure) ? "" : $" {product.UnitOfMeasure}";
-        return $"{product.ProductName} ({product.SKU}) · Stock {product.CurrentStock:0.##}{unit}";
+        var label = string.IsNullOrWhiteSpace(product.DisplayName) ? product.ProductName : product.DisplayName;
+        var variantTag = product.IsVariant ? " · Variant" : "";
+
+        return $"{label} ({product.SKU}){variantTag} · Stock {product.CurrentStock:0.##}{unit}";
     }
 
     private string Money(decimal value)

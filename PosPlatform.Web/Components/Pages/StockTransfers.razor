@@ -72,7 +72,7 @@
             <div class="transfer-panel-header">
                 <div>
                     <h2>Create Transfer</h2>
-                    <p>Select source and destination branch, then add stock items.</p>
+                    <p>Select source and destination branch, then add stock items or variants.</p>
                 </div>
 
                 <button type="button" class="transfer-ghost-btn" @onclick="CloseTransferPanel">
@@ -144,7 +144,7 @@
                     {
                         <div class="transfer-empty small">
                             <strong>Select source branch first</strong>
-                            <span>Products will load after selecting a source branch.</span>
+                            <span>Products and variants will load after selecting a source branch.</span>
                         </div>
                     }
                     else if (_sourceProducts.Count == 0)
@@ -168,14 +168,14 @@
                             {
                                 <div class="transfer-line">
                                     <div>
-                                        <label>Product</label>
+                                        <label>Product / Variant</label>
                                         <select class="transfer-input"
-                                                value="@line.ProductId"
+                                                value="@GetLineOptionKey(line)"
                                                 @onchange="(e) => ProductChanged(line, e.Value?.ToString())">
-                                            <option value="0">Select product</option>
+                                            <option value="">Select product</option>
                                             @foreach (var product in _sourceProducts)
                                             {
-                                                <option value="@product.Id">
+                                                <option value="@product.OptionKey">
                                                     @GetProductOptionText(product)
                                                 </option>
                                             }
@@ -190,7 +190,7 @@
                                     <div>
                                         <label>Available</label>
                                         <div class="transfer-line-total">
-                                            @GetAvailableText(line.ProductId)
+                                            @GetAvailableText(line)
                                         </div>
                                     </div>
 
@@ -894,13 +894,27 @@
 
     private void ProductChanged(CreateStockTransferItemModel line, string? value)
     {
-        if (!int.TryParse(value, out var productId))
+        if (string.IsNullOrWhiteSpace(value))
         {
             line.ProductId = 0;
+            line.SourceProductVariantId = null;
+            line.TargetProductVariantId = null;
             return;
         }
 
-        line.ProductId = productId;
+        var product = _sourceProducts.FirstOrDefault(x => x.OptionKey == value);
+
+        if (product == null)
+        {
+            line.ProductId = 0;
+            line.SourceProductVariantId = null;
+            line.TargetProductVariantId = null;
+            return;
+        }
+
+        line.ProductId = product.ProductId;
+        line.SourceProductVariantId = product.ProductVariantId;
+        line.TargetProductVariantId = null;
     }
 
     private async Task SaveTransferAsync()
@@ -924,15 +938,29 @@
         }
     }
 
+    private string GetLineOptionKey(CreateStockTransferItemModel line)
+    {
+        if (line.SourceProductVariantId.HasValue)
+        {
+            return $"v:{line.SourceProductVariantId.Value}";
+        }
+
+        return line.ProductId > 0 ? $"p:{line.ProductId}" : "";
+    }
+
     private string GetProductOptionText(StockTransferProductOptionViewModel product)
     {
         var unit = string.IsNullOrWhiteSpace(product.UnitOfMeasure) ? "" : $" {product.UnitOfMeasure}";
-        return $"{product.ProductName} ({product.SKU}) · Available {product.QuantityInStock:0.##}{unit}";
+        var label = string.IsNullOrWhiteSpace(product.DisplayName) ? product.ProductName : product.DisplayName;
+        var variantTag = product.IsVariant ? " · Variant" : "";
+
+        return $"{label} ({product.SKU}){variantTag} · Available {product.CurrentStock:0.##}{unit}";
     }
 
-    private string GetAvailableText(int productId)
+    private string GetAvailableText(CreateStockTransferItemModel line)
     {
-        var product = _sourceProducts.FirstOrDefault(x => x.Id == productId);
+        var key = GetLineOptionKey(line);
+        var product = _sourceProducts.FirstOrDefault(x => x.OptionKey == key);
 
         if (product == null)
         {
@@ -940,7 +968,7 @@
         }
 
         var unit = string.IsNullOrWhiteSpace(product.UnitOfMeasure) ? "" : $" {product.UnitOfMeasure}";
-        return $"{product.QuantityInStock:0.##}{unit}";
+        return $"{product.CurrentStock:0.##}{unit}";
     }
 
     private void ShowMessage(string message, bool success)

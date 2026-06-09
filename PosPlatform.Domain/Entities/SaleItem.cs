@@ -21,5 +21,14 @@
 
         public decimal UnitCost { get; set; }
         public decimal CostTotal { get; set; }
+
+        public int? ProductVariantId { get; set; }
+        public ProductVariant? ProductVariant { get; set; }
+
+        public string? VariantName { get; set; }
+        public string? VariantSize { get; set; }
+        public string? VariantColor { get; set; }
+        public string? VariantSKU { get; set; }
+        public string? VariantBarcode { get; set; }
     }
 }

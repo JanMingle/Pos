@@ -12,54 +12,72 @@ namespace PosPlatform.Web.Services
         private readonly TenantContextService _tenantContext;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly AuditLogService _auditLogService;
+
         public SaleService(
-     AppDbContext db,
-     TenantContextService tenantContext,
-     IHttpContextAccessor httpContextAccessor,
-     AuditLogService auditLogService)
+            AppDbContext db,
+            TenantContextService tenantContext,
+            IHttpContextAccessor httpContextAccessor,
+            AuditLogService auditLogService)
         {
             _db = db;
             _tenantContext = tenantContext;
             _httpContextAccessor = httpContextAccessor;
             _auditLogService = auditLogService;
         }
+
         public async Task<List<SaleProductOptionViewModel>> SearchProductsAsync(string? search = null)
         {
+            return await SearchSaleItemsAsync(search);
+        }
+
+        public async Task<List<SaleProductOptionViewModel>> SearchSaleItemsAsync(string? search)
+        {
             var tenantId = await _tenantContext.GetTenantIdAsync();
-            var currentBranchId = await _tenantContext.GetBranchIdAsync();
+            var branchId = await _tenantContext.GetBranchIdAsync();
 
             if (tenantId == null)
             {
                 return new List<SaleProductOptionViewModel>();
             }
 
-            var query = _db.Products
+            var term = search?.Trim();
+
+            var productsQuery = _db.Products
                 .AsNoTracking()
                 .Where(x =>
                     x.TenantId == tenantId.Value &&
                     x.IsActive &&
-                    (!currentBranchId.HasValue || x.BranchId == null || x.BranchId == currentBranchId.Value));
+                    (!branchId.HasValue || x.BranchId == null || x.BranchId == branchId.Value));
 
-            if (!string.IsNullOrWhiteSpace(search))
+            if (!string.IsNullOrWhiteSpace(term))
             {
-                var term = search.Trim();
-
-                query = query.Where(x =>
+                productsQuery = productsQuery.Where(x =>
                     x.ProductName.Contains(term) ||
                     x.SKU.Contains(term) ||
                     x.ProductType.Contains(term) ||
                     (x.Barcode != null && x.Barcode.Contains(term)));
             }
 
-            return await query
+            var productOptions = await productsQuery
                 .OrderBy(x => x.ProductName)
-                .Take(30)
+                .Take(40)
                 .Select(x => new SaleProductOptionViewModel
                 {
                     Id = x.Id,
+                    ProductId = x.Id,
+                    ProductVariantId = null,
+
                     ProductName = x.ProductName,
+                    DisplayName = x.ProductName,
+
                     SKU = x.SKU,
                     Barcode = x.Barcode,
+
+                    VariantName = null,
+                    VariantSize = null,
+                    VariantColor = null,
+                    VariantSKU = null,
+                    VariantBarcode = null,
 
                     ProductType = x.ProductType,
                     TrackStock = x.TrackStock,
@@ -67,19 +85,82 @@ namespace PosPlatform.Web.Services
                     UnitOfMeasure = x.UnitOfMeasure,
                     DurationMinutes = x.DurationMinutes,
 
+                    CostPrice = x.CostPrice,
                     SellingPrice = x.SellingPrice,
                     QuantityInStock = x.QuantityInStock,
                     IsActive = x.IsActive
                 })
                 .ToListAsync();
-        
+
+            var variantsQuery = _db.ProductVariants
+                .AsNoTracking()
+                .Include(x => x.Product)
+                .Where(x =>
+                    x.TenantId == tenantId.Value &&
+                    x.IsActive &&
+                    x.Product != null &&
+                    x.Product.IsActive &&
+                    (!branchId.HasValue || x.BranchId == null || x.BranchId == branchId.Value));
+
+            if (!string.IsNullOrWhiteSpace(term))
+            {
+                variantsQuery = variantsQuery.Where(x =>
+                    x.VariantName.Contains(term) ||
+                    x.SKU.Contains(term) ||
+                    (x.Barcode != null && x.Barcode.Contains(term)) ||
+                    (x.Size != null && x.Size.Contains(term)) ||
+                    (x.Color != null && x.Color.Contains(term)) ||
+                    (x.Product != null && x.Product.ProductName.Contains(term)));
+            }
+
+            var variantOptions = await variantsQuery
+                .OrderBy(x => x.Product!.ProductName)
+                .ThenBy(x => x.VariantName)
+                .Take(60)
+                .Select(x => new SaleProductOptionViewModel
+                {
+                    Id = x.ProductId,
+                    ProductId = x.ProductId,
+                    ProductVariantId = x.Id,
+
+                    ProductName = x.Product != null ? x.Product.ProductName : "Product",
+                    DisplayName =
+                        (x.Product != null ? x.Product.ProductName : "Product") +
+                        " - " +
+                        x.VariantName,
+
+                    SKU = x.SKU,
+                    Barcode = x.Barcode,
+
+                    VariantName = x.VariantName,
+                    VariantSize = x.Size,
+                    VariantColor = x.Color,
+                    VariantSKU = x.SKU,
+                    VariantBarcode = x.Barcode,
+
+                    ProductType = x.Product != null ? x.Product.ProductType : "Physical Product",
+                    TrackStock = true,
+                    AgeRestricted = x.Product != null && x.Product.AgeRestricted,
+                    UnitOfMeasure = x.Product != null ? x.Product.UnitOfMeasure : "Each",
+                    DurationMinutes = x.Product != null ? x.Product.DurationMinutes : null,
+
+                    CostPrice = x.CostPrice,
+                    SellingPrice = x.SellingPrice,
+                    QuantityInStock = x.QuantityInStock,
+                    IsActive = x.IsActive
+                })
+                .ToListAsync();
+
+            return variantOptions
+                .Concat(productOptions)
+                .OrderBy(x => x.DisplayName)
+                .ToList();
         }
 
-     
         public async Task<SaleProductOptionViewModel?> GetProductByBarcodeAsync(string? barcodeOrSku)
         {
             var tenantId = await _tenantContext.GetTenantIdAsync();
-            var currentBranchId = await _tenantContext.GetBranchIdAsync();
+            var branchId = await _tenantContext.GetBranchIdAsync();
 
             if (tenantId == null || string.IsNullOrWhiteSpace(barcodeOrSku))
             {
@@ -87,6 +168,61 @@ namespace PosPlatform.Web.Services
             }
 
             var code = barcodeOrSku.Trim();
+
+            var variant = await _db.ProductVariants
+                .AsNoTracking()
+                .Include(x => x.Product)
+                .Where(x =>
+                    x.TenantId == tenantId.Value &&
+                    x.IsActive &&
+                    x.Product != null &&
+                    x.Product.IsActive &&
+                    (
+                        x.SKU == code ||
+                        (x.Barcode != null && x.Barcode == code)
+                    ) &&
+                    (!branchId.HasValue || x.BranchId == null || x.BranchId == branchId.Value))
+                .OrderByDescending(x => branchId.HasValue && x.BranchId == branchId.Value)
+                .ThenBy(x => x.Product!.ProductName)
+                .ThenBy(x => x.VariantName)
+                .Select(x => new SaleProductOptionViewModel
+                {
+                    Id = x.ProductId,
+                    ProductId = x.ProductId,
+                    ProductVariantId = x.Id,
+
+                    ProductName = x.Product != null ? x.Product.ProductName : "Product",
+                    DisplayName =
+                        (x.Product != null ? x.Product.ProductName : "Product") +
+                        " - " +
+                        x.VariantName,
+
+                    SKU = x.SKU,
+                    Barcode = x.Barcode,
+
+                    VariantName = x.VariantName,
+                    VariantSize = x.Size,
+                    VariantColor = x.Color,
+                    VariantSKU = x.SKU,
+                    VariantBarcode = x.Barcode,
+
+                    ProductType = x.Product != null ? x.Product.ProductType : "Physical Product",
+                    TrackStock = true,
+                    AgeRestricted = x.Product != null && x.Product.AgeRestricted,
+                    UnitOfMeasure = x.Product != null ? x.Product.UnitOfMeasure : "Each",
+                    DurationMinutes = x.Product != null ? x.Product.DurationMinutes : null,
+
+                    CostPrice = x.CostPrice,
+                    SellingPrice = x.SellingPrice,
+                    QuantityInStock = x.QuantityInStock,
+                    IsActive = x.IsActive
+                })
+                .FirstOrDefaultAsync();
+
+            if (variant != null)
+            {
+                return variant;
+            }
 
             return await _db.Products
                 .AsNoTracking()
@@ -97,15 +233,26 @@ namespace PosPlatform.Web.Services
                         x.SKU == code ||
                         (x.Barcode != null && x.Barcode == code)
                     ) &&
-                    (!currentBranchId.HasValue || x.BranchId == null || x.BranchId == currentBranchId.Value))
-                .OrderByDescending(x => currentBranchId.HasValue && x.BranchId == currentBranchId.Value)
+                    (!branchId.HasValue || x.BranchId == null || x.BranchId == branchId.Value))
+                .OrderByDescending(x => branchId.HasValue && x.BranchId == branchId.Value)
                 .ThenBy(x => x.ProductName)
                 .Select(x => new SaleProductOptionViewModel
                 {
                     Id = x.Id,
+                    ProductId = x.Id,
+                    ProductVariantId = null,
+
                     ProductName = x.ProductName,
+                    DisplayName = x.ProductName,
+
                     SKU = x.SKU,
                     Barcode = x.Barcode,
+
+                    VariantName = null,
+                    VariantSize = null,
+                    VariantColor = null,
+                    VariantSKU = null,
+                    VariantBarcode = null,
 
                     ProductType = x.ProductType,
                     TrackStock = x.TrackStock,
@@ -113,6 +260,7 @@ namespace PosPlatform.Web.Services
                     UnitOfMeasure = x.UnitOfMeasure,
                     DurationMinutes = x.DurationMinutes,
 
+                    CostPrice = x.CostPrice,
                     SellingPrice = x.SellingPrice,
                     QuantityInStock = x.QuantityInStock,
                     IsActive = x.IsActive
@@ -216,19 +364,39 @@ namespace PosPlatform.Web.Services
             }
 
             var groupedItems = request.Items
-                .GroupBy(x => x.ProductId)
+                .GroupBy(x => new
+                {
+                    x.ProductId,
+                    x.ProductVariantId
+                })
                 .Select(x => new CreateSaleItemRequest
                 {
-                    ProductId = x.Key,
+                    ProductId = x.Key.ProductId,
+                    ProductVariantId = x.Key.ProductVariantId,
                     Quantity = x.Sum(i => i.Quantity)
                 })
                 .ToList();
 
-            var productIds = groupedItems.Select(x => x.ProductId).ToList();
+            var productIds = groupedItems.Select(x => x.ProductId).Distinct().ToList();
+            var variantIds = groupedItems
+                .Where(x => x.ProductVariantId.HasValue)
+                .Select(x => x.ProductVariantId!.Value)
+                .Distinct()
+                .ToList();
 
             var productsForValidation = await _db.Products
                 .AsNoTracking()
-                .Where(x => x.TenantId == tenantId.Value && productIds.Contains(x.Id))
+                .Where(x =>
+                    x.TenantId == tenantId.Value &&
+                    productIds.Contains(x.Id))
+                .ToListAsync();
+
+            var variantsForValidation = await _db.ProductVariants
+                .AsNoTracking()
+                .Include(x => x.Product)
+                .Where(x =>
+                    x.TenantId == tenantId.Value &&
+                    variantIds.Contains(x.Id))
                 .ToListAsync();
 
             foreach (var item in groupedItems)
@@ -255,9 +423,36 @@ namespace PosPlatform.Web.Services
                     };
                 }
 
-                if (product.TrackStock && !allowNegativeStock && product.QuantityInStock < item.Quantity)
+                if (item.ProductVariantId.HasValue)
                 {
-                    return Fail($"Not enough stock for {product.ProductName}. Available: {product.QuantityInStock:0.##}");
+                    var variant = variantsForValidation.FirstOrDefault(x => x.Id == item.ProductVariantId.Value);
+
+                    if (variant == null)
+                    {
+                        return Fail("One of the selected variants could not be found.");
+                    }
+
+                    if (variant.ProductId != product.Id)
+                    {
+                        return Fail("A selected variant does not belong to the selected product.");
+                    }
+
+                    if (!variant.IsActive)
+                    {
+                        return Fail($"{product.ProductName} - {variant.VariantName} is inactive and cannot be sold.");
+                    }
+
+                    if (!allowNegativeStock && variant.QuantityInStock < item.Quantity)
+                    {
+                        return Fail($"Not enough stock for {product.ProductName} - {variant.VariantName}. Available: {variant.QuantityInStock:0.##}");
+                    }
+                }
+                else
+                {
+                    if (product.TrackStock && !allowNegativeStock && product.QuantityInStock < item.Quantity)
+                    {
+                        return Fail($"Not enough stock for {product.ProductName}. Available: {product.QuantityInStock:0.##}");
+                    }
                 }
             }
 
@@ -304,30 +499,72 @@ namespace PosPlatform.Web.Services
                         return Fail("One of the selected items could not be found.");
                     }
 
+                    ProductVariant? variant = null;
+
+                    if (item.ProductVariantId.HasValue)
+                    {
+                        variant = await _db.ProductVariants.FirstOrDefaultAsync(x =>
+                            x.Id == item.ProductVariantId.Value &&
+                            x.TenantId == tenantId.Value &&
+                            x.ProductId == product.Id);
+
+                        if (variant == null)
+                        {
+                            await transaction.RollbackAsync();
+                            return Fail("One of the selected variants could not be found.");
+                        }
+                    }
+
                     if (!product.IsActive)
                     {
                         await transaction.RollbackAsync();
                         return Fail($"{product.ProductName} is inactive and cannot be sold.");
                     }
 
-                    if (product.TrackStock && !allowNegativeStock && product.QuantityInStock < item.Quantity)
+                    if (variant != null && !variant.IsActive)
+                    {
+                        await transaction.RollbackAsync();
+                        return Fail($"{product.ProductName} - {variant.VariantName} is inactive and cannot be sold.");
+                    }
+
+                    if (variant != null)
+                    {
+                        if (!allowNegativeStock && variant.QuantityInStock < item.Quantity)
+                        {
+                            await transaction.RollbackAsync();
+                            return Fail($"Not enough stock for {product.ProductName} - {variant.VariantName}. Available: {variant.QuantityInStock:0.##}");
+                        }
+                    }
+                    else if (product.TrackStock && !allowNegativeStock && product.QuantityInStock < item.Quantity)
                     {
                         await transaction.RollbackAsync();
                         return Fail($"Not enough stock for {product.ProductName}. Available: {product.QuantityInStock:0.##}");
                     }
 
-                    var unitPrice = product.SellingPrice;
+                    var unitPrice = variant?.SellingPrice ?? product.SellingPrice;
+                    var unitCost = variant?.CostPrice ?? product.CostPrice;
                     var lineTotal = item.Quantity * unitPrice;
-
-                    var unitCost = product.CostPrice;
                     var costTotal = item.Quantity * unitCost;
+
+                    var displayProductName = variant == null
+                        ? product.ProductName
+                        : $"{product.ProductName} - {variant.VariantName}";
 
                     _db.SaleItems.Add(new SaleItem
                     {
                         SaleId = sale.Id,
                         ProductId = product.Id,
-                        ProductName = product.ProductName,
-                        SKU = product.SKU,
+                        ProductVariantId = variant?.Id,
+
+                        ProductName = displayProductName,
+                        SKU = variant?.SKU ?? product.SKU,
+
+                        VariantName = variant?.VariantName,
+                        VariantSize = variant?.Size,
+                        VariantColor = variant?.Color,
+                        VariantSKU = variant?.SKU,
+                        VariantBarcode = variant?.Barcode,
+
                         Quantity = item.Quantity,
                         UnitPrice = unitPrice,
                         LineTotal = lineTotal,
@@ -345,6 +582,12 @@ namespace PosPlatform.Web.Services
                         product.SKU,
                         product.ProductType,
                         product.TrackStock,
+                        ProductVariantId = variant?.Id,
+                        VariantName = variant?.VariantName,
+                        VariantSize = variant?.Size,
+                        VariantColor = variant?.Color,
+                        VariantSKU = variant?.SKU,
+                        VariantBarcode = variant?.Barcode,
                         Quantity = item.Quantity,
                         UnitPrice = unitPrice,
                         LineTotal = lineTotal,
@@ -352,7 +595,42 @@ namespace PosPlatform.Web.Services
                         CostTotal = costTotal
                     });
 
-                    if (product.TrackStock)
+                    if (variant != null)
+                    {
+                        var quantityBefore = variant.QuantityInStock;
+                        var quantityAfter = quantityBefore - item.Quantity;
+
+                        variant.QuantityInStock = quantityAfter;
+                        variant.UpdatedAt = DateTime.UtcNow;
+
+                        _db.StockMovements.Add(new StockMovement
+                        {
+                            TenantId = tenantId.Value,
+                            BranchId = branchId,
+                            ProductId = product.Id,
+                            MovementType = "Sale",
+                            Quantity = -item.Quantity,
+                            QuantityBefore = quantityBefore,
+                            QuantityAfter = quantityAfter,
+                            ReferenceType = "Sale",
+                            ReferenceId = sale.Id,
+                            Notes = $"Variant stock deducted for sale {sale.SaleNumber}: {product.ProductName} - {variant.VariantName}",
+                            CreatedAt = DateTime.UtcNow
+                        });
+
+                        stockAudit.Add(new
+                        {
+                            product.Id,
+                            product.ProductName,
+                            ProductVariantId = variant.Id,
+                            variant.VariantName,
+                            variant.SKU,
+                            QuantityBefore = quantityBefore,
+                            QuantitySold = item.Quantity,
+                            QuantityAfter = quantityAfter
+                        });
+                    }
+                    else if (product.TrackStock)
                     {
                         var quantityBefore = product.QuantityInStock;
                         var quantityAfter = quantityBefore - item.Quantity;
@@ -518,7 +796,7 @@ namespace PosPlatform.Web.Services
                     .Select(x => new SaleReceiptItemViewModel
                     {
                         ProductName = x.ProductName,
-                        SKU = x.SKU,
+                        SKU = string.IsNullOrWhiteSpace(x.VariantSKU) ? x.SKU : x.VariantSKU,
                         Quantity = x.Quantity,
                         UnitPrice = x.UnitPrice,
                         LineTotal = x.LineTotal

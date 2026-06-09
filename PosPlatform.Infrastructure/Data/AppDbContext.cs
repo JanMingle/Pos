@@ -372,6 +372,21 @@ namespace PosPlatform.Infrastructure.Data
                       .HasMaxLength(80)
                       .IsRequired();
 
+                entity.Property(x => x.VariantName)
+      .HasMaxLength(150);
+
+                entity.Property(x => x.VariantSize)
+                      .HasMaxLength(80);
+
+                entity.Property(x => x.VariantColor)
+                      .HasMaxLength(80);
+
+                entity.Property(x => x.VariantSKU)
+                      .HasMaxLength(80);
+
+                entity.Property(x => x.VariantBarcode)
+                      .HasMaxLength(80);
+
                 entity.Property(x => x.Quantity).HasColumnType("decimal(18,2)");
                 entity.Property(x => x.UnitPrice).HasColumnType("decimal(18,2)");
                 entity.Property(x => x.LineTotal).HasColumnType("decimal(18,2)");
@@ -385,6 +400,11 @@ namespace PosPlatform.Infrastructure.Data
                       .WithMany()
                       .HasForeignKey(x => x.ProductId)
                       .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.ProductVariant)
+      .WithMany()
+      .HasForeignKey(x => x.ProductVariantId)
+      .OnDelete(DeleteBehavior.Restrict);
 
                 entity.Property(x => x.UnitCost)
       .HasColumnType("decimal(18,2)");
@@ -828,6 +848,21 @@ namespace PosPlatform.Infrastructure.Data
                       .HasMaxLength(80)
                       .IsRequired();
 
+                entity.Property(x => x.VariantName)
+    .HasMaxLength(150);
+
+                entity.Property(x => x.VariantSize)
+                    .HasMaxLength(80);
+
+                entity.Property(x => x.VariantColor)
+                    .HasMaxLength(80);
+
+                entity.Property(x => x.VariantSKU)
+                    .HasMaxLength(80);
+
+                entity.Property(x => x.VariantBarcode)
+                    .HasMaxLength(80);
+
                 entity.Property(x => x.UnitOfMeasure)
                       .HasMaxLength(50);
 
@@ -855,6 +890,10 @@ namespace PosPlatform.Infrastructure.Data
                       .WithMany()
                       .HasForeignKey(x => x.ProductId)
                       .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(x => x.ProductVariant)
+      .WithMany()
+      .HasForeignKey(x => x.ProductVariantId)
+      .OnDelete(DeleteBehavior.Restrict);
             });
 
             builder.Entity<ExpenseCategory>(entity =>
@@ -879,6 +918,8 @@ namespace PosPlatform.Infrastructure.Data
                       .WithMany()
                       .HasForeignKey(x => x.BranchId)
                       .OnDelete(DeleteBehavior.Restrict);
+
+
             });
 
             builder.Entity<Expense>(entity =>
@@ -967,6 +1008,8 @@ namespace PosPlatform.Infrastructure.Data
                     .HasForeignKey(x => x.TenantId)
                     .OnDelete(DeleteBehavior.Restrict);
 
+
+
                 entity.HasOne(x => x.SourceBranch)
                     .WithMany()
                     .HasForeignKey(x => x.SourceBranchId)
@@ -989,6 +1032,21 @@ namespace PosPlatform.Infrastructure.Data
                 entity.Property(x => x.SKU)
                     .HasMaxLength(80)
                     .IsRequired();
+
+                entity.Property(x => x.VariantName)
+    .HasMaxLength(150);
+
+                entity.Property(x => x.VariantSize)
+                    .HasMaxLength(80);
+
+                entity.Property(x => x.VariantColor)
+                    .HasMaxLength(80);
+
+                entity.Property(x => x.VariantSKU)
+                    .HasMaxLength(80);
+
+                entity.Property(x => x.VariantBarcode)
+                    .HasMaxLength(80);
 
                 entity.Property(x => x.Quantity)
                     .HasColumnType("decimal(18,2)");
@@ -1021,6 +1079,16 @@ namespace PosPlatform.Infrastructure.Data
                 entity.HasOne(x => x.TargetProduct)
                     .WithMany()
                     .HasForeignKey(x => x.TargetProductId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.SourceProductVariant)
+    .WithMany()
+    .HasForeignKey(x => x.SourceProductVariantId)
+    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(x => x.TargetProductVariant)
+                    .WithMany()
+                    .HasForeignKey(x => x.TargetProductVariantId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
@@ -1399,9 +1467,9 @@ namespace PosPlatform.Infrastructure.Data
                     .WithMany()
                     .HasForeignKey(x => x.ReceivedByUserId)
                     .OnDelete(DeleteBehavior.Restrict);
+
+
             });
-
-
 
         }
     }

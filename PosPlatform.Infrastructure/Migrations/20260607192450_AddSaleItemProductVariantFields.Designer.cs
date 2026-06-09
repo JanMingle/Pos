@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PosPlatform.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using PosPlatform.Infrastructure.Data;
 namespace PosPlatform.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260607192450_AddSaleItemProductVariantFields")]
+    partial class AddSaleItemProductVariantFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2016,9 +2019,6 @@ namespace PosPlatform.Infrastructure.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
 
-                    b.Property<int?>("ProductVariantId")
-                        .HasColumnType("int");
-
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(18,2)");
 
@@ -2043,31 +2043,9 @@ namespace PosPlatform.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("VariantBarcode")
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
-                    b.Property<string>("VariantColor")
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
-                    b.Property<string>("VariantName")
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<string>("VariantSKU")
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
-                    b.Property<string>("VariantSize")
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
                     b.HasKey("Id");
 
                     b.HasIndex("ProductId");
-
-                    b.HasIndex("ProductVariantId");
 
                     b.HasIndex("StockPurchaseId");
 
@@ -2165,9 +2143,6 @@ namespace PosPlatform.Infrastructure.Migrations
                     b.Property<int>("SourceProductId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("SourceProductVariantId")
-                        .HasColumnType("int");
-
                     b.Property<decimal>("SourceQuantityAfter")
                         .HasColumnType("decimal(18,2)");
 
@@ -2180,44 +2155,17 @@ namespace PosPlatform.Infrastructure.Migrations
                     b.Property<int>("TargetProductId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("TargetProductVariantId")
-                        .HasColumnType("int");
-
                     b.Property<string>("UnitOfMeasure")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("VariantBarcode")
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
-                    b.Property<string>("VariantColor")
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
-                    b.Property<string>("VariantName")
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<string>("VariantSKU")
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
-                    b.Property<string>("VariantSize")
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("SourceProductId");
 
-                    b.HasIndex("SourceProductVariantId");
-
                     b.HasIndex("StockTransferId");
 
                     b.HasIndex("TargetProductId");
-
-                    b.HasIndex("TargetProductVariantId");
 
                     b.ToTable("StockTransferItems", (string)null);
                 });
@@ -3099,11 +3047,6 @@ namespace PosPlatform.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("PosPlatform.Domain.Entities.ProductVariant", "ProductVariant")
-                        .WithMany()
-                        .HasForeignKey("ProductVariantId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("PosPlatform.Domain.Entities.StockPurchase", "StockPurchase")
                         .WithMany("StockPurchaseItems")
                         .HasForeignKey("StockPurchaseId")
@@ -3111,8 +3054,6 @@ namespace PosPlatform.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Product");
-
-                    b.Navigation("ProductVariant");
 
                     b.Navigation("StockPurchase");
                 });
@@ -3152,11 +3093,6 @@ namespace PosPlatform.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("PosPlatform.Domain.Entities.ProductVariant", "SourceProductVariant")
-                        .WithMany()
-                        .HasForeignKey("SourceProductVariantId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("PosPlatform.Domain.Entities.StockTransfer", "StockTransfer")
                         .WithMany("Items")
                         .HasForeignKey("StockTransferId")
@@ -3169,20 +3105,11 @@ namespace PosPlatform.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("PosPlatform.Domain.Entities.ProductVariant", "TargetProductVariant")
-                        .WithMany()
-                        .HasForeignKey("TargetProductVariantId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("SourceProduct");
-
-                    b.Navigation("SourceProductVariant");
 
                     b.Navigation("StockTransfer");
 
                     b.Navigation("TargetProduct");
-
-                    b.Navigation("TargetProductVariant");
                 });
 
             modelBuilder.Entity("PosPlatform.Domain.Entities.Supplier", b =>
