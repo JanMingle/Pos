@@ -11,182 +11,192 @@
         </div>
     </div>
 
-    <div class="pos-nav-section">Dashboard</div>
-
     <nav class="pos-sidebar-nav">
+        <div class="pos-nav-section">Overview</div>
+
         <NavLink href="/dashboard" class="pos-nav-link" Match="NavLinkMatch.All">
             <span class="pos-nav-icon"><i class="bi bi-grid-1x2"></i></span>
             <span class="pos-nav-text">Dashboard</span>
         </NavLink>
 
-        @if (_canProducts || _canBarcodeLabels || _canStock || _canSales || _canQuotes || _canInvoices || _canOverdueInvoices || _canInvoiceFollowUps || _canCustomers || _canCustomerStatements || _canBranches)
+        @if (_canSales || _canCashierShift || _canCustomers)
         {
-            <div class="pos-nav-section">Operations</div>
+            <div class="pos-nav-section">Sales</div>
+
+            @if (_canSales)
+            {
+                <NavLink href="/sales" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-cart-check"></i></span>
+                    <span class="pos-nav-text">Sales</span>
+                </NavLink>
+            }
+
+            @if (_canCashierShift)
+            {
+                <NavLink href="/cashier-shift" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-cash-coin"></i></span>
+                    <span class="pos-nav-text">Cashier Shift</span>
+                </NavLink>
+            }
+
+            @if (_canCustomers)
+            {
+                <NavLink href="/customers" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-person-lines-fill"></i></span>
+                    <span class="pos-nav-text">Customers</span>
+                </NavLink>
+            }
         }
 
-        @if (_canProducts)
+        @if (_canProducts || _canBarcodeLabels || _canStock || _canStockPurchases || _canStockTransfers || _canSuppliers)
         {
-            <NavLink href="/products" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-box-seam"></i></span>
-                <span class="pos-nav-text">Products</span>
-            </NavLink>
+            <div class="pos-nav-section">Inventory</div>
+
+            @if (_canProducts)
+            {
+                <NavLink href="/products" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-box-seam"></i></span>
+                    <span class="pos-nav-text">Products</span>
+                </NavLink>
+            }
+
+            @if (_canBarcodeLabels)
+            {
+                <NavLink href="/barcode-labels" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-upc-scan"></i></span>
+                    <span class="pos-nav-text">Barcode Labels</span>
+                </NavLink>
+            }
+
+            @if (_canStock)
+            {
+                <NavLink href="/stock" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-graph-up-arrow"></i></span>
+                    <span class="pos-nav-text">Stock</span>
+                </NavLink>
+            }
+
+            @if (_canStockPurchases)
+            {
+                <NavLink href="/stock-purchases" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-box-arrow-in-down"></i></span>
+                    <span class="pos-nav-text">Stock Purchases</span>
+                </NavLink>
+            }
+
+            @if (_canStockTransfers)
+            {
+                <NavLink href="/stock-transfers" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-arrow-left-right"></i></span>
+                    <span class="pos-nav-text">Stock Transfers</span>
+                </NavLink>
+            }
+
+            @if (_canSuppliers)
+            {
+                <NavLink href="/suppliers" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-truck"></i></span>
+                    <span class="pos-nav-text">Suppliers</span>
+                </NavLink>
+            }
         }
 
-        @if (_canBarcodeLabels)
+        @if (_canQuotes || _canInvoices || _canOverdueInvoices || _canInvoiceFollowUps || _canCustomerStatements || _canExpenses)
         {
-            <NavLink href="/barcode-labels" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-upc-scan"></i></span>
-                <span class="pos-nav-text">Barcode Labels</span>
-            </NavLink>
+            <div class="pos-nav-section">Accounts</div>
+
+            @if (_canQuotes)
+            {
+                <NavLink href="/quotes" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-file-earmark-text"></i></span>
+                    <span class="pos-nav-text">Quotes</span>
+                </NavLink>
+            }
+
+            @if (_canInvoices)
+            {
+                <NavLink href="/invoices" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-receipt"></i></span>
+                    <span class="pos-nav-text">Invoices</span>
+                </NavLink>
+            }
+
+            @if (_canOverdueInvoices)
+            {
+                <NavLink href="/overdue-invoices" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-exclamation-octagon"></i></span>
+                    <span class="pos-nav-text">Overdue Invoices</span>
+                </NavLink>
+            }
+
+            @if (_canInvoiceFollowUps)
+            {
+                <NavLink href="/invoice-follow-ups" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-calendar-check"></i></span>
+                    <span class="pos-nav-text">Invoice Follow-ups</span>
+                </NavLink>
+            }
+
+            @if (_canCustomerStatements)
+            {
+                <NavLink href="/customer-statements" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-journal-text"></i></span>
+                    <span class="pos-nav-text">Customer Statements</span>
+                </NavLink>
+            }
+
+            @if (_canExpenses)
+            {
+                <NavLink href="/expenses" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-wallet2"></i></span>
+                    <span class="pos-nav-text">Expenses</span>
+                </NavLink>
+            }
         }
 
-        @if (_canStock)
-        {
-            <NavLink href="/stock" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-graph-up-arrow"></i></span>
-                <span class="pos-nav-text">Stock</span>
-            </NavLink>
-        }
-
-        @if (_canStockPurchases)
-        {
-            <NavLink href="/stock-purchases" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-box-arrow-in-down"></i></span>
-                <span class="pos-nav-text">Stock Purchases</span>
-            </NavLink>
-        }
-
-        @if (_canSuppliers)
-        {
-            <NavLink href="/suppliers" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-truck"></i></span>
-                <span class="pos-nav-text">Suppliers</span>
-            </NavLink>
-        }
-
-        @if (_canSales)
-        {
-            <NavLink href="/sales" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-cart-check"></i></span>
-                <span class="pos-nav-text">Sales</span>
-            </NavLink>
-        }
-
-        @if (_canQuotes)
-        {
-            <NavLink href="/quotes" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-file-earmark-text"></i></span>
-                <span class="pos-nav-text">Quotes</span>
-            </NavLink>
-        }
-
-        @if (_canInvoices)
-        {
-            <NavLink href="/invoices" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-receipt"></i></span>
-                <span class="pos-nav-text">Invoices</span>
-            </NavLink>
-        }
-
-        @if (_canOverdueInvoices)
-        {
-            <NavLink href="/overdue-invoices" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-exclamation-octagon"></i></span>
-                <span class="pos-nav-text">Overdue Invoices</span>
-            </NavLink>
-        }
-
-        @if (_canInvoiceFollowUps)
-        {
-            <NavLink href="/invoice-follow-ups" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-calendar-check"></i></span>
-                <span class="pos-nav-text">Invoice Follow-ups</span>
-            </NavLink>
-        }
-
-        @if (_canCashierShift)
-        {
-            <NavLink href="/cashier-shift" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-cash-coin"></i></span>
-                <span class="pos-nav-text">Cashier Shift</span>
-            </NavLink>
-        }
-
-        @if (_canCustomers)
-        {
-            <NavLink href="/customers" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-person-lines-fill"></i></span>
-                <span class="pos-nav-text">Customers</span>
-            </NavLink>
-        }
-
-        @if (_canCustomerStatements)
-        {
-            <NavLink href="/customer-statements" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-journal-text"></i></span>
-                <span class="pos-nav-text">Customer Statements</span>
-            </NavLink>
-        }
-
-        @if (_canBranches)
-        {
-            <NavLink href="/branches" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-shop"></i></span>
-                <span class="pos-nav-text">Branches</span>
-            </NavLink>
-        }
-
-        @if (_canStockTransfers)
-        {
-            <NavLink href="/stock-transfers" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-arrow-left-right"></i></span>
-                <span class="pos-nav-text">Stock Transfers</span>
-            </NavLink>
-        }
-
-        @if (_canUsers || _canReports || _canAuditTrail || _canSettings)
+        @if (_canBranches || _canUsers || _canReports || _canAuditTrail || _canSettings)
         {
             <div class="pos-nav-section">Management</div>
-        }
 
-        @if (_canUsers)
-        {
-            <NavLink href="/users" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-people"></i></span>
-                <span class="pos-nav-text">Users</span>
-            </NavLink>
-        }
+            @if (_canBranches)
+            {
+                <NavLink href="/branches" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-shop"></i></span>
+                    <span class="pos-nav-text">Branches</span>
+                </NavLink>
+            }
 
-        @if (_canReports)
-        {
-            <NavLink href="/reports" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-bar-chart"></i></span>
-                <span class="pos-nav-text">Reports</span>
-            </NavLink>
-        }
+            @if (_canUsers)
+            {
+                <NavLink href="/users" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-people"></i></span>
+                    <span class="pos-nav-text">Users</span>
+                </NavLink>
+            }
 
-        @if (_canAuditTrail)
-        {
-            <NavLink href="/audit-trail" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-shield-lock"></i></span>
-                <span class="pos-nav-text">Audit Trail</span>
-            </NavLink>
-        }
+            @if (_canReports)
+            {
+                <NavLink href="/reports" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-bar-chart"></i></span>
+                    <span class="pos-nav-text">Reports</span>
+                </NavLink>
+            }
 
-        @if (_canExpenses)
-        {
-            <NavLink href="/expenses" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-wallet2"></i></span>
-                <span class="pos-nav-text">Expenses</span>
-            </NavLink>
-        }
+            @if (_canAuditTrail)
+            {
+                <NavLink href="/audit-trail" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-shield-lock"></i></span>
+                    <span class="pos-nav-text">Audit Trail</span>
+                </NavLink>
+            }
 
-        @if (_canSettings)
-        {
-            <NavLink href="/settings" class="pos-nav-link">
-                <span class="pos-nav-icon"><i class="bi bi-gear"></i></span>
-                <span class="pos-nav-text">Settings</span>
-            </NavLink>
+            @if (_canSettings)
+            {
+                <NavLink href="/settings" class="pos-nav-link">
+                    <span class="pos-nav-icon"><i class="bi bi-gear"></i></span>
+                    <span class="pos-nav-text">Settings</span>
+                </NavLink>
+            }
         }
     </nav>
 

@@ -14,26 +14,19 @@
 <PageTitle>Dashboard</PageTitle>
 
 <section class="dash-page">
-    <div class="dash-hero">
-        <div>
+    <div class="dash-top">
+        <div class="dash-title-area">
             <div class="dash-kicker">
                 <i class="bi bi-speedometer2"></i>
-                Control centre
+                Dashboard
             </div>
 
             <h1>@Greeting, @_settings.BusinessName</h1>
-            <p>Today’s business health, cashier status, low stock alerts and recent activity in one place.</p>
-
-            <QuoteInvoiceDashboardCards />
-            
-            <div class="dash-branch-badge">
-                <i class="bi bi-shop"></i>
-                Showing: @_dashboard.SelectedBranchName
-            </div>
+            <p>Track today’s sales, profit, stock alerts, cashier shift and recent business activity.</p>
         </div>
 
-        <div class="dash-actions">
-            <select class="dash-branch-select" @bind="_branchFilter">
+        <div class="dash-toolbar">
+            <select class="dash-select" @bind="_branchFilter">
                 <option value="">All branches</option>
                 @foreach (var branch in _dashboard.Branches)
                 {
@@ -47,26 +40,48 @@
                 }
             </select>
 
-            <button type="button" class="dash-secondary-action" @onclick="LoadDashboardAsync">
+            <button type="button" class="dash-btn dash-btn-light" @onclick="LoadDashboardAsync">
                 <i class="bi bi-filter"></i>
                 Filter
             </button>
 
-            <a href="/sales" class="dash-primary-action">
+            <a href="/sales" class="dash-btn dash-btn-dark">
                 <i class="bi bi-cart-check"></i>
                 New Sale
-            </a>
-
-            <a href="/reports" class="dash-secondary-action">
-                <i class="bi bi-bar-chart"></i>
-                Reports
             </a>
         </div>
     </div>
 
+    <div class="dash-branch-strip">
+        <div>
+            <span>Current view</span>
+            <strong>@_dashboard.SelectedBranchName</strong>
+        </div>
+
+        <div>
+            <span>Business</span>
+            <strong>@_settings.BusinessType</strong>
+        </div>
+
+        <div>
+            <span>Currency</span>
+            <strong>@_settings.CurrencyCode · @_settings.CurrencySymbol</strong>
+        </div>
+
+        <div>
+            <span>Stock tracking</span>
+            <strong>@(_settings.StockTrackingEnabled ? "Enabled" : "Disabled")</strong>
+        </div>
+    </div>
+
+    <QuoteInvoiceDashboardCards />
+
     @if (_loading)
     {
         <div class="dash-empty">
+            <div class="dash-empty-icon">
+                <i class="bi bi-hourglass-split"></i>
+            </div>
             <strong>Loading dashboard...</strong>
             <span>Please wait while we prepare your business summary.</span>
         </div>
@@ -74,286 +89,326 @@
     else
     {
         <div class="dash-summary-grid">
-            <div class="dash-summary-card dark">
+            <div class="dash-summary-card hero">
+                <div class="dash-card-icon">
+                    <i class="bi bi-graph-up-arrow"></i>
+                </div>
                 <span>Net Profit Today</span>
                 <strong>@Money(_dashboard.TodayNetProfit)</strong>
                 <small>After stock cost and expenses</small>
             </div>
 
             <div class="dash-summary-card">
+                <div class="dash-card-icon soft">
+                    <i class="bi bi-receipt"></i>
+                </div>
                 <span>Net Sales</span>
                 <strong>@Money(_dashboard.TodayNetSales)</strong>
                 <small>@_dashboard.TodayTransactionCount transaction@(_dashboard.TodayTransactionCount == 1 ? "" : "s")</small>
             </div>
 
-            <div class="dash-summary-card green">
+            <div class="dash-summary-card">
+                <div class="dash-card-icon green">
+                    <i class="bi bi-cash-stack"></i>
+                </div>
                 <span>Gross Profit</span>
                 <strong>@Money(_dashboard.TodayGrossProfit)</strong>
                 <small>Sales minus item cost</small>
             </div>
 
-            <div class="dash-summary-card red">
+            <div class="dash-summary-card">
+                <div class="dash-card-icon red">
+                    <i class="bi bi-wallet2"></i>
+                </div>
                 <span>Expenses</span>
                 <strong>@Money(_dashboard.TodayExpenses)</strong>
                 <small>@_dashboard.TodayExpenseCount recorded today</small>
             </div>
 
-            <div class="dash-summary-card amber">
+            <div class="dash-summary-card">
+                <div class="dash-card-icon amber">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                </div>
                 <span>Refunds</span>
                 <strong>@Money(_dashboard.TodayRefunds)</strong>
                 <small>@_dashboard.TodayRefundCount refund@(_dashboard.TodayRefundCount == 1 ? "" : "s")</small>
             </div>
 
-            <div class="dash-summary-card blue">
+            <div class="dash-summary-card">
+                <div class="dash-card-icon blue">
+                    <i class="bi bi-box-seam"></i>
+                </div>
                 <span>Low Stock</span>
                 <strong>@_dashboard.LowStockCount</strong>
                 <small>@_dashboard.OutOfStockCount out of stock</small>
             </div>
         </div>
 
-        <div class="dash-grid">
-            <div class="dash-panel dash-shift-panel">
-                <div class="dash-panel-header">
-                    <div>
-                        <h2>Cashier Shift</h2>
-                        <p>Your current till session status.</p>
-                    </div>
-
-                    <a href="/cashier-shift" class="dash-small-link">
-                        Open Shifts
-                    </a>
-                </div>
-
-                @if (_dashboard.OpenShift == null)
-                {
-                    <div class="dash-shift-empty">
+        <div class="dash-main-grid">
+            <div class="dash-left-column">
+                <div class="dash-panel">
+                    <div class="dash-panel-header">
                         <div>
-                            <strong>No open shift</strong>
-                            <span>Open a cashier shift before making sales.</span>
+                            <h2>Cashier Shift</h2>
+                            <p>Your current till session status.</p>
                         </div>
 
-                        <a href="/cashier-shift">Open Shift</a>
+                        <a href="/cashier-shift" class="dash-panel-link">
+                            Open Shifts
+                        </a>
                     </div>
-                }
-                else
-                {
-                    <div class="dash-shift-card">
-                        <div class="dash-shift-status">
-                            <span>Open since</span>
-                            <strong>@_dashboard.OpenShift.OpenedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</strong>
+
+                    @if (_dashboard.OpenShift == null)
+                    {
+                        <div class="dash-shift-empty">
+                            <div class="dash-shift-empty-icon">
+                                <i class="bi bi-cash-coin"></i>
+                            </div>
+
+                            <div>
+                                <strong>No open shift</strong>
+                                <span>Open a cashier shift before making sales.</span>
+                            </div>
+
+                            <a href="/cashier-shift">Open Shift</a>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="dash-shift-card">
+                            <div class="dash-shift-status">
+                                <span>Open since</span>
+                                <strong>@_dashboard.OpenShift.OpenedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</strong>
+                            </div>
+
+                            <div class="dash-shift-metrics">
+                                <div>
+                                    <span>Opening Cash</span>
+                                    <strong>@Money(_dashboard.OpenShift.OpeningCash)</strong>
+                                </div>
+
+                                <div>
+                                    <span>Cash Sales</span>
+                                    <strong>@Money(_dashboard.OpenShift.CashSales)</strong>
+                                </div>
+
+                                <div>
+                                    <span>Card Sales</span>
+                                    <strong>@Money(_dashboard.OpenShift.CardSales)</strong>
+                                </div>
+
+                                <div>
+                                    <span>EFT Sales</span>
+                                    <strong>@Money(_dashboard.OpenShift.EftSales)</strong>
+                                </div>
+
+                                <div>
+                                    <span>Total Sales</span>
+                                    <strong>@Money(_dashboard.OpenShift.TotalSales)</strong>
+                                </div>
+
+                                <div>
+                                    <span>Expected Cash</span>
+                                    <strong>@Money(_dashboard.OpenShift.ExpectedCash)</strong>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <div class="dash-panel">
+                    <div class="dash-panel-header">
+                        <div>
+                            <h2>Quick Actions</h2>
+                            <p>Shortcuts for daily operations.</p>
+                        </div>
+                    </div>
+
+                    <div class="dash-quick-actions">
+                        <a href="/sales">
+                            <i class="bi bi-cart-plus"></i>
+                            <span>Make Sale</span>
+                        </a>
+
+                        <a href="/stock-purchases">
+                            <i class="bi bi-box-arrow-in-down"></i>
+                            <span>Receive Stock</span>
+                        </a>
+
+                        <a href="/products">
+                            <i class="bi bi-box-seam"></i>
+                            <span>Products</span>
+                        </a>
+
+                        <a href="/customers">
+                            <i class="bi bi-person-plus"></i>
+                            <span>Customers</span>
+                        </a>
+
+                        <a href="/expenses">
+                            <i class="bi bi-wallet2"></i>
+                            <span>Expenses</span>
+                        </a>
+
+                        <a href="/reports">
+                            <i class="bi bi-bar-chart"></i>
+                            <span>Reports</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dash-right-column">
+                <div class="dash-panel">
+                    <div class="dash-panel-header">
+                        <div>
+                            <h2>Recent Sales</h2>
+                            <p>Latest transactions recorded today.</p>
                         </div>
 
-                        <div class="dash-shift-metrics">
-                            <div>
-                                <span>Opening Cash</span>
-                                <strong>@Money(_dashboard.OpenShift.OpeningCash)</strong>
-                            </div>
+                        <a href="/sales" class="dash-panel-link">View Sales</a>
+                    </div>
 
-                            <div>
-                                <span>Cash Sales</span>
-                                <strong>@Money(_dashboard.OpenShift.CashSales)</strong>
-                            </div>
+                    @if (_dashboard.RecentSales.Count == 0)
+                    {
+                        <DashboardEmpty Text="No sales yet today." />
+                    }
+                    else
+                    {
+                        <div class="dash-list">
+                            @foreach (var sale in _dashboard.RecentSales)
+                            {
+                                <div class="dash-list-row">
+                                    <div class="dash-list-left">
+                                        <div class="dash-list-avatar">
+                                            <i class="bi bi-receipt"></i>
+                                        </div>
 
-                            <div>
-                                <span>Card Sales</span>
-                                <strong>@Money(_dashboard.OpenShift.CardSales)</strong>
-                            </div>
+                                        <div>
+                                            <strong>@sale.SaleNumber</strong>
+                                            <span>@sale.CreatedAt.ToLocalTime().ToString("HH:mm") · @sale.PaymentMethod · @(string.IsNullOrWhiteSpace(sale.CustomerName) ? "Walk-in" : sale.CustomerName)</span>
+                                        </div>
+                                    </div>
 
-                            <div>
-                                <span>EFT Sales</span>
-                                <strong>@Money(_dashboard.OpenShift.EftSales)</strong>
-                            </div>
-
-                            <div>
-                                <span>Total Sales</span>
-                                <strong>@Money(_dashboard.OpenShift.TotalSales)</strong>
-                            </div>
-
-                            <div>
-                                <span>Expected Cash</span>
-                                <strong>@Money(_dashboard.OpenShift.ExpectedCash)</strong>
-                            </div>
+                                    <div class="dash-row-money">
+                                        <strong>@Money(sale.TotalAmount)</strong>
+                                        <span>@sale.Status</span>
+                                    </div>
+                                </div>
+                            }
                         </div>
-                    </div>
-                }
-            </div>
-
-            <div class="dash-panel">
-                <div class="dash-panel-header">
-                    <div>
-                        <h2>Quick Actions</h2>
-                        <p>Common actions for daily operations.</p>
-                    </div>
+                    }
                 </div>
 
-                <div class="dash-quick-actions">
-                    <a href="/sales">
-                        <i class="bi bi-cart-plus"></i>
-                        <span>Make Sale</span>
-                    </a>
+                <div class="dash-panel">
+                    <div class="dash-panel-header">
+                        <div>
+                            <h2>Low Stock Alerts</h2>
+                            <p>Items that need attention.</p>
+                        </div>
 
-                    <a href="/stock-purchases">
-                        <i class="bi bi-box-arrow-in-down"></i>
-                        <span>Receive Stock</span>
-                    </a>
-
-                    <a href="/expenses">
-                        <i class="bi bi-wallet2"></i>
-                        <span>Add Expense</span>
-                    </a>
-
-                    <a href="/customers">
-                        <i class="bi bi-person-plus"></i>
-                        <span>Add Customer</span>
-                    </a>
-
-                    <a href="/products">
-                        <i class="bi bi-box-seam"></i>
-                        <span>Products</span>
-                    </a>
-
-                    <a href="/reports">
-                        <i class="bi bi-bar-chart"></i>
-                        <span>Reports</span>
-                    </a>
-                </div>
-            </div>
-
-            <div class="dash-panel">
-                <div class="dash-panel-header">
-                    <div>
-                        <h2>Recent Sales</h2>
-                        <p>Latest transactions recorded today.</p>
+                        <a href="/stock" class="dash-panel-link">View Stock</a>
                     </div>
 
-                    <a href="/sales" class="dash-small-link">View Sales</a>
+                    @if (_dashboard.LowStockItems.Count == 0)
+                    {
+                        <DashboardEmpty Text="No low stock alerts." />
+                    }
+                    else
+                    {
+                        <div class="dash-list">
+                            @foreach (var item in _dashboard.LowStockItems)
+                            {
+                                <div class="dash-list-row">
+                                    <div class="dash-list-left">
+                                        <div class="dash-list-avatar warning">
+                                            <i class="bi bi-box-seam"></i>
+                                        </div>
+
+                                        <div>
+                                            <strong>@item.ProductName</strong>
+                                            <span>@item.SKU · Reorder at @item.ReorderLevel.ToString("0.##")</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="dash-stock-count @(item.QuantityInStock <= 0 ? "danger" : "warning")">
+                                        @item.QuantityInStock.ToString("0.##")
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
                 </div>
 
-                @if (_dashboard.RecentSales.Count == 0)
-                {
-                    <DashboardEmpty Text="No sales yet today." />
-                }
-                else
-                {
-                    <div class="dash-list">
-                        @foreach (var sale in _dashboard.RecentSales)
+                <div class="dash-panel two-column-panel">
+                    <div class="dash-mini-section">
+                        <div class="dash-panel-header compact">
+                            <div>
+                                <h2>Recent Expenses</h2>
+                                <p>Recorded today.</p>
+                            </div>
+
+                            <a href="/expenses" class="dash-panel-link">View</a>
+                        </div>
+
+                        @if (_dashboard.RecentExpenses.Count == 0)
                         {
-                            <div class="dash-list-row">
-                                <div>
-                                    <strong>@sale.SaleNumber</strong>
-                                    <span>@sale.CreatedAt.ToLocalTime().ToString("HH:mm") · @sale.PaymentMethod · @(string.IsNullOrWhiteSpace(sale.CustomerName) ? "Walk-in" : sale.CustomerName)</span>
-                                </div>
+                            <DashboardEmpty Text="No expenses recorded today." />
+                        }
+                        else
+                        {
+                            <div class="dash-list compact-list">
+                                @foreach (var expense in _dashboard.RecentExpenses)
+                                {
+                                    <div class="dash-list-row">
+                                        <div>
+                                            <strong>@expense.CategoryName</strong>
+                                            <span>@expense.ExpenseNumber · @(string.IsNullOrWhiteSpace(expense.VendorName) ? "No vendor" : expense.VendorName)</span>
+                                        </div>
 
-                                <div class="dash-row-money">
-                                    <strong>@Money(sale.TotalAmount)</strong>
-                                    <span>@sale.Status</span>
-                                </div>
+                                        <div class="dash-row-money negative">
+                                            <strong>@Money(expense.TotalAmount)</strong>
+                                        </div>
+                                    </div>
+                                }
                             </div>
                         }
                     </div>
-                }
-            </div>
 
-            <div class="dash-panel">
-                <div class="dash-panel-header">
-                    <div>
-                        <h2>Low Stock Alerts</h2>
-                        <p>Items that need attention.</p>
-                    </div>
+                    <div class="dash-mini-section border-left">
+                        <div class="dash-panel-header compact">
+                            <div>
+                                <h2>Recent Refunds</h2>
+                                <p>Returns and voids.</p>
+                            </div>
 
-                    <a href="/stock" class="dash-small-link">View Stock</a>
-                </div>
+                            <a href="/sales" class="dash-panel-link">View</a>
+                        </div>
 
-                @if (_dashboard.LowStockItems.Count == 0)
-                {
-                    <DashboardEmpty Text="No low stock alerts." />
-                }
-                else
-                {
-                    <div class="dash-list">
-                        @foreach (var item in _dashboard.LowStockItems)
+                        @if (_dashboard.RecentRefunds.Count == 0)
                         {
-                            <div class="dash-list-row">
-                                <div>
-                                    <strong>@item.ProductName</strong>
-                                    <span>@item.SKU · Reorder at @item.ReorderLevel.ToString("0.##")</span>
-                                </div>
+                            <DashboardEmpty Text="No refunds processed today." />
+                        }
+                        else
+                        {
+                            <div class="dash-list compact-list">
+                                @foreach (var refund in _dashboard.RecentRefunds)
+                                {
+                                    <div class="dash-list-row">
+                                        <div>
+                                            <strong>@refund.ReturnNumber</strong>
+                                            <span>@refund.CreatedAt.ToLocalTime().ToString("HH:mm") · @refund.ReturnType · @refund.SaleNumber</span>
+                                        </div>
 
-                                <div class="dash-stock-count @(item.QuantityInStock <= 0 ? "danger" : "warning")">
-                                    @item.QuantityInStock.ToString("0.##")
-                                </div>
+                                        <div class="dash-row-money negative">
+                                            <strong>@Money(refund.TotalRefundAmount)</strong>
+                                        </div>
+                                    </div>
+                                }
                             </div>
                         }
                     </div>
-                }
-            </div>
-
-            <div class="dash-panel">
-                <div class="dash-panel-header">
-                    <div>
-                        <h2>Recent Expenses</h2>
-                        <p>Latest expenses recorded today.</p>
-                    </div>
-
-                    <a href="/expenses" class="dash-small-link">View Expenses</a>
                 </div>
-
-                @if (_dashboard.RecentExpenses.Count == 0)
-                {
-                    <DashboardEmpty Text="No expenses recorded today." />
-                }
-                else
-                {
-                    <div class="dash-list">
-                        @foreach (var expense in _dashboard.RecentExpenses)
-                        {
-                            <div class="dash-list-row">
-                                <div>
-                                    <strong>@expense.CategoryName</strong>
-                                    <span>@expense.ExpenseNumber · @(string.IsNullOrWhiteSpace(expense.VendorName) ? "No vendor" : expense.VendorName)</span>
-                                </div>
-
-                                <div class="dash-row-money negative">
-                                    <strong>@Money(expense.TotalAmount)</strong>
-                                </div>
-                            </div>
-                        }
-                    </div>
-                }
-            </div>
-
-            <div class="dash-panel">
-                <div class="dash-panel-header">
-                    <div>
-                        <h2>Recent Refunds</h2>
-                        <p>Refunds, returns and voids processed today.</p>
-                    </div>
-
-                    <a href="/sales" class="dash-small-link">View Refunds</a>
-                </div>
-
-                @if (_dashboard.RecentRefunds.Count == 0)
-                {
-                    <DashboardEmpty Text="No refunds processed today." />
-                }
-                else
-                {
-                    <div class="dash-list">
-                        @foreach (var refund in _dashboard.RecentRefunds)
-                        {
-                            <div class="dash-list-row">
-                                <div>
-                                    <strong>@refund.ReturnNumber</strong>
-                                    <span>@refund.CreatedAt.ToLocalTime().ToString("HH:mm") · @refund.ReturnType · @refund.SaleNumber</span>
-                                </div>
-
-                                <div class="dash-row-money negative">
-                                    <strong>@Money(refund.TotalRefundAmount)</strong>
-                                </div>
-                            </div>
-                        }
-                    </div>
-                }
             </div>
         </div>
     }
@@ -364,125 +419,149 @@
         animation: dashIn .22s ease both;
     }
 
-    .dash-hero {
+    .dash-top {
         display: flex;
         justify-content: space-between;
         align-items: flex-end;
         gap: 18px;
-        padding: 22px;
-        margin-bottom: 18px;
-        border-radius: 24px;
-        background: radial-gradient(circle at top right, rgba(37,99,235,.16), transparent 32%), linear-gradient(135deg, #111827, #1f2937);
-        box-shadow: 0 18px 40px rgba(15,23,42,.16);
-        color: #ffffff;
+        margin-bottom: 16px;
+    }
+
+    .dash-title-area {
+        min-width: 0;
     }
 
     .dash-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: rgba(255,255,255,.78);
-        font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
 
-    .dash-hero h1 {
+    .dash-title-area h1 {
         margin: 0;
-        font-size: 1.55rem;
-        font-weight: 700;
-        letter-spacing: -.03em;
+        color: #111827;
+        font-size: 1.45rem;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
-    .dash-hero p {
+    .dash-title-area p {
         margin: 7px 0 0;
-        color: rgba(255,255,255,.72);
+        color: #667085;
         font-size: .88rem;
-        max-width: 680px;
+        max-width: 720px;
     }
 
-    .dash-branch-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        min-height: 30px;
-        padding: 0 11px;
-        margin-top: 10px;
-        border-radius: 999px;
-        background: rgba(255,255,255,.12);
-        color: #ffffff;
-        border: 1px solid rgba(255,255,255,.16);
-        font-size: .74rem;
-        font-weight: 700;
-    }
-
-    .dash-actions {
+    .dash-toolbar {
         display: flex;
+        align-items: center;
+        justify-content: flex-end;
         gap: 10px;
         flex-wrap: wrap;
-        justify-content: flex-end;
     }
 
-    .dash-branch-select {
+    .dash-select {
         min-height: 40px;
-        border-radius: 12px;
-        border: 1px solid rgba(255,255,255,.18);
-        background: rgba(255,255,255,.12);
-        color: #ffffff;
+        border-radius: 13px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        color: #111827;
         padding: 0 12px;
-        font-size: .82rem;
-        font-weight: 650;
+        font-size: 16px;
         outline: none;
+        min-width: 180px;
     }
 
-        .dash-branch-select option {
-            color: #0f172a;
-            background: #ffffff;
-        }
-
-    .dash-primary-action,
-    .dash-secondary-action {
+    .dash-btn {
         min-height: 40px;
-        border-radius: 12px;
+        border-radius: 13px;
         padding: 0 14px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
-        font-size: .82rem;
-        font-weight: 700;
+        font-size: .8rem;
+        font-weight: 680;
         text-decoration: none;
         white-space: nowrap;
         border: 0;
     }
 
-    .dash-primary-action {
-        background: #ffffff;
-        color: #111827;
+    .dash-btn-dark {
+        color: #ffffff;
+        background: #252525;
+        box-shadow: 0 12px 24px rgba(17, 24, 39, .12);
     }
 
-    .dash-secondary-action {
-        background: rgba(255,255,255,.12);
-        color: #ffffff;
-        border: 1px solid rgba(255,255,255,.18);
+    .dash-btn-light {
+        color: #8FA6A1;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
     }
+
+    .dash-branch-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+        .dash-branch-strip div {
+            padding: 13px 14px;
+            border-radius: 18px;
+            background: #ffffff;
+            border: 1px solid #e8eaef;
+            box-shadow: 0 10px 24px rgba(17, 24, 39, .035);
+        }
+
+        .dash-branch-strip span,
+        .dash-branch-strip strong {
+            display: block;
+        }
+
+        .dash-branch-strip span {
+            color: #98a2b3;
+            font-size: .7rem;
+            font-weight: 700;
+            letter-spacing: .03em;
+            text-transform: uppercase;
+        }
+
+        .dash-branch-strip strong {
+            margin-top: 5px;
+            color: #111827;
+            font-size: .82rem;
+            font-weight: 690;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
 
     .dash-summary-grid {
         display: grid;
         grid-template-columns: repeat(6, minmax(0, 1fr));
         gap: 12px;
-        margin-bottom: 16px;
+        margin: 16px 0;
     }
 
     .dash-summary-card {
-        padding: 16px;
-        border-radius: 18px;
+        padding: 15px;
+        border-radius: 20px;
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
     }
+
+        .dash-summary-card.hero {
+            background: #252525;
+            border-color: #252525;
+        }
 
         .dash-summary-card span,
         .dash-summary-card strong,
@@ -491,97 +570,128 @@
         }
 
         .dash-summary-card span {
-            color: #64748b;
+            margin-top: 11px;
+            color: #667085;
             font-size: .72rem;
-            font-weight: 650;
+            font-weight: 680;
         }
 
         .dash-summary-card strong {
             margin-top: 6px;
-            color: #0f172a;
-            font-size: 1.02rem;
+            color: #111827;
+            font-size: 1.05rem;
             font-weight: 760;
+            letter-spacing: -.02em;
         }
 
         .dash-summary-card small {
             margin-top: 4px;
-            color: #94a3b8;
+            color: #98a2b3;
             font-size: .72rem;
+            line-height: 1.35;
         }
 
-        .dash-summary-card.dark {
-            background: #111827;
-            border-color: #111827;
+        .dash-summary-card.hero span,
+        .dash-summary-card.hero strong,
+        .dash-summary-card.hero small {
+            color: #ffffff;
         }
 
-            .dash-summary-card.dark span,
-            .dash-summary-card.dark strong,
-            .dash-summary-card.dark small {
-                color: #ffffff;
-            }
+    .dash-card-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #252525;
+        box-shadow: 0 10px 22px rgba(17, 24, 39, .08);
+    }
 
-        .dash-summary-card.green strong {
-            color: #16a34a;
+        .dash-card-icon.soft {
+            color: #252525;
+            background: #f3f4f6;
         }
 
-        .dash-summary-card.red strong {
-            color: #dc2626;
+        .dash-card-icon.green {
+            color: #8FA6A1;
+            background: #f2f6f5;
         }
 
-        .dash-summary-card.amber strong {
-            color: #d97706;
+        .dash-card-icon.red {
+            color: #d92d20;
+            background: #fef3f2;
         }
 
-        .dash-summary-card.blue strong {
+        .dash-card-icon.amber {
+            color: #b7791f;
+            background: #fffbeb;
+        }
+
+        .dash-card-icon.blue {
             color: #2563eb;
+            background: #eff6ff;
         }
 
-    .dash-grid {
+    .dash-main-grid {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: 0.8fr 1.2fr;
         gap: 16px;
         align-items: start;
     }
 
+    .dash-left-column,
+    .dash-right-column {
+        display: grid;
+        gap: 16px;
+    }
+
     .dash-panel {
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        border-radius: 20px;
-        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        border: 1px solid #e8eaef;
+        border-radius: 22px;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
         overflow: hidden;
     }
 
     .dash-panel-header {
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
         display: flex;
         justify-content: space-between;
         align-items: center;
         gap: 12px;
     }
 
+        .dash-panel-header.compact {
+            padding: 15px 16px;
+        }
+
         .dash-panel-header h2 {
             margin: 0;
-            color: #0f172a;
+            color: #111827;
             font-size: .92rem;
             font-weight: 720;
+            letter-spacing: -.01em;
         }
 
         .dash-panel-header p {
             margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .76rem;
+            color: #98a2b3;
+            font-size: .74rem;
         }
 
-    .dash-small-link {
+    .dash-panel-link {
         min-height: 32px;
         padding: 0 11px;
-        border-radius: 10px;
+        border-radius: 999px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        background: #eef5ff;
-        color: #2563eb;
+        background: #ffffff;
+        color: #8FA6A1;
+        border: 1px solid #e5e7eb;
         font-size: .74rem;
         font-weight: 700;
         text-decoration: none;
@@ -589,57 +699,69 @@
     }
 
     .dash-shift-empty {
-        margin: 18px;
-        padding: 18px;
-        border-radius: 16px;
-        background: #fff7ed;
-        border: 1px solid #fed7aa;
-        display: flex;
-        justify-content: space-between;
-        gap: 14px;
+        margin: 16px;
+        padding: 16px;
+        border-radius: 18px;
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 12px;
         align-items: center;
     }
 
-        .dash-shift-empty strong,
-        .dash-shift-empty span {
-            display: block;
-        }
+    .dash-shift-empty-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #b7791f;
+    }
 
-        .dash-shift-empty strong {
-            color: #9a3412;
-            font-size: .9rem;
-        }
+    .dash-shift-empty strong,
+    .dash-shift-empty span {
+        display: block;
+    }
 
-        .dash-shift-empty span {
-            color: #c2410c;
-            font-size: .76rem;
-            margin-top: 3px;
-        }
+    .dash-shift-empty strong {
+        color: #92400e;
+        font-size: .88rem;
+        font-weight: 720;
+    }
 
-        .dash-shift-empty a {
-            min-height: 36px;
-            border-radius: 10px;
-            padding: 0 12px;
-            background: #111827;
-            color: #ffffff;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            font-size: .78rem;
-            font-weight: 700;
-            white-space: nowrap;
-        }
+    .dash-shift-empty span {
+        margin-top: 3px;
+        color: #b45309;
+        font-size: .74rem;
+    }
+
+    .dash-shift-empty a {
+        min-height: 36px;
+        border-radius: 12px;
+        padding: 0 12px;
+        background: #252525;
+        color: #ffffff;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        font-size: .76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
 
     .dash-shift-card {
-        padding: 18px;
+        padding: 16px;
     }
 
     .dash-shift-status {
         padding: 14px;
         margin-bottom: 12px;
-        border-radius: 16px;
-        background: #ecfdf5;
-        border: 1px solid #bbf7d0;
+        border-radius: 18px;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
     }
 
         .dash-shift-status span,
@@ -648,15 +770,18 @@
         }
 
         .dash-shift-status span {
-            color: #15803d;
+            color: #8FA6A1;
             font-size: .72rem;
-            font-weight: 650;
+            font-weight: 720;
+            text-transform: uppercase;
+            letter-spacing: .04em;
         }
 
         .dash-shift-status strong {
-            margin-top: 4px;
-            color: #166534;
-            font-size: .88rem;
+            margin-top: 5px;
+            color: #111827;
+            font-size: .9rem;
+            font-weight: 720;
         }
 
     .dash-shift-metrics {
@@ -668,8 +793,8 @@
         .dash-shift-metrics div {
             padding: 13px;
             border-radius: 16px;
-            background: #f8fafc;
-            border: 1px solid #e7edf5;
+            background: #fafafa;
+            border: 1px solid #edf0f3;
         }
 
         .dash-shift-metrics span,
@@ -678,54 +803,67 @@
         }
 
         .dash-shift-metrics span {
-            color: #64748b;
-            font-size: .72rem;
-            font-weight: 650;
+            color: #98a2b3;
+            font-size: .7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .03em;
         }
 
         .dash-shift-metrics strong {
-            margin-top: 4px;
-            color: #0f172a;
+            margin-top: 5px;
+            color: #111827;
             font-size: .84rem;
+            font-weight: 720;
         }
 
     .dash-quick-actions {
-        padding: 18px;
+        padding: 16px;
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 10px;
     }
 
         .dash-quick-actions a {
-            min-height: 58px;
+            min-height: 56px;
             padding: 12px;
-            border-radius: 16px;
-            background: #f8fafc;
-            border: 1px solid #e7edf5;
+            border-radius: 17px;
+            background: #fafafa;
+            border: 1px solid #edf0f3;
             display: flex;
             align-items: center;
             gap: 10px;
-            color: #0f172a;
+            color: #111827;
             text-decoration: none;
-            font-size: .84rem;
-            font-weight: 700;
+            font-size: .82rem;
+            font-weight: 690;
+            transition: transform .18s ease, background .18s ease;
         }
+
+            .dash-quick-actions a:hover {
+                transform: translateY(-1px);
+                background: #ffffff;
+            }
 
         .dash-quick-actions i {
             width: 34px;
             height: 34px;
-            border-radius: 12px;
-            background: #eef5ff;
-            color: #2563eb;
+            border-radius: 13px;
+            background: #f2f6f5;
+            color: #8FA6A1;
             display: inline-flex;
             align-items: center;
             justify-content: center;
         }
 
     .dash-list {
-        padding: 14px 18px;
+        padding: 14px 16px;
         display: grid;
         gap: 10px;
+    }
+
+    .compact-list {
+        padding: 13px 14px;
     }
 
     .dash-list-row {
@@ -733,28 +871,52 @@
         justify-content: space-between;
         align-items: center;
         gap: 14px;
-        padding: 13px;
+        padding: 12px;
         border-radius: 16px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
+        background: #fafafa;
+        border: 1px solid #edf0f3;
     }
 
-        .dash-list-row strong,
-        .dash-list-row span {
-            display: block;
+    .dash-list-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    .dash-list-avatar {
+        width: 34px;
+        height: 34px;
+        min-width: 34px;
+        border-radius: 13px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #f2f6f5;
+        color: #8FA6A1;
+    }
+
+        .dash-list-avatar.warning {
+            background: #fffbeb;
+            color: #b7791f;
         }
 
-        .dash-list-row strong {
-            color: #0f172a;
-            font-size: .84rem;
-            font-weight: 720;
-        }
+    .dash-list-row strong,
+    .dash-list-row span {
+        display: block;
+    }
 
-        .dash-list-row span {
-            margin-top: 3px;
-            color: #64748b;
-            font-size: .72rem;
-        }
+    .dash-list-row strong {
+        color: #111827;
+        font-size: .82rem;
+        font-weight: 720;
+    }
+
+    .dash-list-row span {
+        margin-top: 3px;
+        color: #667085;
+        font-size: .72rem;
+    }
 
     .dash-row-money {
         text-align: right;
@@ -762,7 +924,7 @@
     }
 
         .dash-row-money.negative strong {
-            color: #dc2626;
+            color: #d92d20;
         }
 
     .dash-stock-count {
@@ -777,39 +939,65 @@
     }
 
         .dash-stock-count.warning {
-            color: #b45309;
+            color: #b7791f;
             background: #fffbeb;
         }
 
         .dash-stock-count.danger {
-            color: #dc2626;
-            background: #fef2f2;
+            color: #d92d20;
+            background: #fef3f2;
+        }
+
+    .two-column-panel {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .dash-mini-section {
+        min-width: 0;
+    }
+
+        .dash-mini-section.border-left {
+            border-left: 1px solid #f1f2f5;
         }
 
     .dash-empty {
-        margin: 18px 0;
+        margin: 16px 0;
         padding: 34px 20px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px dashed #dbe3ef;
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px dashed #d0d5dd;
         text-align: center;
     }
 
-        .dash-empty strong,
-        .dash-empty span {
-            display: block;
-        }
+    .dash-empty-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 10px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
 
-        .dash-empty strong {
-            color: #0f172a;
-            font-size: .9rem;
-        }
+    .dash-empty strong,
+    .dash-empty span {
+        display: block;
+    }
 
-        .dash-empty span {
-            margin-top: 4px;
-            color: #64748b;
-            font-size: .78rem;
-        }
+    .dash-empty strong {
+        color: #111827;
+        font-size: .9rem;
+        font-weight: 720;
+    }
+
+    .dash-empty span {
+        margin-top: 4px;
+        color: #667085;
+        font-size: .78rem;
+    }
 
     @@keyframes dashIn {
         from {
@@ -823,41 +1011,69 @@
         }
     }
 
-    @@media (max-width: 1199px) {
+    @@media (max-width: 1320px) {
         .dash-summary-grid {
             grid-template-columns: repeat(3, minmax(0, 1fr));
         }
-    }
 
-    @@media (max-width: 991px) {
-        .dash-hero,
-        .dash-panel-header,
-        .dash-shift-empty {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-            .dash-actions,
-            .dash-actions a,
-            .dash-actions button,
-            .dash-branch-select,
-            .dash-shift-empty a {
-                width: 100%;
-            }
-
-        .dash-grid {
+        .dash-main-grid {
             grid-template-columns: 1fr;
         }
     }
 
+    @@media (max-width: 991px) {
+        .dash-top {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .dash-toolbar,
+        .dash-toolbar .dash-btn,
+        .dash-select {
+            width: 100%;
+        }
+
+        .dash-branch-strip {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .two-column-panel {
+            grid-template-columns: 1fr;
+        }
+
+        .dash-mini-section.border-left {
+            border-left: 0;
+            border-top: 1px solid #f1f2f5;
+        }
+    }
+
     @@media (max-width: 640px) {
+        .dash-title-area h1 {
+            font-size: 1.2rem;
+        }
+
+        .dash-branch-strip,
         .dash-summary-grid,
         .dash-shift-metrics,
         .dash-quick-actions {
             grid-template-columns: 1fr;
         }
 
+        .dash-shift-empty {
+            grid-template-columns: 1fr;
+            align-items: flex-start;
+        }
+
+            .dash-shift-empty a {
+                width: 100%;
+                justify-content: center;
+            }
+
         .dash-list-row {
+            align-items: flex-start;
+        }
+
+        .dash-list-left {
             align-items: flex-start;
         }
     }
