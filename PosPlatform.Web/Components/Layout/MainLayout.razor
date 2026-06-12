@@ -1,4 +1,9 @@
 ﻿@inherits LayoutComponentBase
+@implements IDisposable
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.JSInterop
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
 
 <input type="checkbox" id="sidebarToggle" class="pos-sidebar-toggle" />
 
@@ -53,3 +58,60 @@
         </main>
     </div>
 </div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        NavigationManager.LocationChanged += HandleLocationChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await ScrollToTopAsync();
+        }
+    }
+
+    private async void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        await InvokeAsync(async () =>
+        {
+            await Task.Delay(80);
+            await ScrollToTopAsync();
+            await CloseMobileSidebarAsync();
+        });
+    }
+
+    private async Task ScrollToTopAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("window.scrollTo", 0, 0);
+        }
+        catch
+        {
+            // Ignore during prerender or if JS is not ready yet.
+        }
+    }
+
+    private async Task CloseMobileSidebarAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync(
+                "eval",
+                "const sidebarToggle = document.getElementById('sidebarToggle'); if (sidebarToggle) sidebarToggle.checked = false;"
+            );
+        }
+        catch
+        {
+            // Ignore during prerender or if JS is not ready yet.
+        }
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= HandleLocationChanged;
+    }
+}

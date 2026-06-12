@@ -4,6 +4,7 @@
 @layout MainLayout
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Web
 @using PosPlatform.Web.Components.Layout
 @using PosPlatform.Web.Models.Invoices
 @using PosPlatform.Web.Models.Settings
@@ -17,14 +18,15 @@
 <PageTitle>Invoices</PageTitle>
 
 <section class="invoices-page">
-    <div class="invoices-header">
+    <div class="invoices-top">
         <div>
             <div class="invoices-kicker">
                 <i class="bi bi-receipt"></i>
                 Customer billing
             </div>
+
             <h1>Invoices</h1>
-            <p>View invoices created from accepted quotes and record customer payments.</p>
+            <p>View invoices, send customer documents, print invoices and record customer payments.</p>
         </div>
     </div>
 
@@ -39,6 +41,44 @@
         </div>
     }
 
+    <div class="invoices-summary-grid">
+        <div class="invoices-summary-card hero">
+            <div class="invoices-summary-icon">
+                <i class="bi bi-cash-stack"></i>
+            </div>
+            <span>Total Value</span>
+            <strong>@Money(_invoices.Sum(x => x.TotalAmount))</strong>
+            <small>For the selected period</small>
+        </div>
+
+        <div class="invoices-summary-card">
+            <div class="invoices-summary-icon green">
+                <i class="bi bi-check2-circle"></i>
+            </div>
+            <span>Paid</span>
+            <strong>@PaidInvoices</strong>
+            <small>Fully settled invoices</small>
+        </div>
+
+        <div class="invoices-summary-card">
+            <div class="invoices-summary-icon amber">
+                <i class="bi bi-hourglass-split"></i>
+            </div>
+            <span>Partially Paid</span>
+            <strong>@PartiallyPaidInvoices</strong>
+            <small>Invoices with part payments</small>
+        </div>
+
+        <div class="invoices-summary-card">
+            <div class="invoices-summary-icon red">
+                <i class="bi bi-exclamation-circle"></i>
+            </div>
+            <span>Balance Due</span>
+            <strong>@Money(_invoices.Sum(x => x.BalanceDue))</strong>
+            <small>Outstanding amount</small>
+        </div>
+    </div>
+
     <div class="invoices-settings-strip">
         <div>
             <span>Business</span>
@@ -47,17 +87,17 @@
 
         <div>
             <span>Invoices Showing</span>
-            <strong>@_invoices.Count</strong>
+            <strong>@TotalInvoices</strong>
         </div>
 
         <div>
-            <span>Total Value</span>
-            <strong>@Money(_invoices.Sum(x => x.TotalAmount))</strong>
+            <span>Currency</span>
+            <strong>@CurrencyLabel</strong>
         </div>
 
         <div>
-            <span>Balance Due</span>
-            <strong>@Money(_invoices.Sum(x => x.BalanceDue))</strong>
+            <span>Overdue</span>
+            <strong>@OverdueInvoices</strong>
         </div>
     </div>
 
@@ -65,7 +105,7 @@
         <input type="date" @bind="_fromDate" />
         <input type="date" @bind="_toDate" />
 
-        <select @bind="_statusFilter">
+        <select value="@_statusFilter" @onchange="StatusFilterChanged">
             <option value="all">All statuses</option>
             <option value="Unpaid">Unpaid</option>
             <option value="Partially Paid">Partially Paid</option>
@@ -77,10 +117,11 @@
             <i class="bi bi-search"></i>
             <input @bind="_searchTerm"
                    @bind:event="oninput"
+                   @onkeydown="HandleSearchKeyDown"
                    placeholder="Search invoice, quote or customer" />
         </div>
 
-        <button type="button" class="invoices-secondary-btn" @onclick="LoadInvoicesAsync">
+        <button type="button" class="invoices-secondary-btn" @onclick="ApplyFiltersAsync">
             <i class="bi bi-filter"></i>
             Filter
         </button>
@@ -95,20 +136,26 @@
         <div class="invoices-table-header">
             <div>
                 <h2>Invoice List</h2>
-                <p>Latest matching invoices.</p>
+                <p>Showing @InvoicePageStart - @InvoicePageEnd of @TotalInvoices invoice@(InvoicePlural).</p>
             </div>
         </div>
 
         @if (_loading)
         {
             <div class="invoices-empty">
+                <div class="invoices-empty-icon">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
                 <strong>Loading invoices...</strong>
-                <span>Please wait.</span>
+                <span>Please wait while we load matching invoices.</span>
             </div>
         }
         else if (_invoices.Count == 0)
         {
             <div class="invoices-empty">
+                <div class="invoices-empty-icon">
+                    <i class="bi bi-receipt"></i>
+                </div>
                 <strong>No invoices found</strong>
                 <span>Accepted quotes can be converted into invoices.</span>
             </div>
@@ -129,15 +176,17 @@
                             <th>Paid</th>
                             <th>Balance</th>
                             <th>Status</th>
-                            <th class="text-end">Actions</th>
+                            <th class="invoices-actions-col">Actions</th>
                         </tr>
                     </thead>
 
                     <tbody>
-                        @foreach (var invoice in _invoices)
+                        @foreach (var invoice in PaginatedInvoices)
                         {
                             <tr>
-                                <td><strong>@invoice.InvoiceNumber</strong></td>
+                                <td>
+                                    <strong>@invoice.InvoiceNumber</strong>
+                                </td>
                                 <td>@(invoice.QuoteNumber ?? "-")</td>
                                 <td>@invoice.CustomerName</td>
                                 <td>@invoice.InvoiceDate.ToString("yyyy-MM-dd")</td>
@@ -151,22 +200,71 @@
                                         @invoice.Status
                                     </span>
                                 </td>
-                                <td class="text-end">
-                                    <button type="button" class="invoices-mini-btn" @onclick="() => ViewInvoiceAsync(invoice.Id)">
-                                        View
-                                    </button>
+                                <td class="invoices-actions-cell">
+                                    <div class="invoices-action-menu">
+                                        <button type="button"
+                                                class="invoices-action-toggle"
+                                                @onclick="() => ToggleActionMenu(invoice.Id)">
+                                            <span>Actions</span>
+                                            <i class="bi bi-chevron-down"></i>
+                                        </button>
 
-                                    <button type="button" class="invoices-mini-btn" @onclick="() => PrintInvoice(invoice.Id)">
-                                        Print
-                                    </button>
-                                    <button type="button" class="invoices-mini-btn" @onclick="() => SendInvoiceEmailAsync(invoice.Id)">
-                                        Email
-                                    </button>
+                                        @if (_openActionInvoiceId == invoice.Id)
+                                        {
+                                            <div class="invoices-action-dropdown">
+                                                <button type="button" @onclick="() => ViewInvoiceAsync(invoice.Id)">
+                                                    <i class="bi bi-eye"></i>
+                                                    <span>View invoice</span>
+                                                </button>
+
+                                                <button type="button" @onclick="() => PrintInvoice(invoice.Id)">
+                                                    <i class="bi bi-printer"></i>
+                                                    <span>Print invoice</span>
+                                                </button>
+
+                                                <button type="button" @onclick="() => SendInvoiceEmailAsync(invoice.Id)">
+                                                    <i class="bi bi-envelope"></i>
+                                                    <span>Email invoice</span>
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
                                 </td>
                             </tr>
                         }
                     </tbody>
                 </table>
+            </div>
+
+            <div class="invoices-pagination">
+                <div class="invoices-page-info">
+                    Showing
+                    <strong>@InvoicePageStart</strong>
+                    -
+                    <strong>@InvoicePageEnd</strong>
+                    of
+                    <strong>@TotalInvoices</strong>
+                </div>
+
+                <div class="invoices-page-controls">
+                    <button type="button"
+                            class="@PreviousInvoicePageClass"
+                            @onclick="PreviousInvoicePage">
+                        <i class="bi bi-chevron-left"></i>
+                        Previous
+                    </button>
+
+                    <span class="invoices-page-count">
+                        Page @_invoicePage of @InvoiceTotalPages
+                    </span>
+
+                    <button type="button"
+                            class="@NextInvoicePageClass"
+                            @onclick="NextInvoicePage">
+                        Next
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
             </div>
         }
     </div>
@@ -218,17 +316,21 @@
                     <span>Balance Due</span>
                     <strong>@Money(_selectedInvoice.BalanceDue)</strong>
                 </div>
+            </div>
+
+            <div class="invoices-detail-actions top-actions">
                 <button type="button" class="invoices-secondary-btn full" @onclick="() => PrintInvoice(_selectedInvoice.Id)">
                     <i class="bi bi-printer"></i>
                     Print Invoice
                 </button>
+
                 <button type="button" class="invoices-secondary-btn full" @onclick="() => SendInvoiceEmailAsync(_selectedInvoice.Id)">
                     <i class="bi bi-envelope"></i>
                     Email Invoice
                 </button>
             </div>
 
-            <div class="invoices-table-wrap">
+            <div class="invoices-table-wrap compact-wrap">
                 <table class="invoices-table compact">
                     <thead>
                         <tr>
@@ -281,7 +383,7 @@
                     <strong>@Money(_selectedInvoice.AmountPaid)</strong>
                 </div>
 
-                <div>
+                <div class="final">
                     <span>Balance Due</span>
                     <strong>@Money(_selectedInvoice.BalanceDue)</strong>
                 </div>
@@ -307,7 +409,7 @@
                 }
                 else
                 {
-                    <div class="invoices-table-wrap">
+                    <div class="invoices-table-wrap compact-wrap">
                         <table class="invoices-table compact">
                             <thead>
                                 <tr>
@@ -388,7 +490,7 @@
                 </div>
             </div>
 
-            <button type="button" class="invoices-primary-btn full mt" disabled="@_savingPayment" @onclick="SavePaymentAsync">
+            <button type="button" class="invoices-primary-btn full mt @(_savingPayment ? "is-disabled" : "")" @onclick="SavePaymentAsync">
                 <i class="bi bi-check-circle"></i>
                 @(_savingPayment ? "Saving..." : "Save Payment")
             </button>
@@ -401,35 +503,86 @@
         animation: invoicesIn .22s ease both;
     }
 
-    .invoices-header {
-        margin-bottom: 18px;
+    .invoices-top {
+        margin-bottom: 16px;
     }
 
     .invoices-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
 
-    .invoices-header h1 {
+    .invoices-top h1 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.45rem;
-        font-weight: 680;
-        letter-spacing: -.03em;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
-    .invoices-header p {
+    .invoices-top p {
         margin: 6px 0 0;
-        color: #64748b;
+        color: #667085;
         font-size: .88rem;
     }
+
+    .invoices-primary-btn,
+    .invoices-secondary-btn,
+    .invoices-ghost-btn,
+    .invoices-page-btn {
+        min-height: 38px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 680;
+        border: 0;
+        white-space: nowrap;
+        transition: transform .18s ease;
+    }
+
+    .invoices-primary-btn {
+        color: #fff;
+        background: #252525;
+        box-shadow: 0 12px 24px rgba(17,24,39,.12);
+    }
+
+    .invoices-secondary-btn {
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
+    }
+
+    .invoices-ghost-btn,
+    .invoices-page-btn {
+        color: #475569;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+    }
+
+        .invoices-primary-btn:hover,
+        .invoices-secondary-btn:hover,
+        .invoices-ghost-btn:hover,
+        .invoices-page-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .invoices-primary-btn.is-disabled,
+        .invoices-page-btn.is-disabled {
+            opacity: .45;
+            cursor: not-allowed;
+            transform: none;
+        }
 
     .invoices-alert {
         display: flex;
@@ -465,6 +618,87 @@
             color: inherit;
         }
 
+    .invoices-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .invoices-summary-card {
+        padding: 15px;
+        border-radius: 20px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
+    }
+
+        .invoices-summary-card.hero {
+            background: #252525;
+            border-color: #252525;
+        }
+
+        .invoices-summary-card span,
+        .invoices-summary-card strong,
+        .invoices-summary-card small {
+            display: block;
+        }
+
+        .invoices-summary-card span {
+            margin-top: 11px;
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .invoices-summary-card strong {
+            margin-top: 6px;
+            color: #111827;
+            font-size: 1.05rem;
+            font-weight: 760;
+            letter-spacing: -.02em;
+        }
+
+        .invoices-summary-card small {
+            margin-top: 4px;
+            color: #98a2b3;
+            font-size: .72rem;
+            line-height: 1.35;
+        }
+
+        .invoices-summary-card.hero span,
+        .invoices-summary-card.hero strong,
+        .invoices-summary-card.hero small {
+            color: #ffffff;
+        }
+
+    .invoices-summary-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #252525;
+        box-shadow: 0 10px 22px rgba(17, 24, 39, .08);
+    }
+
+        .invoices-summary-icon.green {
+            color: #8FA6A1;
+            background: #f2f6f5;
+        }
+
+        .invoices-summary-icon.amber {
+            color: #b7791f;
+            background: #fffbeb;
+        }
+
+        .invoices-summary-icon.red {
+            color: #d92d20;
+            background: #fef3f2;
+        }
+
     .invoices-settings-strip {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -476,8 +710,8 @@
             padding: 13px;
             border-radius: 16px;
             background: #fff;
-            border: 1px solid #e7edf5;
-            box-shadow: 0 12px 28px rgba(15,23,42,.04);
+            border: 1px solid #e8eaef;
+            box-shadow: 0 10px 24px rgba(17,24,39,.035);
         }
 
         .invoices-settings-strip span,
@@ -486,14 +720,16 @@
         }
 
         .invoices-settings-strip span {
-            color: #64748b;
-            font-size: .72rem;
-            font-weight: 650;
+            color: #98a2b3;
+            font-size: .7rem;
+            font-weight: 700;
+            letter-spacing: .03em;
+            text-transform: uppercase;
         }
 
         .invoices-settings-strip strong {
             margin-top: 4px;
-            color: #0f172a;
+            color: #111827;
             font-size: .84rem;
             font-weight: 720;
         }
@@ -506,8 +742,8 @@
         margin-bottom: 16px;
         border-radius: 18px;
         background: #fff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 10px 24px rgba(17,24,39,.035);
     }
 
         .invoices-control-panel input,
@@ -517,22 +753,22 @@
             border-radius: 12px;
             border: 1px solid #e5e7eb;
             background: #fff;
-            color: #0f172a;
+            color: #111827;
             padding: 0 12px;
-            font-size: .84rem;
+            font-size: 16px;
             outline: none;
         }
 
     .invoices-search {
-        min-height: 40px;
+        min-height: 42px;
         display: flex;
         align-items: center;
         gap: 10px;
         padding: 0 13px;
-        border-radius: 12px;
-        background: #f8fafc;
+        border-radius: 14px;
+        background: #fafafa;
         border: 1px solid #e5e7eb;
-        color: #94a3b8;
+        color: #98a2b3;
     }
 
         .invoices-search input {
@@ -540,86 +776,44 @@
             border: 0;
             outline: none;
             background: transparent;
-            color: #0f172a;
-            font-size: .84rem;
+            color: #111827;
+            font-size: 16px;
         }
-
-    .invoices-primary-btn,
-    .invoices-secondary-btn,
-    .invoices-ghost-btn,
-    .invoices-mini-btn {
-        min-height: 38px;
-        border-radius: 11px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        padding: 0 14px;
-        font-size: .8rem;
-        font-weight: 650;
-        border: 0;
-        white-space: nowrap;
-    }
-
-    .invoices-primary-btn {
-        color: #fff;
-        background: #111827;
-        box-shadow: 0 12px 24px rgba(15,23,42,.14);
-    }
-
-        .invoices-primary-btn:disabled {
-            opacity: .55;
-            cursor: not-allowed;
-        }
-
-    .invoices-secondary-btn {
-        color: #2563eb;
-        background: #eef5ff;
-    }
-
-    .invoices-ghost-btn {
-        color: #475569;
-        background: #fff;
-        border: 1px solid #e5e7eb;
-    }
-
-    .invoices-mini-btn {
-        min-height: 30px;
-        color: #2563eb;
-        background: #eff6ff;
-        border: 1px solid #bfdbfe;
-        padding: 0 10px;
-    }
 
     .invoices-table-card {
-        overflow: hidden;
-        border-radius: 20px;
+        overflow: visible;
+        border-radius: 22px;
         background: #fff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17,24,39,.045);
     }
 
     .invoices-table-header {
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
     }
 
         .invoices-table-header h2 {
             margin: 0;
-            color: #0f172a;
-            font-size: .92rem;
+            color: #111827;
+            font-size: .94rem;
             font-weight: 720;
         }
 
         .invoices-table-header p {
             margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .76rem;
+            color: #98a2b3;
+            font-size: .75rem;
         }
 
     .invoices-table-wrap {
         overflow-x: auto;
+        padding-bottom: 100px;
     }
+
+        .invoices-table-wrap.compact-wrap {
+            padding-bottom: 0;
+        }
 
     .invoices-table {
         width: 100%;
@@ -633,12 +827,12 @@
 
         .invoices-table th {
             padding: 12px 16px;
-            background: #f8fafc;
-            color: #64748b;
+            background: #fafafa;
+            color: #667085;
             font-size: .7rem;
             font-weight: 750;
             text-transform: uppercase;
-            border-bottom: 1px solid #e7edf5;
+            border-bottom: 1px solid #e8eaef;
             white-space: nowrap;
         }
 
@@ -646,12 +840,12 @@
             padding: 14px 16px;
             color: #334155;
             font-size: .82rem;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f2f5;
             vertical-align: middle;
         }
 
     .invoices-money {
-        color: #0f172a;
+        color: #111827;
         font-weight: 750;
     }
 
@@ -663,15 +857,16 @@
         border-radius: 999px;
         font-size: .72rem;
         font-weight: 750;
+        white-space: nowrap;
     }
 
         .invoices-pill.unpaid {
-            color: #dc2626;
-            background: #fef2f2;
+            color: #d92d20;
+            background: #fef3f2;
         }
 
         .invoices-pill.partial {
-            color: #d97706;
+            color: #b7791f;
             background: #fffbeb;
         }
 
@@ -681,16 +876,90 @@
         }
 
         .invoices-pill.cancelled {
-            color: #64748b;
-            background: #f1f5f9;
+            color: #667085;
+            background: #f3f4f6;
         }
+
+    .invoices-actions-col,
+    .invoices-actions-cell {
+        text-align: right;
+    }
+
+    .invoices-actions-cell {
+        position: relative;
+        min-width: 150px;
+    }
+
+    .invoices-action-menu {
+        position: relative;
+        display: inline-block;
+    }
+
+    .invoices-action-toggle {
+        min-height: 34px;
+        border-radius: 11px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        color: #252525;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 11px;
+        font-size: .74rem;
+        font-weight: 750;
+        cursor: pointer;
+        box-shadow: 0 8px 18px rgba(17, 24, 39, .04);
+    }
+
+    .invoices-action-dropdown {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        width: 195px;
+        padding: 7px;
+        border-radius: 15px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 18px 38px rgba(17, 24, 39, .14);
+        z-index: 100;
+        display: grid;
+        gap: 4px;
+        text-align: left;
+    }
+
+        .invoices-action-dropdown button {
+            width: 100%;
+            min-height: 36px;
+            border: 0;
+            border-radius: 11px;
+            background: transparent;
+            color: #344054;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 10px;
+            font-size: .78rem;
+            font-weight: 650;
+            text-align: left;
+        }
+
+            .invoices-action-dropdown button:hover {
+                background: #fafafa;
+                color: #252525;
+            }
+
+            .invoices-action-dropdown button i {
+                width: 18px;
+                color: #8FA6A1;
+            }
 
     .invoices-empty {
         margin: 18px;
         padding: 34px 20px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px dashed #dbe3ef;
+        border-radius: 18px;
+        background: #fafafa;
+        border: 1px dashed #d0d5dd;
         text-align: center;
     }
 
@@ -699,21 +968,75 @@
             padding: 24px 16px;
         }
 
-        .invoices-empty strong,
-        .invoices-empty span {
-            display: block;
+    .invoices-empty-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 10px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .invoices-empty strong,
+    .invoices-empty span {
+        display: block;
+    }
+
+    .invoices-empty strong {
+        color: #111827;
+        font-size: .9rem;
+        font-weight: 720;
+    }
+
+    .invoices-empty span {
+        margin-top: 4px;
+        color: #667085;
+        font-size: .78rem;
+    }
+
+    .invoices-pagination {
+        padding: 14px 18px;
+        border-top: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        background: #ffffff;
+        border-radius: 0 0 22px 22px;
+    }
+
+    .invoices-page-info {
+        color: #667085;
+        font-size: .78rem;
+        font-weight: 600;
+    }
+
+        .invoices-page-info strong {
+            color: #111827;
         }
 
-        .invoices-empty strong {
-            color: #0f172a;
-            font-size: .9rem;
-        }
+    .invoices-page-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
 
-        .invoices-empty span {
-            margin-top: 4px;
-            color: #64748b;
-            font-size: .78rem;
-        }
+    .invoices-page-count {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 11px;
+        border-radius: 11px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+        color: #667085;
+        font-size: .76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
 
     .invoices-modal-backdrop {
         position: fixed;
@@ -722,15 +1045,17 @@
         padding: 20px;
         background: rgba(15, 23, 42, .44);
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: center;
+        overflow-y: auto;
     }
 
     .invoices-modal {
         width: 100%;
         max-width: 960px;
-        max-height: calc(100vh - 40px);
-        overflow-y: auto;
+        max-height: none;
+        margin-top: 10px;
+        margin-bottom: 20px;
         padding: 22px;
         border-radius: 22px;
         background: #fff;
@@ -751,7 +1076,7 @@
     }
 
         .invoices-modal-header span {
-            color: #2563eb;
+            color: #8FA6A1;
             font-size: .72rem;
             font-weight: 750;
             letter-spacing: .06em;
@@ -760,14 +1085,14 @@
 
         .invoices-modal-header h4 {
             margin: 3px 0 0;
-            color: #0f172a;
+            color: #111827;
             font-size: 1.05rem;
             font-weight: 720;
         }
 
         .invoices-modal-header p {
             margin: 5px 0 0;
-            color: #64748b;
+            color: #667085;
             font-size: .84rem;
         }
 
@@ -777,7 +1102,7 @@
         border-radius: 10px;
         border: 1px solid #e5e7eb;
         background: #fff;
-        color: #64748b;
+        color: #667085;
     }
 
     .invoices-detail-grid {
@@ -790,8 +1115,8 @@
         .invoices-detail-grid div {
             padding: 13px;
             border-radius: 16px;
-            background: #f8fafc;
-            border: 1px solid #e7edf5;
+            background: #fafafa;
+            border: 1px solid #e8eaef;
         }
 
         .invoices-detail-grid span,
@@ -800,15 +1125,27 @@
         }
 
         .invoices-detail-grid span {
-            color: #64748b;
+            color: #667085;
             font-size: .72rem;
             font-weight: 650;
         }
 
         .invoices-detail-grid strong {
             margin-top: 4px;
-            color: #0f172a;
+            color: #111827;
             font-size: .84rem;
+        }
+
+    .invoices-detail-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+        .invoices-detail-actions.top-actions {
+            margin-top: 0;
+            margin-bottom: 14px;
         }
 
     .invoices-summary {
@@ -817,8 +1154,8 @@
         margin: 14px 0;
         padding: 14px;
         border-radius: 16px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
     }
 
         .invoices-summary div {
@@ -827,13 +1164,18 @@
             gap: 12px;
         }
 
+        .invoices-summary .final {
+            padding-top: 8px;
+            border-top: 1px solid #e8eaef;
+        }
+
         .invoices-summary span {
-            color: #64748b;
+            color: #667085;
             font-size: .78rem;
         }
 
         .invoices-summary strong {
-            color: #0f172a;
+            color: #111827;
             font-size: .86rem;
         }
 
@@ -843,7 +1185,7 @@
 
         .invoices-payment-history h5 {
             margin: 0 0 10px;
-            color: #0f172a;
+            color: #111827;
             font-size: .9rem;
             font-weight: 720;
         }
@@ -857,7 +1199,7 @@
         .invoices-form-grid label {
             display: block;
             margin-bottom: 5px;
-            color: #64748b;
+            color: #667085;
             font-size: .72rem;
             font-weight: 700;
         }
@@ -870,9 +1212,9 @@
             border-radius: 12px;
             border: 1px solid #e5e7eb;
             background: #fff;
-            color: #0f172a;
+            color: #111827;
             padding: 0 12px;
-            font-size: .84rem;
+            font-size: 16px;
             outline: none;
         }
 
@@ -909,6 +1251,7 @@
     @@media (max-width: 1199px) {
         .invoices-control-panel,
         .invoices-settings-strip,
+        .invoices-summary-grid,
         .invoices-detail-grid {
             grid-template-columns: 1fr;
         }
@@ -924,12 +1267,33 @@
             width: 100%;
         }
 
-        .invoices-form-grid {
+        .invoices-form-grid,
+        .invoices-detail-actions {
             grid-template-columns: 1fr;
         }
 
         .span-2 {
             grid-column: span 1;
+        }
+
+        .invoices-pagination {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .invoices-page-controls,
+        .invoices-page-btn {
+            width: 100%;
+        }
+
+        .invoices-page-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .invoices-page-count {
+            justify-content: center;
+            width: 100%;
         }
     }
 </style>
@@ -954,10 +1318,65 @@
     private bool _savingPayment;
     private RecordInvoicePaymentModel _paymentModel = new();
 
+    private int _invoicePage = 1;
+    private int _invoicePageSize = 10;
+    private int? _openActionInvoiceId;
+
     private string CurrencyLabel =>
         string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
             ? "R"
             : _settings.CurrencySymbol;
+
+    private List<InvoiceListItemViewModel> OrderedInvoices =>
+        _invoices
+            .OrderByDescending(x => x.InvoiceDate)
+            .ToList();
+
+    private int TotalInvoices => OrderedInvoices.Count;
+
+    private string InvoicePlural => TotalInvoices == 1 ? "" : "s";
+
+    private int PaidInvoices => _invoices.Count(x => x.Status == "Paid");
+
+    private int PartiallyPaidInvoices => _invoices.Count(x => x.Status == "Partially Paid");
+
+    private int OverdueInvoices =>
+        _invoices.Count(x =>
+            x.DueDate.HasValue &&
+            x.DueDate.Value.Date < DateTime.Today &&
+            x.BalanceDue > 0 &&
+            x.Status != "Paid" &&
+            x.Status != "Cancelled");
+
+    private int InvoiceTotalPages =>
+        TotalInvoices == 0
+            ? 1
+            : (int)Math.Ceiling(TotalInvoices / (double)_invoicePageSize);
+
+    private int SafeInvoicePage =>
+        Math.Min(Math.Max(_invoicePage, 1), InvoiceTotalPages);
+
+    private int InvoicePageStart =>
+        TotalInvoices == 0
+            ? 0
+            : ((SafeInvoicePage - 1) * _invoicePageSize) + 1;
+
+    private int InvoicePageEnd =>
+        TotalInvoices == 0
+            ? 0
+            : Math.Min(SafeInvoicePage * _invoicePageSize, TotalInvoices);
+
+    private List<InvoiceListItemViewModel> PaginatedInvoices =>
+        OrderedInvoices
+            .Skip((SafeInvoicePage - 1) * _invoicePageSize)
+            .Take(_invoicePageSize)
+            .ToList();
+
+    private string PreviousInvoicePageClass =>
+        _invoicePage <= 1 ? "invoices-page-btn is-disabled" : "invoices-page-btn";
+
+    private string NextInvoicePageClass =>
+        _invoicePage >= InvoiceTotalPages ? "invoices-page-btn is-disabled" : "invoices-page-btn";
 
     protected override async Task OnInitializedAsync()
     {
@@ -974,6 +1393,7 @@
     private async Task LoadInvoicesAsync()
     {
         _loading = true;
+        _openActionInvoiceId = null;
 
         _invoices = await InvoiceService.GetInvoicesAsync(
             _fromDate,
@@ -981,7 +1401,32 @@
             _statusFilter,
             _searchTerm);
 
+        if (_invoicePage > InvoiceTotalPages)
+        {
+            _invoicePage = InvoiceTotalPages;
+        }
+
         _loading = false;
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _invoicePage = 1;
+        await LoadInvoicesAsync();
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyFiltersAsync();
+        }
+    }
+
+    private void StatusFilterChanged(ChangeEventArgs e)
+    {
+        _statusFilter = e.Value?.ToString() ?? "all";
+        _invoicePage = 1;
     }
 
     private async Task ResetFiltersAsync()
@@ -990,12 +1435,37 @@
         _toDate = DateTime.Today;
         _statusFilter = "all";
         _searchTerm = null;
+        _invoicePage = 1;
 
         await LoadInvoicesAsync();
     }
 
+    private void NextInvoicePage()
+    {
+        if (_invoicePage < InvoiceTotalPages)
+        {
+            _invoicePage++;
+            _openActionInvoiceId = null;
+        }
+    }
+
+    private void PreviousInvoicePage()
+    {
+        if (_invoicePage > 1)
+        {
+            _invoicePage--;
+            _openActionInvoiceId = null;
+        }
+    }
+
+    private void ToggleActionMenu(int invoiceId)
+    {
+        _openActionInvoiceId = _openActionInvoiceId == invoiceId ? null : invoiceId;
+    }
+
     private async Task ViewInvoiceAsync(int invoiceId)
     {
+        _openActionInvoiceId = null;
         _selectedInvoice = await InvoiceService.GetInvoiceDetailsAsync(invoiceId);
     }
 
@@ -1095,12 +1565,17 @@
             _ => "unpaid"
         };
     }
+
     private void PrintInvoice(int invoiceId)
     {
+        _openActionInvoiceId = null;
         NavigationManager.NavigateTo($"/invoices/print/{invoiceId}");
     }
+
     private async Task SendInvoiceEmailAsync(int invoiceId)
     {
+        _openActionInvoiceId = null;
+
         var result = await DocumentEmailService.SendInvoiceEmailAsync(invoiceId);
         ShowMessage(result.Message, result.Success);
 

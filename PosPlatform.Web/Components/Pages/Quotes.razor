@@ -4,6 +4,7 @@
 @layout MainLayout
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Web
 @using PosPlatform.Web.Components.Layout
 @using PosPlatform.Web.Models.Quotes
 @using PosPlatform.Web.Models.Settings
@@ -18,14 +19,15 @@
 <PageTitle>Quotes</PageTitle>
 
 <section class="quotes-page">
-    <div class="quotes-header">
+    <div class="quotes-top">
         <div>
             <div class="quotes-kicker">
                 <i class="bi bi-file-earmark-text"></i>
                 Sales documents
             </div>
+
             <h1>Quotes</h1>
-            <p>Create customer quotes and turn accepted quotes into invoices.</p>
+            <p>Create customer quotes, send them to customers and convert accepted quotes into invoices.</p>
         </div>
 
         <button type="button" class="quotes-primary-btn" @onclick="OpenCreate">
@@ -45,6 +47,44 @@
         </div>
     }
 
+    <div class="quotes-summary-grid">
+        <div class="quotes-summary-card hero">
+            <div class="quotes-summary-icon">
+                <i class="bi bi-file-earmark-text"></i>
+            </div>
+            <span>Total Value</span>
+            <strong>@Money(_quotes.Sum(x => x.TotalAmount))</strong>
+            <small>For the selected period</small>
+        </div>
+
+        <div class="quotes-summary-card">
+            <div class="quotes-summary-icon green">
+                <i class="bi bi-check2-circle"></i>
+            </div>
+            <span>Accepted</span>
+            <strong>@AcceptedQuotes</strong>
+            <small>Converted or ready to invoice</small>
+        </div>
+
+        <div class="quotes-summary-card">
+            <div class="quotes-summary-icon blue">
+                <i class="bi bi-send"></i>
+            </div>
+            <span>Sent</span>
+            <strong>@SentQuotes</strong>
+            <small>Shared with customers</small>
+        </div>
+
+        <div class="quotes-summary-card">
+            <div class="quotes-summary-icon amber">
+                <i class="bi bi-pencil-square"></i>
+            </div>
+            <span>Drafts</span>
+            <strong>@DraftQuotes</strong>
+            <small>Still being prepared</small>
+        </div>
+    </div>
+
     <div class="quotes-settings-strip">
         <div>
             <span>Business</span>
@@ -58,12 +98,12 @@
 
         <div>
             <span>Quotes Showing</span>
-            <strong>@_quotes.Count</strong>
+            <strong>@TotalQuotes</strong>
         </div>
 
         <div>
-            <span>Total Value</span>
-            <strong>@Money(_quotes.Sum(x => x.TotalAmount))</strong>
+            <span>Tax</span>
+            <strong>@(_settings.TaxEnabled ? $"{_settings.TaxRate:0.##}%" : "Disabled")</strong>
         </div>
     </div>
 
@@ -71,7 +111,7 @@
         <input type="date" @bind="_fromDate" />
         <input type="date" @bind="_toDate" />
 
-        <select @bind="_statusFilter">
+        <select value="@_statusFilter" @onchange="StatusFilterChanged">
             <option value="all">All statuses</option>
             <option value="Draft">Draft</option>
             <option value="Sent">Sent</option>
@@ -83,10 +123,11 @@
             <i class="bi bi-search"></i>
             <input @bind="_searchTerm"
                    @bind:event="oninput"
+                   @onkeydown="HandleSearchKeyDown"
                    placeholder="Search quote number or customer" />
         </div>
 
-        <button type="button" class="quotes-secondary-btn" @onclick="LoadQuotesAsync">
+        <button type="button" class="quotes-secondary-btn" @onclick="ApplyFiltersAsync">
             <i class="bi bi-filter"></i>
             Filter
         </button>
@@ -101,22 +142,33 @@
         <div class="quotes-table-header">
             <div>
                 <h2>Quote List</h2>
-                <p>Latest matching customer quotes.</p>
+                <p>Showing @QuotePageStart - @QuotePageEnd of @TotalQuotes quote@(QuotePlural).</p>
             </div>
         </div>
 
         @if (_loading)
         {
             <div class="quotes-empty">
+                <div class="quotes-empty-icon">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
                 <strong>Loading quotes...</strong>
-                <span>Please wait.</span>
+                <span>Please wait while we load matching customer quotes.</span>
             </div>
         }
         else if (_quotes.Count == 0)
         {
             <div class="quotes-empty">
+                <div class="quotes-empty-icon">
+                    <i class="bi bi-file-earmark-plus"></i>
+                </div>
                 <strong>No quotes found</strong>
                 <span>Create your first customer quote to get started.</span>
+
+                <button type="button" class="quotes-primary-btn" @onclick="OpenCreate">
+                    <i class="bi bi-plus-circle"></i>
+                    New Quote
+                </button>
             </div>
         }
         else
@@ -133,12 +185,12 @@
                             <th>Total</th>
                             <th>Status</th>
                             <th>Created By</th>
-                            <th class="text-end">Actions</th>
+                            <th class="quotes-actions-col">Actions</th>
                         </tr>
                     </thead>
 
                     <tbody>
-                        @foreach (var quote in _quotes)
+                        @foreach (var quote in PaginatedQuotes)
                         {
                             <tr>
                                 <td>
@@ -148,38 +200,101 @@
                                         <span class="quotes-muted">@quote.Notes</span>
                                     }
                                 </td>
+
                                 <td>@quote.CustomerName</td>
                                 <td>@quote.QuoteDate.ToString("yyyy-MM-dd")</td>
                                 <td>@(quote.ExpiryDate?.ToString("yyyy-MM-dd") ?? "-")</td>
                                 <td>@quote.ItemCount</td>
                                 <td class="quotes-money">@Money(quote.TotalAmount)</td>
+
                                 <td>
                                     <span class="quotes-pill @GetStatusClass(quote.Status)">
                                         @quote.Status
                                     </span>
                                 </td>
+
                                 <td>@quote.CreatedByName</td>
-                                <td class="text-end">
-                                    <button type="button" class="quotes-mini-btn" @onclick="() => ViewQuoteAsync(quote.Id)">
-                                        View
-                                    </button>
 
-                                    <button type="button" class="quotes-mini-btn" @onclick="() => MarkSentAsync(quote.Id)">
-                                        Sent
-                                    </button>
+                                <td class="quotes-actions-cell">
+                                    <div class="quotes-action-menu">
+                                        <button type="button"
+                                                class="quotes-action-toggle"
+                                                @onclick="() => ToggleActionMenu(quote.Id)">
+                                            <span>Actions</span>
+                                            <i class="bi bi-chevron-down"></i>
+                                        </button>
 
-                                    <button type="button" class="quotes-mini-btn" @onclick="() => MarkAcceptedAsync(quote.Id)">
-                                        Accept
-                                    </button>
+                                        @if (_openActionQuoteId == quote.Id)
+                                        {
+                                            <div class="quotes-action-dropdown">
+                                                <button type="button" @onclick="() => ViewQuoteAsync(quote.Id)">
+                                                    <i class="bi bi-eye"></i>
+                                                    <span>View quote</span>
+                                                </button>
 
-                                    <button type="button" class="quotes-danger-mini-btn" @onclick="() => MarkCancelledAsync(quote.Id)">
-                                        Cancel
-                                    </button>
+                                                <button type="button" @onclick="() => PrintQuote(quote.Id)">
+                                                    <i class="bi bi-printer"></i>
+                                                    <span>Print quote</span>
+                                                </button>
+
+                                                <button type="button" @onclick="() => SendQuoteEmailAsync(quote.Id)">
+                                                    <i class="bi bi-envelope"></i>
+                                                    <span>Email quote</span>
+                                                </button>
+
+                                                <button type="button" @onclick="() => MarkSentAsync(quote.Id)">
+                                                    <i class="bi bi-send"></i>
+                                                    <span>Mark as sent</span>
+                                                </button>
+
+                                                <button type="button" @onclick="() => MarkAcceptedAsync(quote.Id)">
+                                                    <i class="bi bi-check-circle"></i>
+                                                    <span>Accept & invoice</span>
+                                                </button>
+
+                                                <button type="button" class="danger" @onclick="() => MarkCancelledAsync(quote.Id)">
+                                                    <i class="bi bi-x-circle"></i>
+                                                    <span>Cancel quote</span>
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
                                 </td>
                             </tr>
                         }
                     </tbody>
                 </table>
+            </div>
+
+            <div class="quotes-pagination">
+                <div class="quotes-page-info">
+                    Showing
+                    <strong>@QuotePageStart</strong>
+                    -
+                    <strong>@QuotePageEnd</strong>
+                    of
+                    <strong>@TotalQuotes</strong>
+                </div>
+
+                <div class="quotes-page-controls">
+                    <button type="button"
+                            class="@PreviousQuotePageClass"
+                            @onclick="PreviousQuotePage">
+                        <i class="bi bi-chevron-left"></i>
+                        Previous
+                    </button>
+
+                    <span class="quotes-page-count">
+                        Page @_quotePage of @QuoteTotalPages
+                    </span>
+
+                    <button type="button"
+                            class="@NextQuotePageClass"
+                            @onclick="NextQuotePage">
+                        Next
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
             </div>
         }
     </div>
@@ -213,6 +328,7 @@
 
                         <div class="align-end">
                             <button type="button" class="quotes-secondary-btn full" @onclick="SearchCustomersAsync">
+                                <i class="bi bi-search"></i>
                                 Search
                             </button>
                         </div>
@@ -263,6 +379,7 @@
 
                         <div class="align-end">
                             <button type="button" class="quotes-secondary-btn full" @onclick="SearchProductsAsync">
+                                <i class="bi bi-search"></i>
                                 Search
                             </button>
                         </div>
@@ -280,6 +397,7 @@
                                     </div>
 
                                     <button type="button" class="quotes-mini-btn" @onclick="() => AddProduct(product)">
+                                        <i class="bi bi-plus-lg"></i>
                                         Add
                                     </button>
                                 </div>
@@ -288,7 +406,7 @@
                     }
                 </div>
 
-                <div class="quotes-panel">
+                <div class="quotes-panel sticky">
                     <h5>Quote Items</h5>
 
                     @if (_selectedItems.Count == 0)
@@ -354,13 +472,13 @@
                             <strong>@Money(CreateTax)</strong>
                         </div>
 
-                        <div>
+                        <div class="final">
                             <span>Estimated Total</span>
                             <strong>@Money(CreateTotal)</strong>
                         </div>
                     </div>
 
-                    <button type="button" class="quotes-primary-btn full" disabled="@_saving" @onclick="SaveQuoteAsync">
+                    <button type="button" class="quotes-primary-btn full @(_saving ? "is-disabled" : "")" @onclick="SaveQuoteAsync">
                         <i class="bi bi-check-circle"></i>
                         @(_saving ? "Saving..." : "Create Quote")
                     </button>
@@ -401,6 +519,9 @@
                     <span>Customer Phone</span>
                     <strong>@(_selectedQuote.CustomerPhone ?? "-")</strong>
                 </div>
+            </div>
+
+            <div class="quotes-detail-actions top-actions">
                 <button type="button" class="quotes-secondary-btn full" @onclick="() => PrintQuote(_selectedQuote.Id)">
                     <i class="bi bi-printer"></i>
                     Print Quote
@@ -455,7 +576,7 @@
                     <strong>@Money(_selectedQuote.TaxAmount)</strong>
                 </div>
 
-                <div>
+                <div class="final">
                     <span>Total</span>
                     <strong>@Money(_selectedQuote.TotalAmount)</strong>
                 </div>
@@ -518,37 +639,37 @@
         animation: quotesIn .22s ease both;
     }
 
-    .quotes-header {
+    .quotes-top {
         display: flex;
         justify-content: space-between;
         gap: 18px;
         align-items: flex-end;
-        margin-bottom: 18px;
+        margin-bottom: 16px;
     }
 
     .quotes-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
 
-    .quotes-header h1 {
+    .quotes-top h1 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.45rem;
-        font-weight: 680;
-        letter-spacing: -.03em;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
-    .quotes-header p {
+    .quotes-top p {
         margin: 6px 0 0;
-        color: #64748b;
+        color: #667085;
         font-size: .88rem;
     }
 
@@ -556,56 +677,71 @@
     .quotes-secondary-btn,
     .quotes-ghost-btn,
     .quotes-mini-btn,
-    .quotes-danger-mini-btn {
+    .quotes-danger-mini-btn,
+    .quotes-page-btn {
         min-height: 38px;
-        border-radius: 11px;
+        border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
         padding: 0 14px;
         font-size: .8rem;
-        font-weight: 650;
+        font-weight: 680;
         border: 0;
         white-space: nowrap;
+        transition: transform .18s ease;
     }
 
     .quotes-primary-btn {
         color: #fff;
-        background: #111827;
-        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+        background: #252525;
+        box-shadow: 0 12px 24px rgba(17,24,39,.12);
     }
-
-        .quotes-primary-btn:disabled {
-            opacity: .55;
-            cursor: not-allowed;
-        }
 
     .quotes-secondary-btn {
-        color: #2563eb;
-        background: #eef5ff;
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
     }
 
-    .quotes-ghost-btn {
+    .quotes-ghost-btn,
+    .quotes-page-btn {
         color: #475569;
         background: #fff;
         border: 1px solid #e5e7eb;
     }
 
     .quotes-mini-btn {
-        min-height: 30px;
-        color: #2563eb;
-        background: #eff6ff;
-        border: 1px solid #bfdbfe;
+        min-height: 32px;
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
         padding: 0 10px;
     }
 
     .quotes-danger-mini-btn {
-        min-height: 30px;
-        color: #dc2626;
-        background: #fef2f2;
+        min-height: 32px;
+        color: #d92d20;
+        background: #fef3f2;
         border: 1px solid #fecaca;
         padding: 0 10px;
+    }
+
+        .quotes-primary-btn:hover,
+        .quotes-secondary-btn:hover,
+        .quotes-ghost-btn:hover,
+        .quotes-mini-btn:hover,
+        .quotes-danger-mini-btn:hover,
+        .quotes-page-btn:hover {
+            transform: translateY(-1px);
+        }
+
+    .quotes-primary-btn.is-disabled,
+    .quotes-page-btn.is-disabled {
+        opacity: .45;
+        cursor: not-allowed;
+        transform: none;
     }
 
     .quotes-alert {
@@ -642,6 +778,87 @@
             color: inherit;
         }
 
+    .quotes-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .quotes-summary-card {
+        padding: 15px;
+        border-radius: 20px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
+    }
+
+        .quotes-summary-card.hero {
+            background: #252525;
+            border-color: #252525;
+        }
+
+        .quotes-summary-card span,
+        .quotes-summary-card strong,
+        .quotes-summary-card small {
+            display: block;
+        }
+
+        .quotes-summary-card span {
+            margin-top: 11px;
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .quotes-summary-card strong {
+            margin-top: 6px;
+            color: #111827;
+            font-size: 1.05rem;
+            font-weight: 760;
+            letter-spacing: -.02em;
+        }
+
+        .quotes-summary-card small {
+            margin-top: 4px;
+            color: #98a2b3;
+            font-size: .72rem;
+            line-height: 1.35;
+        }
+
+        .quotes-summary-card.hero span,
+        .quotes-summary-card.hero strong,
+        .quotes-summary-card.hero small {
+            color: #ffffff;
+        }
+
+    .quotes-summary-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #252525;
+        box-shadow: 0 10px 22px rgba(17, 24, 39, .08);
+    }
+
+        .quotes-summary-icon.green {
+            color: #8FA6A1;
+            background: #f2f6f5;
+        }
+
+        .quotes-summary-icon.blue {
+            color: #2563eb;
+            background: #eff6ff;
+        }
+
+        .quotes-summary-icon.amber {
+            color: #b7791f;
+            background: #fffbeb;
+        }
+
     .quotes-settings-strip {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -653,8 +870,8 @@
             padding: 13px;
             border-radius: 16px;
             background: #fff;
-            border: 1px solid #e7edf5;
-            box-shadow: 0 12px 28px rgba(15,23,42,.04);
+            border: 1px solid #e8eaef;
+            box-shadow: 0 10px 24px rgba(17,24,39,.035);
         }
 
         .quotes-settings-strip span,
@@ -663,14 +880,16 @@
         }
 
         .quotes-settings-strip span {
-            color: #64748b;
-            font-size: .72rem;
-            font-weight: 650;
+            color: #98a2b3;
+            font-size: .7rem;
+            font-weight: 700;
+            letter-spacing: .03em;
+            text-transform: uppercase;
         }
 
         .quotes-settings-strip strong {
             margin-top: 4px;
-            color: #0f172a;
+            color: #111827;
             font-size: .84rem;
             font-weight: 720;
         }
@@ -683,8 +902,8 @@
         margin-bottom: 16px;
         border-radius: 18px;
         background: #fff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 10px 24px rgba(17,24,39,.035);
     }
 
         .quotes-control-panel input,
@@ -695,22 +914,22 @@
             border-radius: 12px;
             border: 1px solid #e5e7eb;
             background: #fff;
-            color: #0f172a;
+            color: #111827;
             padding: 0 12px;
-            font-size: .84rem;
+            font-size: 16px;
             outline: none;
         }
 
     .quotes-search {
-        min-height: 40px;
+        min-height: 42px;
         display: flex;
         align-items: center;
         gap: 10px;
         padding: 0 13px;
-        border-radius: 12px;
-        background: #f8fafc;
+        border-radius: 14px;
+        background: #fafafa;
         border: 1px solid #e5e7eb;
-        color: #94a3b8;
+        color: #98a2b3;
     }
 
         .quotes-search input {
@@ -718,40 +937,44 @@
             border: 0;
             outline: none;
             background: transparent;
-            color: #0f172a;
-            font-size: .84rem;
+            color: #111827;
+            font-size: 16px;
         }
 
     .quotes-table-card,
     .quotes-panel {
-        overflow: hidden;
-        border-radius: 20px;
+        border-radius: 22px;
         background: #fff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17,24,39,.045);
+    }
+
+    .quotes-table-card {
+        overflow: visible;
     }
 
     .quotes-table-header {
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
     }
 
         .quotes-table-header h2,
         .quotes-panel h5 {
             margin: 0;
-            color: #0f172a;
-            font-size: .92rem;
+            color: #111827;
+            font-size: .94rem;
             font-weight: 720;
         }
 
         .quotes-table-header p {
             margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .76rem;
+            color: #98a2b3;
+            font-size: .75rem;
         }
 
     .quotes-table-wrap {
         overflow-x: auto;
+        padding-bottom: 100px;
     }
 
     .quotes-table {
@@ -766,12 +989,12 @@
 
         .quotes-table th {
             padding: 12px 16px;
-            background: #f8fafc;
-            color: #64748b;
+            background: #fafafa;
+            color: #667085;
             font-size: .7rem;
             font-weight: 750;
             text-transform: uppercase;
-            border-bottom: 1px solid #e7edf5;
+            border-bottom: 1px solid #e8eaef;
             white-space: nowrap;
         }
 
@@ -779,19 +1002,19 @@
             padding: 14px 16px;
             color: #334155;
             font-size: .82rem;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f2f5;
             vertical-align: middle;
         }
 
     .quotes-muted {
         display: block;
         margin-top: 3px;
-        color: #94a3b8;
+        color: #98a2b3;
         font-size: .72rem;
     }
 
     .quotes-money {
-        color: #0f172a;
+        color: #111827;
         font-weight: 750;
     }
 
@@ -806,8 +1029,8 @@
     }
 
         .quotes-pill.draft {
-            color: #64748b;
-            background: #f1f5f9;
+            color: #667085;
+            background: #f3f4f6;
         }
 
         .quotes-pill.sent {
@@ -821,16 +1044,95 @@
         }
 
         .quotes-pill.cancelled {
-            color: #dc2626;
-            background: #fef2f2;
+            color: #d92d20;
+            background: #fef3f2;
         }
+
+    .quotes-actions-col,
+    .quotes-actions-cell {
+        text-align: right;
+    }
+
+    .quotes-actions-cell {
+        position: relative;
+        min-width: 150px;
+    }
+
+    .quotes-action-menu {
+        position: relative;
+        display: inline-block;
+    }
+
+    .quotes-action-toggle {
+        min-height: 34px;
+        border-radius: 11px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        color: #252525;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 11px;
+        font-size: .74rem;
+        font-weight: 750;
+        cursor: pointer;
+        box-shadow: 0 8px 18px rgba(17, 24, 39, .04);
+    }
+
+    .quotes-action-dropdown {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        width: 205px;
+        padding: 7px;
+        border-radius: 15px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 18px 38px rgba(17, 24, 39, .14);
+        z-index: 100;
+        display: grid;
+        gap: 4px;
+        text-align: left;
+    }
+
+        .quotes-action-dropdown button {
+            width: 100%;
+            min-height: 36px;
+            border: 0;
+            border-radius: 11px;
+            background: transparent;
+            color: #344054;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 10px;
+            font-size: .78rem;
+            font-weight: 650;
+            text-align: left;
+        }
+
+            .quotes-action-dropdown button:hover {
+                background: #fafafa;
+                color: #252525;
+            }
+
+            .quotes-action-dropdown button i {
+                width: 18px;
+                color: #8FA6A1;
+            }
+
+            .quotes-action-dropdown button.danger,
+            .quotes-action-dropdown button.danger i {
+                color: #d92d20;
+            }
 
     .quotes-empty {
         margin: 18px;
         padding: 34px 20px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px dashed #dbe3ef;
+        border-radius: 18px;
+        background: #fafafa;
+        border: 1px dashed #d0d5dd;
         text-align: center;
     }
 
@@ -839,21 +1141,76 @@
             padding: 24px 16px;
         }
 
-        .quotes-empty strong,
-        .quotes-empty span {
-            display: block;
+    .quotes-empty-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 10px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .quotes-empty strong,
+    .quotes-empty span {
+        display: block;
+    }
+
+    .quotes-empty strong {
+        color: #111827;
+        font-size: .9rem;
+        font-weight: 720;
+    }
+
+    .quotes-empty span {
+        margin-top: 4px;
+        margin-bottom: 14px;
+        color: #667085;
+        font-size: .78rem;
+    }
+
+    .quotes-pagination {
+        padding: 14px 18px;
+        border-top: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        background: #ffffff;
+        border-radius: 0 0 22px 22px;
+    }
+
+    .quotes-page-info {
+        color: #667085;
+        font-size: .78rem;
+        font-weight: 600;
+    }
+
+        .quotes-page-info strong {
+            color: #111827;
         }
 
-        .quotes-empty strong {
-            color: #0f172a;
-            font-size: .9rem;
-        }
+    .quotes-page-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
 
-        .quotes-empty span {
-            margin-top: 4px;
-            color: #64748b;
-            font-size: .78rem;
-        }
+    .quotes-page-count {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 11px;
+        border-radius: 11px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+        color: #667085;
+        font-size: .76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
 
     .quotes-modal-backdrop {
         position: fixed;
@@ -862,15 +1219,17 @@
         padding: 20px;
         background: rgba(15, 23, 42, .44);
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: center;
+        overflow-y: auto;
     }
 
     .quotes-modal {
         width: 100%;
         max-width: 960px;
-        max-height: calc(100vh - 40px);
-        overflow-y: auto;
+        max-height: none;
+        margin-top: 10px;
+        margin-bottom: 20px;
         padding: 22px;
         border-radius: 22px;
         background: #fff;
@@ -891,7 +1250,7 @@
     }
 
         .quotes-modal-header span {
-            color: #2563eb;
+            color: #8FA6A1;
             font-size: .72rem;
             font-weight: 750;
             letter-spacing: .06em;
@@ -900,14 +1259,14 @@
 
         .quotes-modal-header h4 {
             margin: 3px 0 0;
-            color: #0f172a;
+            color: #111827;
             font-size: 1.05rem;
             font-weight: 720;
         }
 
         .quotes-modal-header p {
             margin: 5px 0 0;
-            color: #64748b;
+            color: #667085;
             font-size: .84rem;
         }
 
@@ -917,7 +1276,7 @@
         border-radius: 10px;
         border: 1px solid #e5e7eb;
         background: #fff;
-        color: #64748b;
+        color: #667085;
     }
 
     .quotes-create-grid {
@@ -931,6 +1290,11 @@
         padding: 16px;
     }
 
+        .quotes-panel.sticky {
+            position: sticky;
+            top: 10px;
+        }
+
     .quotes-form-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -941,7 +1305,7 @@
         .quotes-form-grid label {
             display: block;
             margin-bottom: 5px;
-            color: #64748b;
+            color: #667085;
             font-size: .72rem;
             font-weight: 700;
         }
@@ -975,8 +1339,8 @@
         .quotes-option-list button {
             width: 100%;
             text-align: left;
-            border: 1px solid #e7edf5;
-            background: #f8fafc;
+            border: 1px solid #e8eaef;
+            background: #fafafa;
             border-radius: 14px;
             padding: 10px 12px;
         }
@@ -988,7 +1352,7 @@
 
         .quotes-option-list span {
             margin-top: 3px;
-            color: #64748b;
+            color: #667085;
             font-size: .72rem;
         }
 
@@ -1000,8 +1364,8 @@
             align-items: center;
             padding: 12px;
             border-radius: 15px;
-            background: #f8fafc;
-            border: 1px solid #e7edf5;
+            background: #fafafa;
+            border: 1px solid #e8eaef;
         }
 
             .quotes-product-list strong,
@@ -1014,7 +1378,7 @@
             .quotes-product-list span,
             .quotes-cart-item span {
                 margin-top: 3px;
-                color: #64748b;
+                color: #667085;
                 font-size: .72rem;
             }
 
@@ -1035,8 +1399,8 @@
         height: 36px;
         border-radius: 11px;
         border: 1px solid #fecaca;
-        background: #fef2f2;
-        color: #dc2626;
+        background: #fef3f2;
+        color: #d92d20;
     }
 
     .quotes-summary {
@@ -1045,8 +1409,8 @@
         margin: 14px 0;
         padding: 14px;
         border-radius: 16px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
     }
 
         .quotes-summary div {
@@ -1055,13 +1419,18 @@
             gap: 12px;
         }
 
+        .quotes-summary .final {
+            padding-top: 8px;
+            border-top: 1px solid #e8eaef;
+        }
+
         .quotes-summary span {
-            color: #64748b;
+            color: #667085;
             font-size: .78rem;
         }
 
         .quotes-summary strong {
-            color: #0f172a;
+            color: #111827;
             font-size: .86rem;
         }
 
@@ -1075,8 +1444,8 @@
         .quotes-detail-grid div {
             padding: 13px;
             border-radius: 16px;
-            background: #f8fafc;
-            border: 1px solid #e7edf5;
+            background: #fafafa;
+            border: 1px solid #e8eaef;
         }
 
         .quotes-detail-grid span,
@@ -1085,14 +1454,14 @@
         }
 
         .quotes-detail-grid span {
-            color: #64748b;
+            color: #667085;
             font-size: .72rem;
             font-weight: 650;
         }
 
         .quotes-detail-grid strong {
             margin-top: 4px;
-            color: #0f172a;
+            color: #111827;
             font-size: .84rem;
         }
 
@@ -1106,13 +1475,13 @@
         .quotes-notes-grid div {
             padding: 13px;
             border-radius: 16px;
-            background: #f8fafc;
-            border: 1px solid #e7edf5;
+            background: #fafafa;
+            border: 1px solid #e8eaef;
         }
 
         .quotes-notes-grid span {
             display: block;
-            color: #64748b;
+            color: #667085;
             font-size: .72rem;
             font-weight: 650;
             margin-bottom: 5px;
@@ -1120,7 +1489,7 @@
 
         .quotes-notes-grid p {
             margin: 0;
-            color: #0f172a;
+            color: #111827;
             font-size: .82rem;
             line-height: 1.5;
         }
@@ -1131,6 +1500,11 @@
         gap: 10px;
         margin-top: 14px;
     }
+
+        .quotes-detail-actions.top-actions {
+            margin-top: 0;
+            margin-bottom: 14px;
+        }
 
     @@keyframes quotesIn {
         from {
@@ -1147,13 +1521,18 @@
     @@media (max-width: 1199px) {
         .quotes-control-panel,
         .quotes-settings-strip,
+        .quotes-summary-grid,
         .quotes-create-grid {
             grid-template-columns: 1fr;
+        }
+
+        .quotes-panel.sticky {
+            position: static;
         }
     }
 
     @@media (max-width: 768px) {
-        .quotes-header,
+        .quotes-top,
         .quotes-modal-header {
             flex-direction: column;
             align-items: flex-start;
@@ -1166,7 +1545,7 @@
             grid-template-columns: 1fr;
         }
 
-        .quotes-header .quotes-primary-btn,
+        .quotes-top .quotes-primary-btn,
         .quotes-control-panel button {
             width: 100%;
         }
@@ -1180,6 +1559,26 @@
             .quotes-remove-btn {
                 width: 100%;
             }
+
+        .quotes-pagination {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .quotes-page-controls,
+        .quotes-page-btn {
+            width: 100%;
+        }
+
+        .quotes-page-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .quotes-page-count {
+            justify-content: center;
+            width: 100%;
+        }
     }
 </style>
 
@@ -1210,10 +1609,56 @@
 
     private QuoteDetailsViewModel? _selectedQuote;
 
+    private int _quotePage = 1;
+    private int _quotePageSize = 10;
+    private int? _openActionQuoteId;
+
     private string CurrencyLabel =>
         string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
             ? "R"
             : _settings.CurrencySymbol;
+
+    private int TotalQuotes => OrderedQuotes.Count;
+    private string QuotePlural => TotalQuotes == 1 ? "" : "s";
+
+    private int DraftQuotes => _quotes.Count(x => x.Status == "Draft");
+    private int SentQuotes => _quotes.Count(x => x.Status == "Sent");
+    private int AcceptedQuotes => _quotes.Count(x => x.Status == "Accepted");
+
+    private List<QuoteListItemViewModel> OrderedQuotes =>
+        _quotes
+            .OrderByDescending(x => x.QuoteDate)
+            .ToList();
+
+    private int QuoteTotalPages =>
+        TotalQuotes == 0
+            ? 1
+            : (int)Math.Ceiling(TotalQuotes / (double)_quotePageSize);
+
+    private int SafeQuotePage =>
+        Math.Min(Math.Max(_quotePage, 1), QuoteTotalPages);
+
+    private int QuotePageStart =>
+        TotalQuotes == 0
+            ? 0
+            : ((SafeQuotePage - 1) * _quotePageSize) + 1;
+
+    private int QuotePageEnd =>
+        TotalQuotes == 0
+            ? 0
+            : Math.Min(SafeQuotePage * _quotePageSize, TotalQuotes);
+
+    private List<QuoteListItemViewModel> PaginatedQuotes =>
+        OrderedQuotes
+            .Skip((SafeQuotePage - 1) * _quotePageSize)
+            .Take(_quotePageSize)
+            .ToList();
+
+    private string PreviousQuotePageClass =>
+        _quotePage <= 1 ? "quotes-page-btn is-disabled" : "quotes-page-btn";
+
+    private string NextQuotePageClass =>
+        _quotePage >= QuoteTotalPages ? "quotes-page-btn is-disabled" : "quotes-page-btn";
 
     private decimal CreateSubtotal =>
         _selectedItems.Sum(x => x.Quantity * x.SellingPrice);
@@ -1244,6 +1689,7 @@
     private async Task LoadQuotesAsync()
     {
         _loading = true;
+        _openActionQuoteId = null;
 
         _quotes = await QuoteService.GetQuotesAsync(
             _fromDate,
@@ -1251,7 +1697,32 @@
             _statusFilter,
             _searchTerm);
 
+        if (_quotePage > QuoteTotalPages)
+        {
+            _quotePage = QuoteTotalPages;
+        }
+
         _loading = false;
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _quotePage = 1;
+        await LoadQuotesAsync();
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyFiltersAsync();
+        }
+    }
+
+    private void StatusFilterChanged(ChangeEventArgs e)
+    {
+        _statusFilter = e.Value?.ToString() ?? "all";
+        _quotePage = 1;
     }
 
     private async Task ResetFiltersAsync()
@@ -1260,12 +1731,38 @@
         _toDate = DateTime.Today;
         _statusFilter = "all";
         _searchTerm = null;
+        _quotePage = 1;
 
         await LoadQuotesAsync();
     }
 
+    private void NextQuotePage()
+    {
+        if (_quotePage < QuoteTotalPages)
+        {
+            _quotePage++;
+            _openActionQuoteId = null;
+        }
+    }
+
+    private void PreviousQuotePage()
+    {
+        if (_quotePage > 1)
+        {
+            _quotePage--;
+            _openActionQuoteId = null;
+        }
+    }
+
+    private void ToggleActionMenu(int quoteId)
+    {
+        _openActionQuoteId = _openActionQuoteId == quoteId ? null : quoteId;
+    }
+
     private void OpenCreate()
     {
+        _openActionQuoteId = null;
+
         _createModel = new CreateQuoteModel
         {
             QuoteDate = DateTime.Today,
@@ -1389,12 +1886,14 @@
             _selectedItems.Clear();
             _products.Clear();
             _customers.Clear();
+            _quotePage = 1;
             await LoadQuotesAsync();
         }
     }
 
     private async Task ViewQuoteAsync(int quoteId)
     {
+        _openActionQuoteId = null;
         _selectedQuote = await QuoteService.GetQuoteDetailsAsync(quoteId);
     }
 
@@ -1405,11 +1904,14 @@
 
     private async Task MarkSentAsync(int quoteId)
     {
+        _openActionQuoteId = null;
         await MarkStatusAsync(quoteId, "Sent");
     }
 
     private async Task MarkAcceptedAsync(int quoteId)
     {
+        _openActionQuoteId = null;
+
         var statusResult = await QuoteService.UpdateStatusAsync(quoteId, "Accepted");
 
         if (!statusResult.Success)
@@ -1443,6 +1945,7 @@
 
     private async Task MarkCancelledAsync(int quoteId)
     {
+        _openActionQuoteId = null;
         await MarkStatusAsync(quoteId, "Cancelled");
     }
 
@@ -1507,10 +2010,14 @@
 
     private void PrintQuote(int quoteId)
     {
+        _openActionQuoteId = null;
         NavigationManager.NavigateTo($"/quotes/print/{quoteId}");
     }
+
     private async Task SendQuoteEmailAsync(int quoteId)
     {
+        _openActionQuoteId = null;
+
         var result = await DocumentEmailService.SendQuoteEmailAsync(quoteId);
         ShowMessage(result.Message, result.Success);
 

@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @layout MainLayout
 @attribute [Authorize]
+@using Microsoft.AspNetCore.Components.Web
 @using PosPlatform.Web.Components.Layout
 @using PosPlatform.Web.Models.Settings
 @using PosPlatform.Web.Models.Suppliers
@@ -15,14 +16,15 @@
 <PageTitle>Suppliers</PageTitle>
 
 <section class="suppliers-page">
-    <div class="suppliers-header">
+    <div class="suppliers-top">
         <div>
             <div class="suppliers-kicker">
                 <i class="bi bi-truck"></i>
                 Supplier management
             </div>
+
             <h1>Suppliers</h1>
-            <p>Manage suppliers, contact details, purchase history and stock receiving partners.</p>
+            <p>Manage supplier contacts, purchase history and stock receiving partners.</p>
         </div>
 
         <button type="button" class="suppliers-primary-btn" @onclick="OpenAddModal">
@@ -65,24 +67,40 @@
     </div>
 
     <div class="suppliers-summary-grid">
-        <div class="suppliers-summary-card">
+        <div class="suppliers-summary-card hero">
+            <div class="suppliers-summary-icon">
+                <i class="bi bi-truck"></i>
+            </div>
             <span>Total Suppliers</span>
             <strong>@TotalSuppliers</strong>
+            <small>All supplier records</small>
         </div>
 
-        <div class="suppliers-summary-card green">
+        <div class="suppliers-summary-card">
+            <div class="suppliers-summary-icon green">
+                <i class="bi bi-check2-circle"></i>
+            </div>
             <span>Active</span>
             <strong>@ActiveSuppliers</strong>
+            <small>Available for stock receiving</small>
         </div>
 
-        <div class="suppliers-summary-card amber">
+        <div class="suppliers-summary-card">
+            <div class="suppliers-summary-icon amber">
+                <i class="bi bi-receipt"></i>
+            </div>
             <span>Total Purchases</span>
             <strong>@TotalPurchases</strong>
+            <small>Purchase records linked</small>
         </div>
 
-        <div class="suppliers-summary-card blue">
+        <div class="suppliers-summary-card">
+            <div class="suppliers-summary-icon blue">
+                <i class="bi bi-cash-stack"></i>
+            </div>
             <span>Total Spent</span>
             <strong>@Money(TotalSpent)</strong>
+            <small>Purchase value recorded</small>
         </div>
     </div>
 
@@ -91,16 +109,17 @@
             <i class="bi bi-search"></i>
             <input @bind="_searchTerm"
                    @bind:event="oninput"
+                   @onkeydown="HandleSearchKeyDown"
                    placeholder="Search supplier, contact, phone or email" />
         </div>
 
-        <select class="suppliers-filter" @bind="_statusFilter">
+        <select class="suppliers-filter" value="@_statusFilter" @onchange="StatusFilterChanged">
             <option value="all">All suppliers</option>
             <option value="active">Active only</option>
             <option value="inactive">Inactive only</option>
         </select>
 
-        <button type="button" class="suppliers-secondary-btn" @onclick="LoadSuppliersAsync">
+        <button type="button" class="suppliers-secondary-btn" @onclick="ApplyFiltersAsync">
             <i class="bi bi-filter"></i>
             Apply
         </button>
@@ -115,7 +134,7 @@
         <div class="suppliers-panel-header">
             <div>
                 <h2>Supplier List</h2>
-                <p>@_suppliers.Count supplier@(_suppliers.Count == 1 ? "" : "s") showing.</p>
+                <p>Showing @PageStart - @PageEnd of @TotalFilteredSuppliers supplier@(SupplierPlural).</p>
             </div>
 
             <a href="/stock-purchases" class="suppliers-secondary-link">
@@ -127,15 +146,26 @@
         @if (_loading)
         {
             <div class="suppliers-empty">
+                <div class="suppliers-empty-icon">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
                 <strong>Loading suppliers...</strong>
                 <span>Please wait while we fetch supplier records.</span>
             </div>
         }
-        else if (_suppliers.Count == 0)
+        else if (TotalFilteredSuppliers == 0)
         {
             <div class="suppliers-empty">
+                <div class="suppliers-empty-icon">
+                    <i class="bi bi-truck"></i>
+                </div>
                 <strong>No suppliers found</strong>
                 <span>Add your first supplier before receiving stock purchases.</span>
+
+                <button type="button" class="suppliers-primary-btn" @onclick="OpenAddModal">
+                    <i class="bi bi-plus-lg"></i>
+                    Add Supplier
+                </button>
             </div>
         }
         else
@@ -150,12 +180,12 @@
                             <th>Total Spent</th>
                             <th>Last Purchase</th>
                             <th>Status</th>
-                            <th class="text-end">Actions</th>
+                            <th class="suppliers-actions-col">Actions</th>
                         </tr>
                     </thead>
 
                     <tbody>
-                        @foreach (var supplier in _suppliers)
+                        @foreach (var supplier in PaginatedSuppliers)
                         {
                             <tr>
                                 <td>
@@ -177,7 +207,7 @@
                                 </td>
 
                                 <td>@supplier.TotalPurchases</td>
-                                <td>@Money(supplier.TotalSpent)</td>
+                                <td class="suppliers-money">@Money(supplier.TotalSpent)</td>
                                 <td>@(supplier.LastPurchaseDate.HasValue? supplier.LastPurchaseDate.Value.ToLocalTime().ToString("yyyy-MM-dd") : "-")</td>
 
                                 <td>
@@ -186,27 +216,71 @@
                                     </span>
                                 </td>
 
-                                <td class="text-end">
-                                    <div class="suppliers-actions">
-                                        <button type="button" class="suppliers-mini-btn edit" @onclick="() => OpenEditModal(supplier.Id)">
-                                            <i class="bi bi-pencil"></i>
-                                            Edit
+                                <td class="suppliers-actions-cell">
+                                    <div class="suppliers-action-menu">
+                                        <button type="button"
+                                                class="suppliers-action-toggle"
+                                                @onclick="() => ToggleActionMenu(supplier.Id)">
+                                            <span>Actions</span>
+                                            <i class="bi bi-chevron-down"></i>
                                         </button>
 
-                                        <button type="button" class="suppliers-mini-btn status" @onclick="() => ToggleStatusAsync(supplier.Id)">
-                                            <i class="bi @(supplier.IsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
-                                            @(supplier.IsActive ? "Pause" : "Activate")
-                                        </button>
+                                        @if (_openActionSupplierId == supplier.Id)
+                                        {
+                                            <div class="suppliers-action-dropdown">
+                                                <button type="button" @onclick="() => OpenEditModal(supplier.Id)">
+                                                    <i class="bi bi-pencil"></i>
+                                                    <span>Edit supplier</span>
+                                                </button>
 
-                                        <button type="button" class="suppliers-mini-btn delete" @onclick="() => ConfirmDelete(supplier.Id, supplier.SupplierName)">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
+                                                <button type="button" @onclick="() => ToggleStatusAsync(supplier.Id)">
+                                                    <i class="bi @(supplier.IsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
+                                                    <span>@(supplier.IsActive ? "Pause supplier" : "Activate supplier")</span>
+                                                </button>
+
+                                                <button type="button" class="danger" @onclick="() => ConfirmDelete(supplier.Id, supplier.SupplierName)">
+                                                    <i class="bi bi-trash"></i>
+                                                    <span>Delete supplier</span>
+                                                </button>
+                                            </div>
+                                        }
                                     </div>
                                 </td>
                             </tr>
                         }
                     </tbody>
                 </table>
+            </div>
+
+            <div class="suppliers-pagination">
+                <div class="suppliers-page-info">
+                    Showing
+                    <strong>@PageStart</strong>
+                    -
+                    <strong>@PageEnd</strong>
+                    of
+                    <strong>@TotalFilteredSuppliers</strong>
+                </div>
+
+                <div class="suppliers-page-controls">
+                    <button type="button"
+                            class="@PreviousPageClass"
+                            @onclick="PreviousPage">
+                        <i class="bi bi-chevron-left"></i>
+                        Previous
+                    </button>
+
+                    <span class="suppliers-page-count">
+                        Page @_currentPage of @TotalPages
+                    </span>
+
+                    <button type="button"
+                            class="@NextPageClass"
+                            @onclick="NextPage">
+                        Next
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
             </div>
         }
     </div>
@@ -281,7 +355,8 @@
 
                 <div class="suppliers-modal-actions">
                     <button type="button" class="suppliers-ghost-btn" @onclick="CloseModal">Cancel</button>
-                    <button type="submit" class="suppliers-primary-btn" disabled="@_saving">
+
+                    <button type="submit" class="suppliers-primary-btn @(_saving ? "is-disabled" : "")">
                         <i class="bi bi-check2-circle"></i>
                         @(_saving ? "Saving..." : "Save Supplier")
                     </button>
@@ -321,37 +396,37 @@
         animation: suppliersIn .22s ease both;
     }
 
-    .suppliers-header {
+    .suppliers-top {
         display: flex;
         justify-content: space-between;
         align-items: flex-end;
         gap: 18px;
-        margin-bottom: 18px;
+        margin-bottom: 16px;
     }
 
     .suppliers-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
 
-    .suppliers-header h1 {
+    .suppliers-top h1 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.45rem;
-        font-weight: 680;
-        letter-spacing: -.03em;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
-    .suppliers-header p {
+    .suppliers-top p {
         margin: 6px 0 0;
-        color: #64748b;
+        color: #667085;
         font-size: .88rem;
     }
 
@@ -359,36 +434,38 @@
     .suppliers-secondary-btn,
     .suppliers-ghost-btn,
     .suppliers-danger-btn,
-    .suppliers-mini-btn,
-    .suppliers-secondary-link {
+    .suppliers-secondary-link,
+    .suppliers-page-btn {
         min-height: 38px;
-        border-radius: 11px;
+        border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
         padding: 0 14px;
         font-size: .8rem;
-        font-weight: 650;
+        font-weight: 680;
         border: 0;
-        transition: all .18s ease;
+        transition: transform .18s ease;
         white-space: nowrap;
         text-decoration: none;
     }
 
     .suppliers-primary-btn {
         color: #ffffff;
-        background: #111827;
-        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+        background: #252525;
+        box-shadow: 0 12px 24px rgba(17, 24, 39, .12);
     }
 
     .suppliers-secondary-btn,
     .suppliers-secondary-link {
-        color: #2563eb;
-        background: #eef5ff;
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
     }
 
-    .suppliers-ghost-btn {
+    .suppliers-ghost-btn,
+    .suppliers-page-btn {
         color: #475569;
         background: #ffffff;
         border: 1px solid #e5e7eb;
@@ -396,7 +473,23 @@
 
     .suppliers-danger-btn {
         color: #ffffff;
-        background: #dc2626;
+        background: #d92d20;
+    }
+
+        .suppliers-primary-btn:hover,
+        .suppliers-secondary-btn:hover,
+        .suppliers-ghost-btn:hover,
+        .suppliers-danger-btn:hover,
+        .suppliers-secondary-link:hover,
+        .suppliers-page-btn:hover {
+            transform: translateY(-1px);
+        }
+
+    .suppliers-primary-btn.is-disabled,
+    .suppliers-page-btn.is-disabled {
+        opacity: .45;
+        cursor: not-allowed;
+        transform: none;
     }
 
     .suppliers-alert {
@@ -433,70 +526,120 @@
             color: inherit;
         }
 
-    .suppliers-settings-strip,
-    .suppliers-summary-grid {
+    .suppliers-settings-strip {
         display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 10px;
         margin-bottom: 16px;
     }
 
-    .suppliers-settings-strip {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
-
-    .suppliers-summary-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
-
-    .suppliers-settings-strip div,
-    .suppliers-summary-card {
-        padding: 13px;
-        border-radius: 16px;
-        background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.04);
-    }
-
-    .suppliers-summary-card {
-        padding: 16px;
-    }
+        .suppliers-settings-strip div {
+            padding: 13px;
+            border-radius: 16px;
+            background: #ffffff;
+            border: 1px solid #e8eaef;
+            box-shadow: 0 10px 24px rgba(17, 24, 39, .035);
+        }
 
         .suppliers-settings-strip span,
-        .suppliers-settings-strip strong,
-        .suppliers-summary-card span,
-        .suppliers-summary-card strong {
+        .suppliers-settings-strip strong {
             display: block;
         }
 
-        .suppliers-settings-strip span,
-        .suppliers-summary-card span {
-            color: #64748b;
-            font-size: .72rem;
-            font-weight: 650;
+        .suppliers-settings-strip span {
+            color: #98a2b3;
+            font-size: .7rem;
+            font-weight: 700;
+            letter-spacing: .03em;
+            text-transform: uppercase;
         }
 
-        .suppliers-settings-strip strong,
-        .suppliers-summary-card strong {
+        .suppliers-settings-strip strong {
             margin-top: 4px;
-            color: #0f172a;
-            font-size: .88rem;
+            color: #111827;
+            font-size: .84rem;
             font-weight: 720;
         }
 
+    .suppliers-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .suppliers-summary-card {
+        padding: 15px;
+        border-radius: 20px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
+    }
+
+        .suppliers-summary-card.hero {
+            background: #252525;
+            border-color: #252525;
+        }
+
+        .suppliers-summary-card span,
+        .suppliers-summary-card strong,
+        .suppliers-summary-card small {
+            display: block;
+        }
+
+        .suppliers-summary-card span {
+            margin-top: 11px;
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
         .suppliers-summary-card strong {
-            font-size: 1.08rem;
+            margin-top: 6px;
+            color: #111827;
+            font-size: 1.05rem;
+            font-weight: 760;
+            letter-spacing: -.02em;
         }
 
-        .suppliers-summary-card.green strong {
-            color: #16a34a;
+        .suppliers-summary-card small {
+            margin-top: 4px;
+            color: #98a2b3;
+            font-size: .72rem;
+            line-height: 1.35;
         }
 
-        .suppliers-summary-card.blue strong {
+        .suppliers-summary-card.hero span,
+        .suppliers-summary-card.hero strong,
+        .suppliers-summary-card.hero small {
+            color: #ffffff;
+        }
+
+    .suppliers-summary-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #252525;
+        box-shadow: 0 10px 22px rgba(17, 24, 39, .08);
+    }
+
+        .suppliers-summary-icon.green {
+            color: #8FA6A1;
+            background: #f2f6f5;
+        }
+
+        .suppliers-summary-icon.amber {
+            color: #b7791f;
+            background: #fffbeb;
+        }
+
+        .suppliers-summary-icon.blue {
             color: #2563eb;
-        }
-
-        .suppliers-summary-card.amber strong {
-            color: #d97706;
+            background: #eff6ff;
         }
 
     .suppliers-control-panel {
@@ -507,20 +650,20 @@
         margin-bottom: 16px;
         border-radius: 18px;
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 10px 24px rgba(17, 24, 39, .035);
     }
 
     .suppliers-search {
-        min-height: 40px;
+        min-height: 42px;
         display: flex;
         align-items: center;
         gap: 10px;
         padding: 0 13px;
-        border-radius: 12px;
-        background: #f8fafc;
+        border-radius: 14px;
+        background: #fafafa;
         border: 1px solid #e5e7eb;
-        color: #94a3b8;
+        color: #98a2b3;
     }
 
         .suppliers-search input,
@@ -531,9 +674,9 @@
             border-radius: 12px;
             border: 1px solid #e5e7eb;
             background: #ffffff;
-            color: #0f172a;
+            color: #111827;
             padding: 0 12px;
-            font-size: .84rem;
+            font-size: 16px;
             outline: none;
         }
 
@@ -545,15 +688,15 @@
 
     .suppliers-panel {
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        border-radius: 20px;
-        box-shadow: 0 16px 34px rgba(15,23,42,.055);
-        overflow: hidden;
+        border: 1px solid #e8eaef;
+        border-radius: 22px;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
+        overflow: visible;
     }
 
     .suppliers-panel-header {
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -562,19 +705,20 @@
 
         .suppliers-panel-header h2 {
             margin: 0;
-            color: #0f172a;
-            font-size: .92rem;
+            color: #111827;
+            font-size: .94rem;
             font-weight: 720;
         }
 
         .suppliers-panel-header p {
             margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .76rem;
+            color: #98a2b3;
+            font-size: .75rem;
         }
 
     .suppliers-table-wrap {
         overflow-x: auto;
+        padding-bottom: 90px;
     }
 
     .suppliers-table {
@@ -585,13 +729,13 @@
 
         .suppliers-table th {
             padding: 12px 16px;
-            background: #f8fafc;
-            color: #64748b;
+            background: #fafafa;
+            color: #667085;
             font-size: .7rem;
             font-weight: 750;
             text-transform: uppercase;
             letter-spacing: .05em;
-            border-bottom: 1px solid #e7edf5;
+            border-bottom: 1px solid #e8eaef;
             white-space: nowrap;
         }
 
@@ -599,7 +743,7 @@
             padding: 14px 16px;
             color: #334155;
             font-size: .82rem;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f2f5;
             vertical-align: middle;
         }
 
@@ -613,8 +757,8 @@
         width: 38px;
         height: 38px;
         border-radius: 14px;
-        background: #eef5ff;
-        color: #2563eb;
+        background: #f2f6f5;
+        color: #8FA6A1;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -625,7 +769,7 @@
     .suppliers-cell strong,
     .suppliers-contact strong {
         display: block;
-        color: #0f172a;
+        color: #111827;
         font-size: .85rem;
         font-weight: 720;
     }
@@ -634,7 +778,7 @@
     .suppliers-contact span {
         display: block;
         margin-top: 2px;
-        color: #94a3b8;
+        color: #98a2b3;
         font-size: .72rem;
     }
 
@@ -654,66 +798,173 @@
         }
 
         .suppliers-status-pill.inactive {
-            color: #64748b;
-            background: #f1f5f9;
+            color: #667085;
+            background: #f3f4f6;
         }
 
-    .suppliers-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: 6px;
-        flex-wrap: wrap;
+    .suppliers-money {
+        color: #111827 !important;
+        font-weight: 750;
     }
 
-    .suppliers-mini-btn {
-        min-height: 30px;
-        padding: 0 10px;
-        border: 1px solid;
+    .suppliers-actions-col,
+    .suppliers-actions-cell {
+        text-align: right;
+    }
+
+    .suppliers-actions-cell {
+        position: relative;
+        min-width: 150px;
+    }
+
+    .suppliers-action-menu {
+        position: relative;
+        display: inline-block;
+    }
+
+    .suppliers-action-toggle {
+        min-height: 34px;
+        border-radius: 11px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        color: #252525;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 11px;
         font-size: .74rem;
+        font-weight: 750;
+        cursor: pointer;
+        box-shadow: 0 8px 18px rgba(17, 24, 39, .04);
     }
 
-        .suppliers-mini-btn.edit {
-            color: #2563eb;
-            background: #eff6ff;
-            border-color: #bfdbfe;
+    .suppliers-action-dropdown {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        width: 195px;
+        padding: 7px;
+        border-radius: 15px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 18px 38px rgba(17, 24, 39, .14);
+        z-index: 100;
+        display: grid;
+        gap: 4px;
+        text-align: left;
+    }
+
+        .suppliers-action-dropdown button {
+            width: 100%;
+            min-height: 36px;
+            border: 0;
+            border-radius: 11px;
+            background: transparent;
+            color: #344054;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 10px;
+            font-size: .78rem;
+            font-weight: 650;
+            text-align: left;
         }
 
-        .suppliers-mini-btn.status {
-            color: #b45309;
-            background: #fffbeb;
-            border-color: #fde68a;
-        }
+            .suppliers-action-dropdown button:hover {
+                background: #fafafa;
+                color: #252525;
+            }
 
-        .suppliers-mini-btn.delete {
-            color: #dc2626;
-            background: #fef2f2;
-            border-color: #fecaca;
-        }
+            .suppliers-action-dropdown button i {
+                width: 18px;
+                color: #8FA6A1;
+            }
+
+            .suppliers-action-dropdown button.danger,
+            .suppliers-action-dropdown button.danger i {
+                color: #d92d20;
+            }
 
     .suppliers-empty {
         margin: 18px;
         padding: 34px 20px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px dashed #dbe3ef;
+        border-radius: 18px;
+        background: #fafafa;
+        border: 1px dashed #d0d5dd;
         text-align: center;
     }
 
-        .suppliers-empty strong,
-        .suppliers-empty span {
-            display: block;
+    .suppliers-empty-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 10px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .suppliers-empty strong,
+    .suppliers-empty span {
+        display: block;
+    }
+
+    .suppliers-empty strong {
+        color: #111827;
+        font-size: .9rem;
+        font-weight: 720;
+    }
+
+    .suppliers-empty span {
+        margin-top: 4px;
+        margin-bottom: 14px;
+        color: #667085;
+        font-size: .78rem;
+    }
+
+    .suppliers-pagination {
+        padding: 14px 18px;
+        border-top: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        background: #ffffff;
+        border-radius: 0 0 22px 22px;
+    }
+
+    .suppliers-page-info {
+        color: #667085;
+        font-size: .78rem;
+        font-weight: 600;
+    }
+
+        .suppliers-page-info strong {
+            color: #111827;
         }
 
-        .suppliers-empty strong {
-            color: #0f172a;
-            font-size: .9rem;
-        }
+    .suppliers-page-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
 
-        .suppliers-empty span {
-            margin-top: 4px;
-            color: #64748b;
-            font-size: .78rem;
-        }
+    .suppliers-page-count {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 11px;
+        border-radius: 11px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+        color: #667085;
+        font-size: .76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
 
     .suppliers-modal-backdrop {
         position: fixed;
@@ -752,7 +1003,7 @@
     }
 
         .suppliers-modal-header span {
-            color: #2563eb;
+            color: #8FA6A1;
             font-size: .72rem;
             font-weight: 750;
             letter-spacing: .06em;
@@ -762,7 +1013,7 @@
         .suppliers-modal-header h4,
         .suppliers-delete-modal h4 {
             margin: 3px 0 0;
-            color: #0f172a;
+            color: #111827;
             font-size: 1.08rem;
             font-weight: 720;
         }
@@ -770,7 +1021,7 @@
         .suppliers-modal-header p,
         .suppliers-delete-modal p {
             margin: 5px 0 0;
-            color: #64748b;
+            color: #667085;
             font-size: .84rem;
             line-height: 1.5;
         }
@@ -781,7 +1032,7 @@
         border-radius: 10px;
         border: 1px solid #e5e7eb;
         background: #ffffff;
-        color: #64748b;
+        color: #667085;
     }
 
     .suppliers-label {
@@ -804,8 +1055,8 @@
         gap: 10px;
         padding: 12px;
         border-radius: 14px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
     }
 
         .suppliers-check input {
@@ -818,13 +1069,13 @@
         }
 
         .suppliers-check strong {
-            color: #0f172a;
+            color: #111827;
             font-size: .85rem;
         }
 
         .suppliers-check small {
             margin-top: 2px;
-            color: #64748b;
+            color: #667085;
             font-size: .76rem;
         }
 
@@ -851,8 +1102,8 @@
         height: 52px;
         margin: 0 auto 14px;
         border-radius: 18px;
-        color: #dc2626;
-        background: #fef2f2;
+        color: #d92d20;
+        background: #fef3f2;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -883,13 +1134,13 @@
     }
 
     @@media (max-width: 768px) {
-        .suppliers-header,
+        .suppliers-top,
         .suppliers-panel-header {
             flex-direction: column;
             align-items: flex-start;
         }
 
-            .suppliers-header .suppliers-primary-btn,
+            .suppliers-top .suppliers-primary-btn,
             .suppliers-secondary-link {
                 width: 100%;
             }
@@ -898,6 +1149,26 @@
         .suppliers-summary-grid,
         .suppliers-control-panel {
             grid-template-columns: 1fr;
+        }
+
+        .suppliers-pagination {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .suppliers-page-controls,
+        .suppliers-page-btn {
+            width: 100%;
+        }
+
+        .suppliers-page-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .suppliers-page-count {
+            justify-content: center;
+            width: 100%;
         }
 
         .suppliers-modal-actions {
@@ -930,10 +1201,50 @@
     private string? _message;
     private bool _isSuccess;
 
+    private int _currentPage = 1;
+    private int _pageSize = 10;
+    private int? _openActionSupplierId;
+
     private int TotalSuppliers => _suppliers.Count;
     private int ActiveSuppliers => _suppliers.Count(x => x.IsActive);
     private int TotalPurchases => _suppliers.Sum(x => x.TotalPurchases);
     private decimal TotalSpent => _suppliers.Sum(x => x.TotalSpent);
+
+    private List<SupplierListItemViewModel> FilteredSuppliers => _suppliers;
+
+    private int TotalFilteredSuppliers => FilteredSuppliers.Count;
+
+    private string SupplierPlural => TotalFilteredSuppliers == 1 ? "" : "s";
+
+    private int TotalPages =>
+        TotalFilteredSuppliers == 0
+            ? 1
+            : (int)Math.Ceiling(TotalFilteredSuppliers / (double)_pageSize);
+
+    private int SafeCurrentPage =>
+        Math.Min(Math.Max(_currentPage, 1), TotalPages);
+
+    private int PageStart =>
+        TotalFilteredSuppliers == 0
+            ? 0
+            : ((SafeCurrentPage - 1) * _pageSize) + 1;
+
+    private int PageEnd =>
+        TotalFilteredSuppliers == 0
+            ? 0
+            : Math.Min(SafeCurrentPage * _pageSize, TotalFilteredSuppliers);
+
+    private List<SupplierListItemViewModel> PaginatedSuppliers =>
+        FilteredSuppliers
+            .Skip((SafeCurrentPage - 1) * _pageSize)
+            .Take(_pageSize)
+            .ToList();
+
+    private string PreviousPageClass =>
+        _currentPage <= 1 ? "suppliers-page-btn is-disabled" : "suppliers-page-btn";
+
+    private string NextPageClass =>
+        _currentPage >= TotalPages ? "suppliers-page-btn is-disabled" : "suppliers-page-btn";
 
     protected override async Task OnInitializedAsync()
     {
@@ -950,19 +1261,73 @@
     private async Task LoadSuppliersAsync()
     {
         _loading = true;
+        _openActionSupplierId = null;
+
         _suppliers = await SupplierService.GetSuppliersAsync(_searchTerm, _statusFilter);
+
+        if (_currentPage > TotalPages)
+        {
+            _currentPage = TotalPages;
+        }
+
         _loading = false;
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _currentPage = 1;
+        await LoadSuppliersAsync();
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyFiltersAsync();
+        }
+    }
+
+    private void StatusFilterChanged(ChangeEventArgs e)
+    {
+        _statusFilter = e.Value?.ToString() ?? "all";
+        _currentPage = 1;
     }
 
     private async Task ResetFiltersAsync()
     {
         _searchTerm = null;
         _statusFilter = "all";
+        _currentPage = 1;
         await LoadSuppliersAsync();
+    }
+
+    private void NextPage()
+    {
+        if (_currentPage < TotalPages)
+        {
+            _currentPage++;
+            _openActionSupplierId = null;
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (_currentPage > 1)
+        {
+            _currentPage--;
+            _openActionSupplierId = null;
+        }
+    }
+
+    private void ToggleActionMenu(int supplierId)
+    {
+        _openActionSupplierId = _openActionSupplierId == supplierId ? null : supplierId;
     }
 
     private void OpenAddModal()
     {
+        _openActionSupplierId = null;
+
         _form = new SupplierFormModel
         {
             IsActive = true
@@ -973,6 +1338,8 @@
 
     private async Task OpenEditModal(int id)
     {
+        _openActionSupplierId = null;
+
         var model = await SupplierService.GetByIdAsync(id);
 
         if (model == null)
@@ -993,6 +1360,11 @@
 
     private async Task SaveSupplierAsync()
     {
+        if (_saving)
+        {
+            return;
+        }
+
         _saving = true;
 
         var result = await SupplierService.SaveAsync(_form);
@@ -1004,12 +1376,15 @@
         {
             _showModal = false;
             _form = new SupplierFormModel();
+            _currentPage = 1;
             await LoadSuppliersAsync();
         }
     }
 
     private async Task ToggleStatusAsync(int id)
     {
+        _openActionSupplierId = null;
+
         var result = await SupplierService.ToggleStatusAsync(id);
         ShowMessage(result.Message, result.Success);
 
@@ -1021,6 +1396,8 @@
 
     private void ConfirmDelete(int id, string name)
     {
+        _openActionSupplierId = null;
+
         _deleteId = id;
         _deleteSupplierName = name;
         _showDeleteConfirm = true;
