@@ -15,14 +15,37 @@
 <PageTitle>Cashier Shift</PageTitle>
 
 <section class="shift-page">
-    <div class="shift-header">
+    <div class="shift-top">
         <div>
             <div class="shift-kicker">
                 <i class="bi bi-cash-coin"></i>
                 Till session
             </div>
+
             <h1>Cashier Shift</h1>
-            <p>Open and close your till session, track cash, card and EFT totals.</p>
+            <p>Open your till, record cash movements, monitor payment totals and close your shift accurately.</p>
+        </div>
+
+        <div class="shift-top-actions">
+            @if (_openShift == null)
+            {
+                <span class="shift-top-pill warning">
+                    <i class="bi bi-exclamation-circle"></i>
+                    No open shift
+                </span>
+            }
+            else
+            {
+                <span class="shift-top-pill success">
+                    <i class="bi bi-check2-circle"></i>
+                    Shift open
+                </span>
+            }
+
+            <button type="button" class="shift-ghost-btn" @onclick="LoadAsync">
+                <i class="bi bi-arrow-clockwise"></i>
+                Refresh
+            </button>
         </div>
     </div>
 
@@ -37,162 +60,226 @@
         </div>
     }
 
-    <div class="shift-grid">
-        <div class="shift-panel">
-            <div class="shift-panel-header">
-                <div>
-                    <h2>Current Shift</h2>
-                    <p>Use this before and after selling.</p>
+    @if (_loading)
+    {
+        <div class="shift-empty">
+            <div class="shift-empty-icon">
+                <i class="bi bi-hourglass-split"></i>
+            </div>
+            <strong>Loading cashier shift...</strong>
+            <span>Please wait while we prepare your till session.</span>
+        </div>
+    }
+    else
+    {
+        <div class="shift-summary-grid">
+            <div class="shift-summary-card hero">
+                <div class="shift-summary-icon">
+                    <i class="bi bi-wallet2"></i>
                 </div>
+                <span>Expected Cash</span>
+                <strong>@Money(_openShift?.ExpectedCash ?? 0)</strong>
+                <small>Opening cash + cash sales + cash in - cash out</small>
             </div>
 
-            @if (_loading)
-            {
-                <div class="shift-empty">
-                    <strong>Loading shift...</strong>
-                    <span>Please wait.</span>
+            <div class="shift-summary-card">
+                <div class="shift-summary-icon green">
+                    <i class="bi bi-cash-stack"></i>
                 </div>
-            }
-            else if (_openShift == null)
-            {
-                <EditForm Model="_openModel" OnValidSubmit="OpenShiftAsync">
-                    <DataAnnotationsValidator />
+                <span>Cash Sales</span>
+                <strong>@Money(_openShift?.CashSales ?? 0)</strong>
+                <small>Cash transactions in this shift</small>
+            </div>
 
-                    <div class="shift-form">
-                        <div class="shift-empty compact">
-                            <strong>No open shift</strong>
-                            <span>Open a shift before starting your cashier session.</span>
-                        </div>
+            <div class="shift-summary-card">
+                <div class="shift-summary-icon blue">
+                    <i class="bi bi-credit-card"></i>
+                </div>
+                <span>Card Sales</span>
+                <strong>@Money(_openShift?.CardSales ?? 0)</strong>
+                <small>Card payments recorded</small>
+            </div>
 
+            <div class="shift-summary-card">
+                <div class="shift-summary-icon violet">
+                    <i class="bi bi-bank"></i>
+                </div>
+                <span>EFT Sales</span>
+                <strong>@Money(_openShift?.EftSales ?? 0)</strong>
+                <small>Bank transfer payments</small>
+            </div>
+        </div>
+
+        <div class="shift-main-grid">
+            <div class="shift-left-column">
+                <div class="shift-panel">
+                    <div class="shift-panel-header">
                         <div>
-                            <label>Opening Cash (@CurrencyLabel)</label>
-                            <InputNumber class="shift-input" @bind-Value="_openModel.OpeningCash" />
-                        </div>
-
-                        <div>
-                            <label>Opening Notes</label>
-                            <InputTextArea class="shift-input shift-textarea" @bind-Value="_openModel.OpeningNotes" />
-                        </div>
-
-                        <ValidationSummary class="shift-validation" />
-
-                        <button type="submit" class="shift-primary-btn" disabled="@_saving">
-                            <i class="bi bi-play-circle"></i>
-                            @(_saving ? "Opening..." : "Open Shift")
-                        </button>
-                    </div>
-                </EditForm>
-            }
-            else
-            {
-                <div class="shift-current">
-                    <div class="shift-status-card open">
-                        <span>Status</span>
-                        <strong>@_openShift.Status</strong>
-                    </div>
-
-                    <div class="shift-stats-grid">
-                        <div>
-                            <span>Opened</span>
-                            <strong>@_openShift.OpenedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</strong>
-                        </div>
-
-                        <div>
-                            <span>Opening Cash</span>
-                            <strong>@Money(_openShift.OpeningCash)</strong>
-                        </div>
-
-                        <div>
-                            <span>Cash Sales</span>
-                            <strong>@Money(_openShift.CashSales)</strong>
-                        </div>
-
-                        <div>
-                            <span>Card Sales</span>
-                            <strong>@Money(_openShift.CardSales)</strong>
-                        </div>
-
-                        <div>
-                            <span>EFT Sales</span>
-                            <strong>@Money(_openShift.EftSales)</strong>
-                        </div>
-
-                        <div>
-                            <span>Total Sales</span>
-                            <strong>@Money(_openShift.TotalSales)</strong>
-                        </div>
-
-                        <div>
-                            <span>Cash In</span>
-                            <strong>@Money(_openShift.CashIn)</strong>
-                        </div>
-
-                        <div>
-                            <span>Cash Out</span>
-                            <strong>@Money(_openShift.CashOut)</strong>
-                        </div>
-
-                        <div>
-                            <span>Expected Cash</span>
-                            <strong>@Money(_openShift.ExpectedCash)</strong>
+                            <h2>Current Shift</h2>
+                            <p>Manage your active till session before selling and after closing.</p>
                         </div>
                     </div>
 
-                    <div class="shift-cash-movement-card">
-                        <div class="shift-mini-header">
+                    @if (_openShift == null)
+                    {
+                        <EditForm Model="_openModel" OnValidSubmit="OpenShiftAsync">
+                            <DataAnnotationsValidator />
+
+                            <div class="shift-form">
+                                <div class="shift-start-card">
+                                    <div class="shift-start-icon">
+                                        <i class="bi bi-play-circle"></i>
+                                    </div>
+
+                                    <div>
+                                        <strong>Start your cashier session</strong>
+                                        <span>Enter opening float before processing sales.</span>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label>Opening Cash (@CurrencyLabel)</label>
+                                    <InputNumber class="shift-input" @bind-Value="_openModel.OpeningCash" />
+                                </div>
+
+                                <div>
+                                    <label>Opening Notes</label>
+                                    <InputTextArea class="shift-input shift-textarea" @bind-Value="_openModel.OpeningNotes" />
+                                </div>
+
+                                <ValidationSummary class="shift-validation" />
+
+                                <button type="submit"
+                                        class="shift-primary-btn"
+                                        disabled="@(_saving ? "disabled" : null)">
+                                    <i class="bi bi-play-circle"></i>
+                                    @(_saving ? "Opening..." : "Open Shift")
+                                </button>
+                            </div>
+                        </EditForm>
+                    }
+                    else
+                    {
+                        <div class="shift-current">
+                            <div class="shift-open-banner">
+                                <div>
+                                    <span>Status</span>
+                                    <strong>@_openShift.Status</strong>
+                                    <small>Opened @_openShift.OpenedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</small>
+                                </div>
+
+                                <div class="shift-open-total">
+                                    <span>Total Sales</span>
+                                    <strong>@Money(_openShift.TotalSales)</strong>
+                                </div>
+                            </div>
+
+                            <div class="shift-stats-grid">
+                                <div>
+                                    <span>Opening Cash</span>
+                                    <strong>@Money(_openShift.OpeningCash)</strong>
+                                </div>
+
+                                <div>
+                                    <span>Cash Sales</span>
+                                    <strong>@Money(_openShift.CashSales)</strong>
+                                </div>
+
+                                <div>
+                                    <span>Card Sales</span>
+                                    <strong>@Money(_openShift.CardSales)</strong>
+                                </div>
+
+                                <div>
+                                    <span>EFT Sales</span>
+                                    <strong>@Money(_openShift.EftSales)</strong>
+                                </div>
+
+                                <div>
+                                    <span>Cash In</span>
+                                    <strong>@Money(_openShift.CashIn)</strong>
+                                </div>
+
+                                <div>
+                                    <span>Cash Out</span>
+                                    <strong>@Money(_openShift.CashOut)</strong>
+                                </div>
+
+                                <div class="highlight">
+                                    <span>Expected Cash</span>
+                                    <strong>@Money(_openShift.ExpectedCash)</strong>
+                                </div>
+
+                                <div>
+                                    <span>Cash Movements</span>
+                                    <strong>@_openShift.CashMovements.Count</strong>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @if (_openShift != null)
+                {
+                    <div class="shift-panel">
+                        <div class="shift-panel-header">
                             <div>
-                                <h3>Cash In / Cash Out</h3>
-                                <p>Record extra float, petty cash, cash drops or till withdrawals.</p>
+                                <h2>Cash In / Cash Out</h2>
+                                <p>Record extra float, cash drops, petty cash or till withdrawals.</p>
                             </div>
                         </div>
 
                         <EditForm Model="_movementModel" OnValidSubmit="RecordCashMovementAsync">
                             <DataAnnotationsValidator />
 
-                            <div class="shift-movement-form">
-                                <div>
-                                    <label>Movement Type</label>
-                                    <InputSelect class="shift-input" @bind-Value="_movementModel.MovementType">
-                                        <option value="Cash In">Cash In</option>
-                                        <option value="Cash Out">Cash Out</option>
-                                    </InputSelect>
+                            <div class="shift-form">
+                                <div class="shift-movement-form">
+                                    <div>
+                                        <label>Movement Type</label>
+                                        <InputSelect class="shift-input" @bind-Value="_movementModel.MovementType">
+                                            <option value="Cash In">Cash In</option>
+                                            <option value="Cash Out">Cash Out</option>
+                                        </InputSelect>
+                                    </div>
+
+                                    <div>
+                                        <label>Amount (@CurrencyLabel)</label>
+                                        <InputNumber class="shift-input" @bind-Value="_movementModel.Amount" />
+                                    </div>
+
+                                    <div>
+                                        <label>Reason</label>
+                                        <InputText class="shift-input" @bind-Value="_movementModel.Reason" />
+                                    </div>
+
+                                    <div>
+                                        <label>Notes</label>
+                                        <InputTextArea class="shift-input shift-textarea" @bind-Value="_movementModel.Notes" />
+                                    </div>
                                 </div>
 
-                                <div>
-                                    <label>Amount (@CurrencyLabel)</label>
-                                    <InputNumber class="shift-input" @bind-Value="_movementModel.Amount" />
-                                </div>
+                                <ValidationSummary class="shift-validation" />
 
-                                <div>
-                                    <label>Reason</label>
-                                    <InputText class="shift-input" @bind-Value="_movementModel.Reason" />
-                                </div>
-
-                                <div>
-                                    <label>Notes</label>
-                                    <InputTextArea class="shift-input shift-textarea" @bind-Value="_movementModel.Notes" />
-                                </div>
+                                <button type="submit"
+                                        class="shift-secondary-btn"
+                                        disabled="@(_savingMovement ? "disabled" : null)">
+                                    <i class="bi bi-plus-circle"></i>
+                                    @(_savingMovement ? "Recording..." : "Record Cash Movement")
+                                </button>
                             </div>
-
-                            <ValidationSummary class="shift-validation" />
-
-                            <button type="submit" class="shift-secondary-btn" disabled="@_savingMovement">
-                                <i class="bi bi-plus-circle"></i>
-                                @(_savingMovement ? "Recording..." : "Record Cash Movement")
-                            </button>
                         </EditForm>
 
                         @if (_openShift.CashMovements.Count == 0)
                         {
                             <div class="shift-empty compact">
                                 <strong>No cash movements yet</strong>
-                                <span>Cash in/out entries will appear here.</span>
+                                <span>Cash in and cash out entries will appear here.</span>
                             </div>
                         }
                         else
                         {
                             <div class="shift-movement-list">
-                                @foreach (var movement in _openShift.CashMovements)
+                                @foreach (var movement in _openShift.CashMovements.OrderByDescending(x => x.CreatedAt))
                                 {
                                     <div class="shift-movement-item">
                                         <div>
@@ -217,135 +304,222 @@
                         }
                     </div>
 
-                    <EditForm Model="_closeModel" OnValidSubmit="CloseShiftAsync">
-                        <DataAnnotationsValidator />
-
-                        <div class="shift-form">
+                    <div class="shift-panel">
+                        <div class="shift-panel-header">
                             <div>
-                                <label>Closing Cash Counted (@CurrencyLabel)</label>
-                                <InputNumber class="shift-input" @bind-Value="_closeModel.ClosingCash" />
+                                <h2>Close Shift</h2>
+                                <p>Count your cash and close the till session.</p>
                             </div>
-
-                            <div>
-                                <label>Closing Notes</label>
-                                <InputTextArea class="shift-input shift-textarea" @bind-Value="_closeModel.ClosingNotes" />
-                            </div>
-
-                            <ValidationSummary class="shift-validation" />
-
-                            <button type="submit" class="shift-danger-btn" disabled="@_saving">
-                                <i class="bi bi-stop-circle"></i>
-                                @(_saving ? "Closing..." : "Close Shift")
-                            </button>
                         </div>
-                    </EditForm>
+
+                        <EditForm Model="_closeModel" OnValidSubmit="CloseShiftAsync">
+                            <DataAnnotationsValidator />
+
+                            <div class="shift-form">
+                                <div class="shift-close-preview">
+                                    <div>
+                                        <span>Expected Cash</span>
+                                        <strong>@Money(_openShift.ExpectedCash)</strong>
+                                    </div>
+
+                                    <div>
+                                        <span>Closing Cash</span>
+                                        <strong>@Money(_closeModel.ClosingCash)</strong>
+                                    </div>
+
+                                    <div>
+                                        <span>Difference</span>
+                                        <strong class="@GetDifferenceClass(_closeModel.ClosingCash - _openShift.ExpectedCash)">
+                                            @Money(_closeModel.ClosingCash - _openShift.ExpectedCash)
+                                        </strong>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label>Closing Cash Counted (@CurrencyLabel)</label>
+                                    <InputNumber class="shift-input" @bind-Value="_closeModel.ClosingCash" />
+                                </div>
+
+                                <div>
+                                    <label>Closing Notes</label>
+                                    <InputTextArea class="shift-input shift-textarea" @bind-Value="_closeModel.ClosingNotes" />
+                                </div>
+
+                                <ValidationSummary class="shift-validation" />
+
+                                <button type="submit"
+                                        class="shift-danger-btn"
+                                        disabled="@(_saving ? "disabled" : null)">
+                                    <i class="bi bi-stop-circle"></i>
+                                    @(_saving ? "Closing..." : "Close Shift")
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                }
+            </div>
+
+            <div class="shift-right-column">
+                <div class="shift-panel">
+                    <div class="shift-panel-header">
+                        <div>
+                            <h2>How Till Totals Work</h2>
+                            <p>Quick explanation for accurate balancing.</p>
+                        </div>
+                    </div>
+
+                    <div class="shift-help">
+                        <div>
+                            <i class="bi bi-wallet2"></i>
+                            <strong>Expected Cash</strong>
+                            <span>Opening cash plus cash sales plus cash in, minus cash out.</span>
+                        </div>
+
+                        <div>
+                            <i class="bi bi-calculator"></i>
+                            <strong>Cash Difference</strong>
+                            <span>Closing counted cash minus expected cash.</span>
+                        </div>
+
+                        <div>
+                            <i class="bi bi-credit-card"></i>
+                            <strong>Card and EFT</strong>
+                            <span>Card and EFT are tracked separately because they are not physical cash in the till.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="shift-panel">
+                    <div class="shift-panel-header">
+                        <div>
+                            <h2>Quick Checklist</h2>
+                            <p>Use this before closing your shift.</p>
+                        </div>
+                    </div>
+
+                    <div class="shift-checklist">
+                        <div>
+                            <i class="bi bi-check2"></i>
+                            <span>Confirm all cash sales are captured.</span>
+                        </div>
+
+                        <div>
+                            <i class="bi bi-check2"></i>
+                            <span>Record any cash drops or petty cash.</span>
+                        </div>
+
+                        <div>
+                            <i class="bi bi-check2"></i>
+                            <span>Count physical cash before closing.</span>
+                        </div>
+
+                        <div>
+                            <i class="bi bi-check2"></i>
+                            <span>Add notes when there is a cash difference.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="shift-panel shift-history-panel">
+            <div class="shift-panel-header shift-history-header">
+                <div>
+                    <h2>My Shift History</h2>
+                    <p>Showing @HistoryPageStart - @HistoryPageEnd of @TotalHistoryShifts shift@(@TotalHistoryShifts == 1 ? "" : "s").</p>
+                </div>
+
+                <div class="shift-date-filters">
+                    <input type="date" @bind="_fromDate" />
+                    <input type="date" @bind="_toDate" />
+
+                    <button type="button" class="shift-secondary-btn" @onclick="ApplyHistoryFilterAsync">
+                        <i class="bi bi-filter"></i>
+                        Filter
+                    </button>
+                </div>
+            </div>
+
+            @if (TotalHistoryShifts == 0)
+            {
+                <div class="shift-empty">
+                    <strong>No shifts found</strong>
+                    <span>Open and close a shift to see history here.</span>
+                </div>
+            }
+            else
+            {
+                <div class="shift-table-wrap">
+                    <table class="shift-table">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Opened</th>
+                                <th>Closed</th>
+                                <th>Opening</th>
+                                <th>Cash In</th>
+                                <th>Cash Out</th>
+                                <th>Cash Sales</th>
+                                <th>Card</th>
+                                <th>EFT</th>
+                                <th>Total</th>
+                                <th>Expected Cash</th>
+                                <th>Closing Cash</th>
+                                <th>Difference</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var shift in PaginatedShifts)
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="shift-pill @(shift.Status == "Open" ? "open" : "closed")">
+                                            @shift.Status
+                                        </span>
+                                    </td>
+                                    <td>@shift.OpenedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td>@(shift.ClosedAt.HasValue? shift.ClosedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "-")</td>
+                                    <td>@Money(shift.OpeningCash)</td>
+                                    <td>@Money(shift.CashIn)</td>
+                                    <td>@Money(shift.CashOut)</td>
+                                    <td>@Money(shift.CashSales)</td>
+                                    <td>@Money(shift.CardSales)</td>
+                                    <td>@Money(shift.EftSales)</td>
+                                    <td class="shift-money">@Money(shift.TotalSales)</td>
+                                    <td>@Money(shift.ExpectedCash)</td>
+                                    <td>@Money(shift.ClosingCash)</td>
+                                    <td class="@GetDifferenceClass(shift.CashDifference)">
+                                        @Money(shift.CashDifference)
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="shift-pagination">
+                    <button type="button"
+                            class="shift-page-btn"
+                            disabled="@(_historyPage <= 1 ? "disabled" : null)"
+                            @onclick="PreviousHistoryPage">
+                        <i class="bi bi-chevron-left"></i>
+                        Previous
+                    </button>
+
+                    <span>Page @_historyPage of @HistoryTotalPages</span>
+
+                    <button type="button"
+                            class="shift-page-btn"
+                            disabled="@(_historyPage >= HistoryTotalPages ? "disabled" : null)"
+                            @onclick="NextHistoryPage">
+                        Next
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
                 </div>
             }
         </div>
-
-        <div class="shift-panel">
-            <div class="shift-panel-header">
-                <div>
-                    <h2>Shift Meaning</h2>
-                    <p>How the totals are calculated.</p>
-                </div>
-            </div>
-
-            <div class="shift-help">
-                <div>
-                    <strong>Expected Cash</strong>
-                    <span>Opening cash plus cash sales plus cash in, minus cash out.</span>
-                </div>
-
-                <div>
-                    <strong>Cash Difference</strong>
-                    <span>Closing counted cash minus expected cash.</span>
-                </div>
-
-                <div>
-                    <strong>Card and EFT</strong>
-                    <span>These are tracked separately because they are not physical cash in the till.</span>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="shift-panel shift-history-panel">
-        <div class="shift-panel-header shift-history-header">
-            <div>
-                <h2>My Shift History</h2>
-                <p>Past shifts for the logged-in cashier.</p>
-            </div>
-
-            <div class="shift-date-filters">
-                <input type="date" @bind="_fromDate" />
-                <input type="date" @bind="_toDate" />
-
-                <button type="button" class="shift-secondary-btn" @onclick="LoadAsync">
-                    Filter
-                </button>
-            </div>
-        </div>
-
-        @if (_shifts.Count == 0)
-        {
-            <div class="shift-empty">
-                <strong>No shifts found</strong>
-                <span>Open and close a shift to see history here.</span>
-            </div>
-        }
-        else
-        {
-            <div class="shift-table-wrap">
-                <table class="shift-table">
-                    <thead>
-                        <tr>
-                            <th>Status</th>
-                            <th>Opened</th>
-                            <th>Closed</th>
-                            <th>Opening</th>
-                            <th>Cash In</th>
-                            <th>Cash Out</th>
-                            <th>Cash Sales</th>
-                            <th>Card</th>
-                            <th>EFT</th>
-                            <th>Total</th>
-                            <th>Expected Cash</th>
-                            <th>Closing Cash</th>
-                            <th>Difference</th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        @foreach (var shift in _shifts)
-                        {
-                            <tr>
-                                <td>
-                                    <span class="shift-pill @(shift.Status == "Open" ? "open" : "closed")">
-                                        @shift.Status
-                                    </span>
-                                </td>
-                                <td>@shift.OpenedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
-                                <td>@(shift.ClosedAt.HasValue? shift.ClosedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "-")</td>
-                                <td>@Money(shift.OpeningCash)</td>
-                                <td>@Money(shift.CashIn)</td>
-                                <td>@Money(shift.CashOut)</td>
-                                <td>@Money(shift.CashSales)</td>
-                                <td>@Money(shift.CardSales)</td>
-                                <td>@Money(shift.EftSales)</td>
-                                <td>@Money(shift.TotalSales)</td>
-                                <td>@Money(shift.ExpectedCash)</td>
-                                <td>@Money(shift.ClosingCash)</td>
-                                <td class="@GetDifferenceClass(shift.CashDifference)">
-                                    @Money(shift.CashDifference)
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
-    </div>
+    }
 </section>
 
 <style>
@@ -353,138 +527,71 @@
         animation: shiftIn .22s ease both;
     }
 
-    .shift-header {
-        margin-bottom: 18px;
+    .shift-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 18px;
+        margin-bottom: 16px;
     }
 
     .shift-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
 
-    .shift-header h1 {
+    .shift-top h1 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.45rem;
-        font-weight: 680;
-        letter-spacing: -.03em;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
-    .shift-header p {
+    .shift-top p {
         margin: 6px 0 0;
-        color: #64748b;
+        color: #667085;
         font-size: .88rem;
     }
 
-    .shift-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr);
-        gap: 16px;
-        align-items: start;
-    }
-
-    .shift-panel {
-        background: #ffffff;
-        border: 1px solid #e7edf5;
-        border-radius: 20px;
-        box-shadow: 0 16px 34px rgba(15,23,42,.055);
-        overflow: hidden;
-    }
-
-    .shift-panel-header {
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+    .shift-top-actions {
         display: flex;
-        justify-content: space-between;
-        gap: 14px;
         align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        flex-wrap: wrap;
     }
 
-        .shift-panel-header h2 {
-            margin: 0;
-            color: #0f172a;
-            font-size: .92rem;
-            font-weight: 720;
-        }
-
-        .shift-panel-header p {
-            margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .76rem;
-        }
-
-    .shift-form,
-    .shift-current,
-    .shift-help {
-        padding: 18px;
-        display: grid;
-        gap: 13px;
-    }
-
-        .shift-form label {
-            display: block;
-            margin-bottom: 6px;
-            color: #475569;
-            font-size: .77rem;
-            font-weight: 700;
-        }
-
-    .shift-input,
-    .shift-date-filters input {
-        width: 100%;
-        min-height: 40px;
-        border-radius: 12px;
-        border: 1px solid #e5e7eb;
-        background: #ffffff;
-        color: #0f172a;
-        padding: 0 12px;
-        font-size: .84rem;
-        outline: none;
-    }
-
-    .shift-textarea {
-        min-height: 86px;
-        padding-top: 10px;
-        resize: vertical;
-    }
-
-    .shift-primary-btn,
-    .shift-secondary-btn,
-    .shift-danger-btn {
+    .shift-top-pill {
         min-height: 38px;
-        border-radius: 11px;
         display: inline-flex;
         align-items: center;
-        justify-content: center;
         gap: 8px;
-        padding: 0 14px;
-        font-size: .8rem;
-        font-weight: 650;
-        border: 0;
+        padding: 0 13px;
+        border-radius: 999px;
+        font-size: .78rem;
+        font-weight: 750;
         white-space: nowrap;
     }
 
-    .shift-primary-btn {
-        color: #ffffff;
-        background: #111827;
-    }
+        .shift-top-pill.success {
+            color: #15803d;
+            background: #ecfdf5;
+            border: 1px solid #bbf7d0;
+        }
 
-    .shift-secondary-btn {
-        color: #2563eb;
-        background: #eef5ff;
-    }
-
-    .shift-danger-btn {
-        color: #ffffff;
-        background: #dc2626;
-    }
+        .shift-top-pill.warning {
+            color: #b45309;
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+        }
 
     .shift-alert {
         display: flex;
@@ -520,59 +627,350 @@
             color: inherit;
         }
 
+    .shift-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .shift-summary-card {
+        padding: 15px;
+        border-radius: 20px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
+    }
+
+        .shift-summary-card.hero {
+            background: #252525;
+            border-color: #252525;
+        }
+
+        .shift-summary-card span,
+        .shift-summary-card strong,
+        .shift-summary-card small {
+            display: block;
+        }
+
+        .shift-summary-card span {
+            margin-top: 11px;
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .shift-summary-card strong {
+            margin-top: 6px;
+            color: #111827;
+            font-size: 1.05rem;
+            font-weight: 760;
+            letter-spacing: -.02em;
+        }
+
+        .shift-summary-card small {
+            margin-top: 4px;
+            color: #98a2b3;
+            font-size: .72rem;
+            line-height: 1.35;
+        }
+
+        .shift-summary-card.hero span,
+        .shift-summary-card.hero strong,
+        .shift-summary-card.hero small {
+            color: #ffffff;
+        }
+
+    .shift-summary-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #252525;
+        box-shadow: 0 10px 22px rgba(17, 24, 39, .08);
+    }
+
+        .shift-summary-icon.green {
+            color: #8FA6A1;
+            background: #f2f6f5;
+        }
+
+        .shift-summary-icon.blue {
+            color: #2563eb;
+            background: #eff6ff;
+        }
+
+        .shift-summary-icon.violet {
+            color: #7c3aed;
+            background: #f5f3ff;
+        }
+
+    .shift-main-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr);
+        gap: 16px;
+        align-items: start;
+    }
+
+    .shift-left-column,
+    .shift-right-column {
+        display: grid;
+        gap: 16px;
+    }
+
+    .shift-panel {
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        border-radius: 22px;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
+        overflow: hidden;
+    }
+
+    .shift-panel-header {
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: center;
+    }
+
+        .shift-panel-header h2 {
+            margin: 0;
+            color: #111827;
+            font-size: .94rem;
+            font-weight: 720;
+        }
+
+        .shift-panel-header p {
+            margin: 4px 0 0;
+            color: #98a2b3;
+            font-size: .75rem;
+        }
+
+    .shift-form,
+    .shift-current,
+    .shift-help,
+    .shift-checklist {
+        padding: 18px;
+        display: grid;
+        gap: 13px;
+    }
+
+        .shift-form label {
+            display: block;
+            margin-bottom: 6px;
+            color: #475569;
+            font-size: .77rem;
+            font-weight: 700;
+        }
+
+    .shift-input,
+    .shift-date-filters input {
+        width: 100%;
+        min-height: 40px;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        color: #111827;
+        padding: 0 12px;
+        font-size: 16px;
+        outline: none;
+    }
+
+    .shift-textarea {
+        min-height: 86px;
+        padding-top: 10px;
+        resize: vertical;
+    }
+
+    .shift-primary-btn,
+    .shift-secondary-btn,
+    .shift-danger-btn,
+    .shift-ghost-btn,
+    .shift-page-btn {
+        min-height: 38px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 680;
+        border: 0;
+        white-space: nowrap;
+        transition: transform .18s ease;
+    }
+
+    .shift-primary-btn {
+        color: #ffffff;
+        background: #252525;
+    }
+
+    .shift-secondary-btn {
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
+    }
+
+    .shift-danger-btn {
+        color: #ffffff;
+        background: #d92d20;
+    }
+
+    .shift-ghost-btn,
+    .shift-page-btn {
+        color: #475569;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+    }
+
+        .shift-primary-btn:hover,
+        .shift-secondary-btn:hover,
+        .shift-danger-btn:hover,
+        .shift-ghost-btn:hover,
+        .shift-page-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .shift-primary-btn:disabled,
+        .shift-secondary-btn:disabled,
+        .shift-danger-btn:disabled,
+        .shift-page-btn:disabled {
+            opacity: .45;
+            cursor: not-allowed;
+            transform: none;
+        }
+
     .shift-empty {
         margin: 18px;
         padding: 34px 20px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px dashed #dbe3ef;
+        border-radius: 18px;
+        background: #fafafa;
+        border: 1px dashed #d0d5dd;
         text-align: center;
     }
 
         .shift-empty.compact {
-            margin: 0;
+            margin: 0 18px 18px;
             padding: 24px 16px;
         }
 
-        .shift-empty strong,
-        .shift-empty span {
-            display: block;
-        }
-
-        .shift-empty strong {
-            color: #0f172a;
-            font-size: .9rem;
-        }
-
-        .shift-empty span {
-            margin-top: 4px;
-            color: #64748b;
-            font-size: .78rem;
-        }
-
-    .shift-status-card {
-        padding: 14px;
+    .shift-empty-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 10px;
         border-radius: 16px;
-        border: 1px solid #bbf7d0;
-        background: #ecfdf5;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
-        .shift-status-card span,
-        .shift-status-card strong {
+    .shift-empty strong,
+    .shift-empty span {
+        display: block;
+    }
+
+    .shift-empty strong {
+        color: #111827;
+        font-size: .9rem;
+        font-weight: 720;
+    }
+
+    .shift-empty span {
+        margin-top: 4px;
+        color: #667085;
+        font-size: .78rem;
+    }
+
+    .shift-start-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 15px;
+        border-radius: 18px;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
+    }
+
+    .shift-start-icon {
+        width: 42px;
+        height: 42px;
+        min-width: 42px;
+        border-radius: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #8FA6A1;
+    }
+
+    .shift-start-card strong,
+    .shift-start-card span {
+        display: block;
+    }
+
+    .shift-start-card strong {
+        color: #111827;
+        font-size: .9rem;
+        font-weight: 740;
+    }
+
+    .shift-start-card span {
+        margin-top: 3px;
+        color: #667085;
+        font-size: .76rem;
+    }
+
+    .shift-open-banner {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px;
+        border-radius: 18px;
+        background: #252525;
+        color: #ffffff;
+    }
+
+        .shift-open-banner span,
+        .shift-open-banner strong,
+        .shift-open-banner small {
             display: block;
         }
 
-        .shift-status-card span {
-            color: #15803d;
+        .shift-open-banner span {
+            color: rgba(255,255,255,.72);
             font-size: .72rem;
-            font-weight: 650;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .04em;
         }
 
-        .shift-status-card strong {
+        .shift-open-banner strong {
             margin-top: 4px;
-            color: #166534;
+            color: #ffffff;
             font-size: 1rem;
-            font-weight: 750;
+            font-weight: 760;
+        }
+
+        .shift-open-banner small {
+            margin-top: 4px;
+            color: rgba(255,255,255,.74);
+            font-size: .74rem;
+        }
+
+    .shift-open-total {
+        text-align: right;
+    }
+
+        .shift-open-total strong {
+            font-size: 1.2rem;
         }
 
     .shift-stats-grid {
@@ -582,206 +980,55 @@
     }
 
         .shift-stats-grid div,
-        .shift-help div {
+        .shift-help div,
+        .shift-checklist div,
+        .shift-close-preview div {
             padding: 13px;
             border-radius: 16px;
-            background: #f8fafc;
-            border: 1px solid #e7edf5;
+            background: #fafafa;
+            border: 1px solid #e8eaef;
         }
+
+            .shift-stats-grid div.highlight {
+                background: #f2f6f5;
+                border-color: #dce7e4;
+            }
 
         .shift-stats-grid span,
         .shift-stats-grid strong,
         .shift-help strong,
-        .shift-help span {
+        .shift-help span,
+        .shift-checklist span,
+        .shift-close-preview span,
+        .shift-close-preview strong {
             display: block;
         }
 
-        .shift-stats-grid span {
-            color: #64748b;
+        .shift-stats-grid span,
+        .shift-close-preview span {
+            color: #667085;
             font-size: .72rem;
-            font-weight: 650;
+            font-weight: 700;
         }
 
-        .shift-stats-grid strong {
+        .shift-stats-grid strong,
+        .shift-close-preview strong {
             margin-top: 4px;
-            color: #0f172a;
+            color: #111827;
             font-size: .86rem;
             font-weight: 720;
-        }
-
-    .shift-help strong {
-        color: #0f172a;
-        font-size: .86rem;
-    }
-
-    .shift-help span {
-        margin-top: 3px;
-        color: #64748b;
-        font-size: .76rem;
-        line-height: 1.45;
-    }
-
-    .shift-history-panel {
-        margin-top: 16px;
-    }
-
-    .shift-history-header {
-        align-items: center;
-    }
-
-    .shift-date-filters {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        flex-wrap: wrap;
-    }
-
-    .shift-table-wrap {
-        overflow-x: auto;
-    }
-
-    .shift-table {
-        width: 100%;
-        min-width: 1050px;
-        border-collapse: collapse;
-    }
-
-        .shift-table th {
-            padding: 12px 16px;
-            background: #f8fafc;
-            color: #64748b;
-            font-size: .7rem;
-            font-weight: 750;
-            text-transform: uppercase;
-            letter-spacing: .05em;
-            border-bottom: 1px solid #e7edf5;
-            white-space: nowrap;
-        }
-
-        .shift-table td {
-            padding: 14px 16px;
-            color: #334155;
-            font-size: .82rem;
-            border-bottom: 1px solid #f1f5f9;
-            vertical-align: middle;
-        }
-
-    .shift-pill {
-        display: inline-flex;
-        min-height: 26px;
-        align-items: center;
-        padding: 0 9px;
-        border-radius: 999px;
-        font-size: .72rem;
-        font-weight: 750;
-    }
-
-        .shift-pill.open {
-            color: #15803d;
-            background: #ecfdf5;
-        }
-
-        .shift-pill.closed {
-            color: #64748b;
-            background: #f1f5f9;
-        }
-
-    .difference-good {
-        color: #15803d !important;
-        font-weight: 750;
-    }
-
-    .difference-bad {
-        color: #dc2626 !important;
-        font-weight: 750;
-    }
-
-    .difference-neutral {
-        color: #334155 !important;
-        font-weight: 750;
-    }
-
-    .shift-validation {
-        padding: 12px 14px;
-        border-radius: 14px;
-        background: #fef2f2;
-        color: #991b1b;
-        font-size: .8rem;
-    }
-
-    @@keyframes shiftIn {
-        from {
-            opacity: 0;
-            transform: translateY(8px);
-        }
-
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    @@media (max-width: 991px) {
-        .shift-grid,
-        .shift-stats-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .shift-history-header {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .shift-date-filters,
-        .shift-date-filters input,
-        .shift-date-filters button {
-            width: 100%;
-        }
-    }
-
-    .shift-movement-form {
-        grid-template-columns: 1fr;
-    }
-
-    .shift-movement-item {
-        flex-direction: column;
-    }
-
-    .shift-cash-movement-card {
-        padding: 14px;
-        border-radius: 18px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
-    }
-
-    .shift-mini-header {
-        margin-bottom: 12px;
-    }
-
-        .shift-mini-header h3 {
-            margin: 0;
-            color: #0f172a;
-            font-size: .9rem;
-            font-weight: 720;
-        }
-
-        .shift-mini-header p {
-            margin: 4px 0 0;
-            color: #64748b;
-            font-size: .76rem;
         }
 
     .shift-movement-form {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 12px;
-        margin-bottom: 12px;
     }
 
     .shift-movement-list {
         display: grid;
         gap: 8px;
-        margin-top: 14px;
+        padding: 0 18px 18px;
     }
 
     .shift-movement-item {
@@ -790,8 +1037,8 @@
         gap: 12px;
         padding: 12px;
         border-radius: 15px;
-        background: #ffffff;
-        border: 1px solid #e7edf5;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
     }
 
         .shift-movement-item strong,
@@ -801,13 +1048,13 @@
 
         .shift-movement-item strong {
             margin-top: 5px;
-            color: #0f172a;
+            color: #111827;
             font-size: .84rem;
         }
 
         .shift-movement-item small {
             margin-top: 2px;
-            color: #64748b;
+            color: #667085;
             font-size: .72rem;
         }
 
@@ -827,8 +1074,8 @@
         }
 
         .shift-movement-pill.out {
-            color: #dc2626;
-            background: #fef2f2;
+            color: #d92d20;
+            background: #fef3f2;
         }
 
     .shift-movement-amount {
@@ -842,8 +1089,233 @@
         }
 
         .shift-movement-amount.out {
-            color: #dc2626;
+            color: #d92d20;
         }
+
+    .shift-close-preview {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .shift-help div {
+        display: grid;
+        gap: 5px;
+    }
+
+    .shift-help i {
+        width: 34px;
+        height: 34px;
+        border-radius: 13px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        margin-bottom: 3px;
+    }
+
+    .shift-help strong {
+        color: #111827;
+        font-size: .86rem;
+        font-weight: 720;
+    }
+
+    .shift-help span {
+        color: #667085;
+        font-size: .76rem;
+        line-height: 1.45;
+    }
+
+    .shift-checklist div {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+    }
+
+    .shift-checklist i {
+        color: #15803d;
+        margin-top: 2px;
+    }
+
+    .shift-checklist span {
+        color: #475569;
+        font-size: .8rem;
+        line-height: 1.4;
+    }
+
+    .shift-validation {
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: #fef2f2;
+        color: #991b1b;
+        font-size: .8rem;
+    }
+
+    .shift-history-panel {
+        margin-top: 16px;
+    }
+
+    .shift-history-header {
+        align-items: center;
+    }
+
+    .shift-date-filters {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .shift-table-wrap {
+        overflow-x: auto;
+    }
+
+    .shift-table {
+        width: 100%;
+        min-width: 1120px;
+        border-collapse: collapse;
+    }
+
+        .shift-table th {
+            padding: 12px 16px;
+            background: #fafafa;
+            color: #667085;
+            font-size: .7rem;
+            font-weight: 750;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            border-bottom: 1px solid #e8eaef;
+            white-space: nowrap;
+        }
+
+        .shift-table td {
+            padding: 14px 16px;
+            color: #334155;
+            font-size: .82rem;
+            border-bottom: 1px solid #f1f2f5;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+
+    .shift-pill {
+        display: inline-flex;
+        min-height: 26px;
+        align-items: center;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 750;
+    }
+
+        .shift-pill.open {
+            color: #15803d;
+            background: #ecfdf5;
+        }
+
+        .shift-pill.closed {
+            color: #667085;
+            background: #f3f4f6;
+        }
+
+    .shift-money {
+        color: #111827 !important;
+        font-weight: 750;
+    }
+
+    .difference-good {
+        color: #15803d !important;
+        font-weight: 750;
+    }
+
+    .difference-bad {
+        color: #d92d20 !important;
+        font-weight: 750;
+    }
+
+    .difference-neutral {
+        color: #334155 !important;
+        font-weight: 750;
+    }
+
+    .shift-pagination {
+        padding: 13px 18px;
+        border-top: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        color: #667085;
+        font-size: .78rem;
+        font-weight: 700;
+    }
+
+    @@keyframes shiftIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width: 1199px) {
+        .shift-summary-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .shift-main-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .shift-top,
+        .shift-history-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .shift-top-actions,
+        .shift-top-actions button,
+        .shift-date-filters,
+        .shift-date-filters input,
+        .shift-date-filters button {
+            width: 100%;
+        }
+
+        .shift-summary-grid,
+        .shift-stats-grid,
+        .shift-movement-form,
+        .shift-close-preview {
+            grid-template-columns: 1fr;
+        }
+
+        .shift-movement-item {
+            flex-direction: column;
+        }
+
+        .shift-open-banner {
+            flex-direction: column;
+        }
+
+        .shift-open-total {
+            text-align: left;
+        }
+
+        .shift-pagination {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .shift-page-btn {
+            width: 100%;
+        }
+    }
 </style>
 
 @code {
@@ -869,14 +1341,48 @@
     private DateTime? _fromDate = DateTime.Today.AddDays(-7);
     private DateTime? _toDate = DateTime.Today;
 
+    private int _historyPage = 1;
+    private int _historyPageSize = 8;
+
     private string CurrencyLabel =>
         string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
             ? "R"
             : _settings.CurrencySymbol;
 
+    private List<CashierShiftViewModel> OrderedShifts =>
+        _shifts
+            .OrderByDescending(x => x.OpenedAt)
+            .ToList();
+
+    private int TotalHistoryShifts => OrderedShifts.Count;
+
+    private int HistoryTotalPages =>
+        TotalHistoryShifts == 0
+            ? 1
+            : (int)Math.Ceiling(TotalHistoryShifts / (double)_historyPageSize);
+
+    private int SafeHistoryPage =>
+        Math.Min(Math.Max(_historyPage, 1), HistoryTotalPages);
+
+    private int HistoryPageStart =>
+        TotalHistoryShifts == 0
+            ? 0
+            : ((SafeHistoryPage - 1) * _historyPageSize) + 1;
+
+    private int HistoryPageEnd =>
+        TotalHistoryShifts == 0
+            ? 0
+            : Math.Min(SafeHistoryPage * _historyPageSize, TotalHistoryShifts);
+
+    private List<CashierShiftViewModel> PaginatedShifts =>
+        OrderedShifts
+            .Skip((SafeHistoryPage - 1) * _historyPageSize)
+            .Take(_historyPageSize)
+            .ToList();
+
     protected override async Task OnInitializedAsync()
     {
-        if (!await UserAccessService.CanAccessAsync("sales"))
+        if (!await UserAccessService.CanAccessAsync("cashier-shift"))
         {
             NavigationManager.NavigateTo("/dashboard");
             return;
@@ -893,7 +1399,34 @@
         _openShift = await CashierShiftService.GetOpenShiftAsync();
         _shifts = await CashierShiftService.GetMyShiftsAsync(_fromDate, _toDate);
 
+        if (_historyPage > HistoryTotalPages)
+        {
+            _historyPage = HistoryTotalPages;
+        }
+
         _loading = false;
+    }
+
+    private async Task ApplyHistoryFilterAsync()
+    {
+        _historyPage = 1;
+        await LoadAsync();
+    }
+
+    private void NextHistoryPage()
+    {
+        if (_historyPage < HistoryTotalPages)
+        {
+            _historyPage++;
+        }
+    }
+
+    private void PreviousHistoryPage()
+    {
+        if (_historyPage > 1)
+        {
+            _historyPage--;
+        }
     }
 
     private async Task OpenShiftAsync()
@@ -908,6 +1441,7 @@
         if (result.Success)
         {
             _openModel = new OpenShiftModel();
+            _historyPage = 1;
             await LoadAsync();
         }
     }
@@ -944,10 +1478,11 @@
         if (result.Success)
         {
             _closeModel = new CloseShiftModel();
+            _historyPage = 1;
             await LoadAsync();
         }
     }
-    
+
     private string Money(decimal value)
     {
         return $"{CurrencyLabel} {value:0.00}";

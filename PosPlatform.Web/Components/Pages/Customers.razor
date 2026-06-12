@@ -7,6 +7,7 @@
 @using PosPlatform.Web.Models.Customers
 @using PosPlatform.Web.Models.Settings
 @using PosPlatform.Web.Services
+@using Microsoft.AspNetCore.Components.Web
 @inject CustomerService CustomerService
 @inject BusinessSettingsService BusinessSettingsService
 @inject UserAccessService UserAccessService
@@ -15,12 +16,13 @@
 <PageTitle>Customers</PageTitle>
 
 <section class="customers-page">
-    <div class="customers-header">
+    <div class="customers-top">
         <div>
             <div class="customers-kicker">
                 <i class="bi bi-person-lines-fill"></i>
                 Customer records
             </div>
+
             <h1>Customers</h1>
             <p>Manage customer profiles, contact details, business customers and purchase history.</p>
         </div>
@@ -83,29 +85,49 @@
     else
     {
         <div class="customers-summary-grid">
-            <div class="customers-summary-card">
+            <div class="customers-summary-card hero">
+                <div class="customers-summary-icon">
+                    <i class="bi bi-people"></i>
+                </div>
                 <span>Total Customers</span>
                 <strong>@TotalCustomers</strong>
+                <small>All records in this view</small>
             </div>
 
-            <div class="customers-summary-card green">
+            <div class="customers-summary-card">
+                <div class="customers-summary-icon green">
+                    <i class="bi bi-check2-circle"></i>
+                </div>
                 <span>Active</span>
                 <strong>@ActiveCustomers</strong>
+                <small>Available during sales</small>
             </div>
 
-            <div class="customers-summary-card blue">
+            <div class="customers-summary-card">
+                <div class="customers-summary-icon blue">
+                    <i class="bi bi-person"></i>
+                </div>
                 <span>Individuals</span>
                 <strong>@IndividualCustomers</strong>
+                <small>Personal customer records</small>
             </div>
 
-            <div class="customers-summary-card violet">
+            <div class="customers-summary-card">
+                <div class="customers-summary-icon violet">
+                    <i class="bi bi-building"></i>
+                </div>
                 <span>Businesses</span>
                 <strong>@BusinessCustomers</strong>
+                <small>Company customer records</small>
             </div>
 
-            <div class="customers-summary-card amber">
+            <div class="customers-summary-card">
+                <div class="customers-summary-icon amber">
+                    <i class="bi bi-cash-stack"></i>
+                </div>
                 <span>Total Spent</span>
                 <strong>@Money(TotalSpent)</strong>
+                <small>Purchase value recorded</small>
             </div>
         </div>
 
@@ -114,10 +136,11 @@
                 <i class="bi bi-search"></i>
                 <input @bind="_searchTerm"
                        @bind:event="oninput"
-                       placeholder="Search name, phone or email" />
+                       @onkeydown="HandleSearchKeyDown"
+                       placeholder="Search by name, phone or email" />
             </div>
 
-            <select class="customers-filter" @bind="_statusFilter">
+            <select class="customers-filter" value="@_statusFilter" @onchange="StatusFilterChanged">
                 <option value="all">All customers</option>
                 <option value="active">Active only</option>
                 <option value="inactive">Inactive only</option>
@@ -125,7 +148,7 @@
                 <option value="business">Businesses</option>
             </select>
 
-            <button type="button" class="customers-secondary-btn" @onclick="LoadCustomersAsync">
+            <button type="button" class="customers-secondary-btn" @onclick="ApplyFiltersAsync">
                 <i class="bi bi-filter"></i>
                 Apply
             </button>
@@ -140,22 +163,38 @@
             <div class="customers-panel-header">
                 <div>
                     <h2>Customer List</h2>
-                    <p>@_customers.Count customer@(_customers.Count == 1 ? "" : "s") showing.</p>
+                    <p>Showing @PageStart - @PageEnd of @TotalFilteredCustomers customer@(@TotalFilteredCustomers == 1 ? "" : "s").</p>
                 </div>
+
+                <span class="customers-status-note">
+                    <i class="bi bi-shield-check"></i>
+                    Tenant scoped
+                </span>
             </div>
 
             @if (_loading)
             {
                 <div class="customers-empty">
+                    <div class="customers-empty-icon">
+                        <i class="bi bi-hourglass-split"></i>
+                    </div>
                     <strong>Loading customers...</strong>
                     <span>Please wait while we fetch customer records.</span>
                 </div>
             }
-            else if (_customers.Count == 0)
+            else if (TotalFilteredCustomers == 0)
             {
                 <div class="customers-empty">
+                    <div class="customers-empty-icon">
+                        <i class="bi bi-person-x"></i>
+                    </div>
                     <strong>No customers found</strong>
                     <span>Add your first customer or adjust the filters.</span>
+
+                    <button type="button" class="customers-primary-btn" @onclick="OpenAddModal">
+                        <i class="bi bi-person-plus"></i>
+                        Add Customer
+                    </button>
                 </div>
             }
             else
@@ -171,12 +210,12 @@
                                 <th>Total Spent</th>
                                 <th>Last Purchase</th>
                                 <th>Status</th>
-                                <th class="text-end">Actions</th>
+                                <th class="customers-actions-col">Actions</th>
                             </tr>
                         </thead>
 
                         <tbody>
-                            @foreach (var customer in _customers)
+                            @foreach (var customer in PaginatedCustomers)
                             {
                                 <tr>
                                     <td>
@@ -203,7 +242,7 @@
                                     </td>
 
                                     <td>@customer.TotalPurchases</td>
-                                    <td>@Money(customer.TotalSpent)</td>
+                                    <td class="customers-money">@Money(customer.TotalSpent)</td>
                                     <td>@(customer.LastPurchaseDate.HasValue? customer.LastPurchaseDate.Value.ToLocalTime().ToString("yyyy-MM-dd") : "-")</td>
 
                                     <td>
@@ -212,27 +251,73 @@
                                         </span>
                                     </td>
 
-                                    <td class="text-end">
-                                        <div class="customers-actions">
-                                            <button type="button" class="customers-mini-btn edit" @onclick="() => OpenEditModal(customer.Id)">
-                                                <i class="bi bi-pencil"></i>
-                                                Edit
+                                    <td class="customers-actions-cell">
+                                        <div class="customers-action-menu">
+                                            <button type="button"
+                                                    class="customers-action-toggle"
+                                                    @onclick="() => ToggleActionMenu(customer.Id)">
+                                                <span>Actions</span>
+                                                <i class="bi bi-chevron-down"></i>
                                             </button>
 
-                                            <button type="button" class="customers-mini-btn status" @onclick="() => ToggleStatusAsync(customer.Id)">
-                                                <i class="bi @(customer.IsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
-                                                @(customer.IsActive ? "Pause" : "Activate")
-                                            </button>
+                                            @if (_openActionCustomerId == customer.Id)
+                                            {
+                                                <div class="customers-action-dropdown">
+                                                    <button type="button" @onclick="() => OpenEditModal(customer.Id)">
+                                                        <i class="bi bi-pencil"></i>
+                                                        <span>Edit customer</span>
+                                                    </button>
 
-                                            <button type="button" class="customers-mini-btn delete" @onclick="() => ConfirmDelete(customer.Id, customer.DisplayName)">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
+                                                    <button type="button" @onclick="() => ToggleStatusAsync(customer.Id)">
+                                                        <i class="bi @(customer.IsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
+                                                        <span>@(customer.IsActive ? "Pause customer" : "Activate customer")</span>
+                                                    </button>
+
+                                                    <button type="button" class="danger" @onclick="() => ConfirmDelete(customer.Id, customer.DisplayName)">
+                                                        <i class="bi bi-trash"></i>
+                                                        <span>Delete customer</span>
+                                                    </button>
+                                                </div>
+                                            }
                                         </div>
                                     </td>
                                 </tr>
                             }
                         </tbody>
                     </table>
+                </div>
+
+                <div class="customers-pagination">
+                    <div class="customers-page-info">
+                        Showing
+                        <strong>@PageStart</strong>
+                        -
+                        <strong>@PageEnd</strong>
+                        of
+                        <strong>@TotalFilteredCustomers</strong>
+                    </div>
+
+                    <div class="customers-page-controls">
+                        <button type="button"
+                                class="customers-page-btn"
+                                disabled="@(_currentPage <= 1)"
+                                @onclick="PreviousPage">
+                            <i class="bi bi-chevron-left"></i>
+                            Previous
+                        </button>
+
+                        <span class="customers-page-count">
+                            Page @_currentPage of @TotalPages
+                        </span>
+
+                        <button type="button"
+                                class="customers-page-btn"
+                                disabled="@(_currentPage >= TotalPages)"
+                                @onclick="NextPage">
+                            Next
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
                 </div>
             }
         </div>
@@ -356,37 +441,37 @@
         animation: customersIn .22s ease both;
     }
 
-    .customers-header {
+    .customers-top {
         display: flex;
         justify-content: space-between;
         align-items: flex-end;
         gap: 18px;
-        margin-bottom: 18px;
+        margin-bottom: 16px;
     }
 
     .customers-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
 
-    .customers-header h1 {
+    .customers-top h1 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.45rem;
-        font-weight: 680;
-        letter-spacing: -.03em;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
-    .customers-header p {
+    .customers-top p {
         margin: 6px 0 0;
-        color: #64748b;
+        color: #667085;
         font-size: .88rem;
     }
 
@@ -394,33 +479,35 @@
     .customers-secondary-btn,
     .customers-ghost-btn,
     .customers-danger-btn,
-    .customers-mini-btn {
+    .customers-page-btn {
         min-height: 38px;
-        border-radius: 11px;
+        border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
         padding: 0 14px;
         font-size: .8rem;
-        font-weight: 650;
+        font-weight: 680;
         border: 0;
-        transition: all .18s ease;
+        transition: transform .18s ease;
         white-space: nowrap;
     }
 
     .customers-primary-btn {
         color: #ffffff;
-        background: #111827;
-        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+        background: #252525;
+        box-shadow: 0 12px 24px rgba(17, 24, 39, .12);
     }
 
     .customers-secondary-btn {
-        color: #2563eb;
-        background: #eef5ff;
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
     }
 
-    .customers-ghost-btn {
+    .customers-ghost-btn,
+    .customers-page-btn {
         color: #475569;
         background: #ffffff;
         border: 1px solid #e5e7eb;
@@ -428,7 +515,22 @@
 
     .customers-danger-btn {
         color: #ffffff;
-        background: #dc2626;
+        background: #d92d20;
+    }
+
+        .customers-primary-btn:hover,
+        .customers-secondary-btn:hover,
+        .customers-ghost-btn:hover,
+        .customers-danger-btn:hover,
+        .customers-page-btn:hover {
+            transform: translateY(-1px);
+        }
+
+    .customers-page-btn:disabled,
+    .customers-primary-btn:disabled {
+        opacity: .45;
+        cursor: not-allowed;
+        transform: none;
     }
 
     .customers-alert {
@@ -465,74 +567,39 @@
             color: inherit;
         }
 
-    .customers-settings-strip,
-    .customers-summary-grid {
+    .customers-settings-strip {
         display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 10px;
         margin-bottom: 16px;
     }
 
-    .customers-settings-strip {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
-
-    .customers-summary-grid {
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-    }
-
-    .customers-settings-strip div,
-    .customers-summary-card {
-        padding: 13px;
-        border-radius: 16px;
-        background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.04);
-    }
-
-    .customers-summary-card {
-        padding: 16px;
-    }
+        .customers-settings-strip div {
+            padding: 13px;
+            border-radius: 16px;
+            background: #ffffff;
+            border: 1px solid #e8eaef;
+            box-shadow: 0 10px 24px rgba(17, 24, 39, .035);
+        }
 
         .customers-settings-strip span,
-        .customers-settings-strip strong,
-        .customers-summary-card span,
-        .customers-summary-card strong {
+        .customers-settings-strip strong {
             display: block;
         }
 
-        .customers-settings-strip span,
-        .customers-summary-card span {
-            color: #64748b;
-            font-size: .72rem;
-            font-weight: 650;
+        .customers-settings-strip span {
+            color: #98a2b3;
+            font-size: .7rem;
+            font-weight: 700;
+            letter-spacing: .03em;
+            text-transform: uppercase;
         }
 
-        .customers-settings-strip strong,
-        .customers-summary-card strong {
+        .customers-settings-strip strong {
             margin-top: 4px;
-            color: #0f172a;
-            font-size: .88rem;
+            color: #111827;
+            font-size: .84rem;
             font-weight: 720;
-        }
-
-        .customers-summary-card strong {
-            font-size: 1.08rem;
-        }
-
-        .customers-summary-card.green strong {
-            color: #16a34a;
-        }
-
-        .customers-summary-card.blue strong {
-            color: #2563eb;
-        }
-
-        .customers-summary-card.violet strong {
-            color: #7c3aed;
-        }
-
-        .customers-summary-card.amber strong {
-            color: #d97706;
         }
 
     .customers-settings-warning {
@@ -571,13 +638,99 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        background: #111827;
+        background: #252525;
         color: #ffffff;
         font-size: .78rem;
         font-weight: 700;
         text-decoration: none;
         white-space: nowrap;
     }
+
+    .customers-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .customers-summary-card {
+        padding: 15px;
+        border-radius: 20px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
+    }
+
+        .customers-summary-card.hero {
+            background: #252525;
+            border-color: #252525;
+        }
+
+        .customers-summary-card span,
+        .customers-summary-card strong,
+        .customers-summary-card small {
+            display: block;
+        }
+
+        .customers-summary-card span {
+            margin-top: 11px;
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .customers-summary-card strong {
+            margin-top: 6px;
+            color: #111827;
+            font-size: 1.05rem;
+            font-weight: 760;
+            letter-spacing: -.02em;
+        }
+
+        .customers-summary-card small {
+            margin-top: 4px;
+            color: #98a2b3;
+            font-size: .72rem;
+            line-height: 1.35;
+        }
+
+        .customers-summary-card.hero span,
+        .customers-summary-card.hero strong,
+        .customers-summary-card.hero small {
+            color: #ffffff;
+        }
+
+    .customers-summary-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #252525;
+        box-shadow: 0 10px 22px rgba(17, 24, 39, .08);
+    }
+
+        .customers-summary-icon.green {
+            color: #8FA6A1;
+            background: #f2f6f5;
+        }
+
+        .customers-summary-icon.blue {
+            color: #2563eb;
+            background: #eff6ff;
+        }
+
+        .customers-summary-icon.violet {
+            color: #7c3aed;
+            background: #f5f3ff;
+        }
+
+        .customers-summary-icon.amber {
+            color: #b7791f;
+            background: #fffbeb;
+        }
 
     .customers-control-panel {
         display: grid;
@@ -587,8 +740,8 @@
         margin-bottom: 16px;
         border-radius: 18px;
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 10px 24px rgba(17, 24, 39, .035);
     }
 
     .customers-search {
@@ -598,9 +751,9 @@
         gap: 10px;
         padding: 0 13px;
         border-radius: 12px;
-        background: #f8fafc;
+        background: #fafafa;
         border: 1px solid #e5e7eb;
-        color: #94a3b8;
+        color: #98a2b3;
     }
 
         .customers-search input,
@@ -611,9 +764,9 @@
             border-radius: 12px;
             border: 1px solid #e5e7eb;
             background: #ffffff;
-            color: #0f172a;
+            color: #111827;
             padding: 0 12px;
-            font-size: .84rem;
+            font-size: 16px;
             outline: none;
         }
 
@@ -625,32 +778,50 @@
 
     .customers-panel {
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        border-radius: 20px;
-        box-shadow: 0 16px 34px rgba(15,23,42,.055);
-        overflow: hidden;
+        border: 1px solid #e8eaef;
+        border-radius: 22px;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
+        overflow: visible;
     }
 
     .customers-panel-header {
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 14px;
     }
 
         .customers-panel-header h2 {
             margin: 0;
-            color: #0f172a;
-            font-size: .92rem;
+            color: #111827;
+            font-size: .94rem;
             font-weight: 720;
         }
 
         .customers-panel-header p {
             margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .76rem;
+            color: #98a2b3;
+            font-size: .75rem;
         }
+
+    .customers-status-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        color: #8FA6A1;
+        background: #f2f6f5;
+        font-size: .74rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
 
     .customers-table-wrap {
         overflow-x: auto;
+        padding-bottom: 80px;
     }
 
     .customers-table {
@@ -661,13 +832,13 @@
 
         .customers-table th {
             padding: 12px 16px;
-            background: #f8fafc;
-            color: #64748b;
+            background: #fafafa;
+            color: #667085;
             font-size: .7rem;
             font-weight: 750;
             text-transform: uppercase;
             letter-spacing: .05em;
-            border-bottom: 1px solid #e7edf5;
+            border-bottom: 1px solid #e8eaef;
             white-space: nowrap;
         }
 
@@ -675,7 +846,7 @@
             padding: 14px 16px;
             color: #334155;
             font-size: .82rem;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f2f5;
             vertical-align: middle;
         }
 
@@ -689,8 +860,8 @@
         width: 38px;
         height: 38px;
         border-radius: 14px;
-        background: #eef5ff;
-        color: #2563eb;
+        background: #f2f6f5;
+        color: #8FA6A1;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -701,7 +872,7 @@
     .customers-cell strong,
     .customers-contact strong {
         display: block;
-        color: #0f172a;
+        color: #111827;
         font-size: .85rem;
         font-weight: 720;
     }
@@ -710,7 +881,7 @@
     .customers-contact span {
         display: block;
         margin-top: 2px;
-        color: #94a3b8;
+        color: #98a2b3;
         font-size: .72rem;
     }
 
@@ -741,66 +912,173 @@
         }
 
         .customers-status-pill.inactive {
-            color: #64748b;
-            background: #f1f5f9;
+            color: #667085;
+            background: #f3f4f6;
         }
 
-    .customers-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: 6px;
-        flex-wrap: wrap;
+    .customers-money {
+        color: #111827 !important;
+        font-weight: 750;
     }
 
-    .customers-mini-btn {
-        min-height: 30px;
-        padding: 0 10px;
-        border: 1px solid;
+    .customers-actions-col,
+    .customers-actions-cell {
+        text-align: right;
+    }
+
+    .customers-actions-cell {
+        position: relative;
+        min-width: 150px;
+    }
+
+    .customers-action-menu {
+        position: relative;
+        display: inline-block;
+    }
+
+    .customers-action-toggle {
+        min-height: 34px;
+        border-radius: 11px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        color: #252525;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 11px;
         font-size: .74rem;
+        font-weight: 750;
+        cursor: pointer;
+        box-shadow: 0 8px 18px rgba(17, 24, 39, .04);
     }
 
-        .customers-mini-btn.edit {
-            color: #2563eb;
-            background: #eff6ff;
-            border-color: #bfdbfe;
+    .customers-action-dropdown {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        width: 195px;
+        padding: 7px;
+        border-radius: 15px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 18px 38px rgba(17, 24, 39, .14);
+        z-index: 100;
+        display: grid;
+        gap: 4px;
+        text-align: left;
+    }
+
+        .customers-action-dropdown button {
+            width: 100%;
+            min-height: 36px;
+            border: 0;
+            border-radius: 11px;
+            background: transparent;
+            color: #344054;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 10px;
+            font-size: .78rem;
+            font-weight: 650;
+            text-align: left;
         }
 
-        .customers-mini-btn.status {
-            color: #b45309;
-            background: #fffbeb;
-            border-color: #fde68a;
-        }
+            .customers-action-dropdown button:hover {
+                background: #fafafa;
+                color: #252525;
+            }
 
-        .customers-mini-btn.delete {
-            color: #dc2626;
-            background: #fef2f2;
-            border-color: #fecaca;
-        }
+            .customers-action-dropdown button i {
+                width: 18px;
+                color: #8FA6A1;
+            }
+
+            .customers-action-dropdown button.danger,
+            .customers-action-dropdown button.danger i {
+                color: #d92d20;
+            }
 
     .customers-empty {
         margin: 18px;
         padding: 34px 20px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px dashed #dbe3ef;
+        border-radius: 18px;
+        background: #fafafa;
+        border: 1px dashed #d0d5dd;
         text-align: center;
     }
 
-        .customers-empty strong,
-        .customers-empty span {
-            display: block;
+    .customers-empty-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 10px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .customers-empty strong,
+    .customers-empty span {
+        display: block;
+    }
+
+    .customers-empty strong {
+        color: #111827;
+        font-size: .9rem;
+        font-weight: 720;
+    }
+
+    .customers-empty span {
+        margin-top: 4px;
+        margin-bottom: 14px;
+        color: #667085;
+        font-size: .78rem;
+    }
+
+    .customers-pagination {
+        padding: 14px 18px;
+        border-top: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        background: #ffffff;
+        border-radius: 0 0 22px 22px;
+    }
+
+    .customers-page-info {
+        color: #667085;
+        font-size: .78rem;
+        font-weight: 600;
+    }
+
+        .customers-page-info strong {
+            color: #111827;
         }
 
-        .customers-empty strong {
-            color: #0f172a;
-            font-size: .9rem;
-        }
+    .customers-page-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
 
-        .customers-empty span {
-            margin-top: 4px;
-            color: #64748b;
-            font-size: .78rem;
-        }
+    .customers-page-count {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 11px;
+        border-radius: 11px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+        color: #667085;
+        font-size: .76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
 
     .customers-modal-backdrop {
         position: fixed;
@@ -839,7 +1117,7 @@
     }
 
         .customers-modal-header span {
-            color: #2563eb;
+            color: #8FA6A1;
             font-size: .72rem;
             font-weight: 750;
             letter-spacing: .06em;
@@ -849,7 +1127,7 @@
         .customers-modal-header h4,
         .customers-delete-modal h4 {
             margin: 3px 0 0;
-            color: #0f172a;
+            color: #111827;
             font-size: 1.08rem;
             font-weight: 720;
         }
@@ -857,7 +1135,7 @@
         .customers-modal-header p,
         .customers-delete-modal p {
             margin: 5px 0 0;
-            color: #64748b;
+            color: #667085;
             font-size: .84rem;
             line-height: 1.5;
         }
@@ -868,7 +1146,7 @@
         border-radius: 10px;
         border: 1px solid #e5e7eb;
         background: #ffffff;
-        color: #64748b;
+        color: #667085;
     }
 
     .customers-label {
@@ -891,8 +1169,8 @@
         gap: 10px;
         padding: 12px;
         border-radius: 14px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
     }
 
         .customers-check input {
@@ -905,13 +1183,13 @@
         }
 
         .customers-check strong {
-            color: #0f172a;
+            color: #111827;
             font-size: .85rem;
         }
 
         .customers-check small {
             margin-top: 2px;
-            color: #64748b;
+            color: #667085;
             font-size: .76rem;
         }
 
@@ -938,8 +1216,8 @@
         height: 52px;
         margin: 0 auto 14px;
         border-radius: 18px;
-        color: #dc2626;
-        background: #fef2f2;
+        color: #d92d20;
+        background: #fef3f2;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -970,12 +1248,12 @@
     }
 
     @@media (max-width: 768px) {
-        .customers-header {
+        .customers-top {
             flex-direction: column;
             align-items: flex-start;
         }
 
-            .customers-header .customers-primary-btn {
+            .customers-top .customers-primary-btn {
                 width: 100%;
             }
 
@@ -991,6 +1269,26 @@
         }
 
         .customers-settings-link {
+            width: 100%;
+        }
+
+        .customers-pagination {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .customers-page-controls,
+        .customers-page-btn {
+            width: 100%;
+        }
+
+        .customers-page-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .customers-page-count {
+            justify-content: center;
             width: 100%;
         }
 
@@ -1024,6 +1322,10 @@
     private string? _message;
     private bool _isSuccess;
 
+    private int _currentPage = 1;
+    private int _pageSize = 10;
+    private int? _openActionCustomerId;
+
     private bool CustomersEnabled => _settings.CustomersEnabled;
 
     private int TotalCustomers => _customers.Count;
@@ -1031,6 +1333,34 @@
     private int IndividualCustomers => _customers.Count(x => x.CustomerType == "Individual");
     private int BusinessCustomers => _customers.Count(x => x.CustomerType == "Business");
     private decimal TotalSpent => _customers.Sum(x => x.TotalSpent);
+
+    private List<CustomerListItemViewModel> FilteredCustomers => _customers;
+
+    private int TotalFilteredCustomers => FilteredCustomers.Count;
+
+    private int TotalPages =>
+        TotalFilteredCustomers == 0
+            ? 1
+            : (int)Math.Ceiling(TotalFilteredCustomers / (double)_pageSize);
+
+    private int SafeCurrentPage =>
+        Math.Min(Math.Max(_currentPage, 1), TotalPages);
+
+    private int PageStart =>
+        TotalFilteredCustomers == 0
+            ? 0
+            : ((SafeCurrentPage - 1) * _pageSize) + 1;
+
+    private int PageEnd =>
+        TotalFilteredCustomers == 0
+            ? 0
+            : Math.Min(SafeCurrentPage * _pageSize, TotalFilteredCustomers);
+
+    private List<CustomerListItemViewModel> PaginatedCustomers =>
+        FilteredCustomers
+            .Skip((SafeCurrentPage - 1) * _pageSize)
+            .Take(_pageSize)
+            .ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -1055,19 +1385,73 @@
     private async Task LoadCustomersAsync()
     {
         _loading = true;
+        _openActionCustomerId = null;
+
         _customers = await CustomerService.GetCustomersAsync(_searchTerm, _statusFilter);
+
+        if (_currentPage > TotalPages)
+        {
+            _currentPage = TotalPages;
+        }
+
         _loading = false;
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _currentPage = 1;
+        await LoadCustomersAsync();
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyFiltersAsync();
+        }
+    }
+
+    private void StatusFilterChanged(ChangeEventArgs e)
+    {
+        _statusFilter = e.Value?.ToString() ?? "all";
+        _currentPage = 1;
     }
 
     private async Task ResetFiltersAsync()
     {
         _searchTerm = null;
         _statusFilter = "all";
+        _currentPage = 1;
         await LoadCustomersAsync();
+    }
+
+    private void NextPage()
+    {
+        if (_currentPage < TotalPages)
+        {
+            _currentPage++;
+            _openActionCustomerId = null;
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (_currentPage > 1)
+        {
+            _currentPage--;
+            _openActionCustomerId = null;
+        }
+    }
+
+    private void ToggleActionMenu(int customerId)
+    {
+        _openActionCustomerId = _openActionCustomerId == customerId ? null : customerId;
     }
 
     private void OpenAddModal()
     {
+        _openActionCustomerId = null;
+
         _form = new CustomerFormModel
         {
             CustomerType = "Individual",
@@ -1079,6 +1463,8 @@
 
     private async Task OpenEditModal(int id)
     {
+        _openActionCustomerId = null;
+
         var model = await CustomerService.GetByIdAsync(id);
 
         if (model == null)
@@ -1116,6 +1502,8 @@
 
     private async Task ToggleStatusAsync(int id)
     {
+        _openActionCustomerId = null;
+
         var result = await CustomerService.ToggleStatusAsync(id);
         ShowMessage(result.Message, result.Success);
 
@@ -1127,6 +1515,8 @@
 
     private void ConfirmDelete(int id, string name)
     {
+        _openActionCustomerId = null;
+
         _deleteId = id;
         _deleteCustomerName = name;
         _showDeleteConfirm = true;

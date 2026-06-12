@@ -21,26 +21,40 @@
 @inject BranchService BranchService
 @using Microsoft.AspNetCore.Components.Web
 
-
-
-
 <PageTitle>Sales</PageTitle>
 
 <section class="sales-page">
-    <div class="sales-header">
+    <div class="sales-pos-top">
         <div>
             <div class="sales-kicker">
                 <i class="bi bi-cart-check"></i>
                 Point of sale
             </div>
-            <h1>Make a Sale</h1>
-            <p>Sell products, services, packages, vouchers and digital items from one screen.</p>
+            <h1>Sell Faster</h1>
+            <p>Scan, search, add to cart, take payment and print the slip from one screen.</p>
         </div>
 
-        <button class="sales-ghost-btn" @onclick="ClearCart">
-            <i class="bi bi-trash"></i>
-            Clear Cart
-        </button>
+        <div class="sales-top-actions">
+            @if (HasOpenShift)
+            {
+                <div class="sales-shift-pill">
+                    <i class="bi bi-check2-circle"></i>
+                    <span>Shift open</span>
+                </div>
+            }
+            else
+            {
+                <a href="/cashier-shift" class="sales-open-shift-btn">
+                    <i class="bi bi-cash-coin"></i>
+                    Open Shift
+                </a>
+            }
+
+            <button type="button" class="sales-ghost-btn" @onclick="ClearCart">
+                <i class="bi bi-trash"></i>
+                Clear Cart
+            </button>
+        </div>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(_message))
@@ -54,39 +68,12 @@
         </div>
     }
 
-    <div class="sales-settings-strip">
-        <div>
-            <span>Business</span>
-            <strong>@_settings.BusinessName</strong>
-        </div>
-
-        <div>
-            <span>Currency</span>
-            <strong>@_settings.CurrencyCode · @_settings.CurrencySymbol</strong>
-        </div>
-
-        <div>
-            <span>Tax</span>
-            <strong>@GetTaxLabel()</strong>
-        </div>
-
-        <div>
-            <span>Discounts</span>
-            <strong>@(_settings.AllowDiscounts ? "Enabled" : "Disabled")</strong>
-        </div>
-
-        <div>
-            <span>Customer</span>
-            <strong>@(_settings.RequireCustomerForSale ? "Required" : "Optional")</strong>
-        </div>
-    </div>
-
     @if (!HasOpenShift)
     {
         <div class="sales-shift-warning">
             <div>
                 <strong>No open cashier shift</strong>
-                <span>You need to open a shift before completing sales. This keeps cash, card, EFT, and till totals accurate.</span>
+                <span>You need to open a shift before completing sales. You can still prepare a cart, but checkout will be blocked.</span>
             </div>
 
             <a href="/cashier-shift" class="sales-open-shift-btn">
@@ -95,26 +82,22 @@
             </a>
         </div>
     }
-    else
-    {
-        <div class="sales-shift-active">
-            <i class="bi bi-check2-circle"></i>
-            <span>
-                Shift open since @_openShift!.OpenedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
-            </span>
-        </div>
-    }
 
-    <div class="sales-grid">
-        <div class="sales-panel">
+    <div class="sales-pos-layout">
+        <div class="sales-items-panel">
             <div class="sales-panel-header">
                 <div>
                     <h2>Items</h2>
-                    <p>Search product name, SKU, barcode or item type.</p>
+                    <p>Showing @ProductPageStart - @ProductPageEnd of @_products.Count item@(_products.Count == 1 ? "" : "s").</p>
                 </div>
+
+                <button type="button" class="sales-ghost-btn compact" @onclick="LoadProducts">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    Refresh
+                </button>
             </div>
 
-            <div class="sales-barcode-row">
+            <div class="sales-scan-box">
                 <div class="sales-barcode-box">
                     <i class="bi bi-upc-scan"></i>
                     <input @bind="_barcodeValue"
@@ -126,8 +109,7 @@
 
                 <button type="button"
                         class="sales-primary-btn"
-                        disabled="@_barcodeScanning"
-                        @onclick="ScanBarcodeAsync">
+                        disabled="@(_barcodeScanning ? "disabled" : null)" @onclick="ScanBarcodeAsync">
                     <i class="bi bi-upc"></i>
                     @(_barcodeScanning ? "Checking..." : "Add Scan")
                 </button>
@@ -138,10 +120,11 @@
                     <i class="bi bi-search"></i>
                     <input @bind="_searchTerm"
                            @bind:event="oninput"
-                           placeholder="Search products, services, vouchers..." />
+                           @onkeydown="HandleProductSearchKeyDown"
+                           placeholder="Search product, variant, service, SKU or barcode..." />
                 </div>
 
-                <button class="sales-primary-btn" @onclick="LoadProducts">
+                <button type="button" class="sales-primary-btn" @onclick="LoadProducts">
                     Search
                 </button>
             </div>
@@ -150,91 +133,115 @@
             {
                 <div class="sales-empty">
                     <strong>Loading items...</strong>
-                    <span>Please wait.</span>
+                    <span>Please wait while we prepare your POS item list.</span>
                 </div>
             }
             else if (_products.Count == 0)
             {
                 <div class="sales-empty">
                     <strong>No items found</strong>
-                    <span>Add products or services first, then come back to sell.</span>
+                    <span>Search again or add products/services first.</span>
                 </div>
             }
             else
             {
-                <div class="sales-product-list">
-                    @foreach (var product in _products)
+                <div class="sales-product-grid">
+                    @foreach (var product in PaginatedProducts)
                     {
-                        <div class="sales-product-card">
-                            <div class="sales-product-left">
-                                <div class="sales-product-avatar">@GetInitials(product.ProductName)</div>
+                        <button type="button"
+                                class="sales-product-tile @(IsAddDisabled(product) ? "disabled" : "")"
+                                disabled="@(IsAddDisabled(product) ? "disabled" : null)"
+                                @onclick="() => AddToCart(product)">
+                            <div class="sales-product-tile-top">
+                                <div class="sales-product-avatar">@GetInitials(GetProductDisplayName(product))</div>
 
-                                <div>
-                                    <strong>@product.ProductName</strong>
-                                    <span>@product.SKU · @product.ProductType</span>
-
-                                    @if (product.TrackStock)
+                                <div class="sales-product-price">
+                                    <strong>@Money(product.SellingPrice)</strong>
+                                    @if (product.IsVariant)
                                     {
-                                        <small>Stock: @product.QuantityInStock.ToString("0.##") @GetUnitLabel(product.UnitOfMeasure)</small>
+                                        <span>Variant</span>
                                     }
-                                    else if (product.ProductType == "Service" && product.DurationMinutes.HasValue)
-                                    {
-                                        <small>Duration: @product.DurationMinutes minutes</small>
-                                    }
-                                    else
-                                    {
-                                        <small>Non-stock item</small>
-                                    }
-
-                                    <div class="sales-item-tags">
-                                        <em class="@GetTypeClass(product.ProductType)">@product.ProductType</em>
-
-                                        @if (product.TrackStock)
-                                        {
-                                            <em class="tag-stock">Stock tracked</em>
-                                        }
-                                        else
-                                        {
-                                            <em class="tag-muted">No stock</em>
-                                        }
-
-                                        @if (product.AgeRestricted)
-                                        {
-                                            <em class="tag-age">Age restricted</em>
-                                        }
-                                    </div>
                                 </div>
                             </div>
 
-                            <div class="sales-product-right">
-                                <strong>@Money(product.SellingPrice)</strong>
-
-                                <button class="sales-add-btn"
-                                        disabled="@IsAddDisabled(product)"
-                                        @onclick="() => AddToCart(product)">
-                                    <i class="bi bi-plus-lg"></i>
-                                    Add
-                                </button>
+                            <div class="sales-product-name">
+                                <strong>@GetProductDisplayName(product)</strong>
+                                <span>@GetProductSku(product) · @product.ProductType</span>
                             </div>
-                        </div>
+
+                            <div class="sales-product-meta">
+                                @if (product.TrackStock)
+                                {
+                                    <span class="stock @(product.QuantityInStock <= 0 ? "danger" : "")">
+                                        Stock: @product.QuantityInStock.ToString("0.##") @GetUnitLabel(product.UnitOfMeasure)
+                                    </span>
+                                }
+                                else if (product.ProductType == "Service" && product.DurationMinutes.HasValue)
+                                {
+                                    <span>Duration: @product.DurationMinutes min</span>
+                                }
+                                else
+                                {
+                                    <span>Non-stock item</span>
+                                }
+                            </div>
+
+                            <div class="sales-item-tags">
+                                <em class="@GetTypeClass(product.ProductType)">@product.ProductType</em>
+
+                                @if (product.IsVariant)
+                                {
+                                    <em class="tag-variant">Variant</em>
+                                }
+
+                                @if (product.AgeRestricted)
+                                {
+                                    <em class="tag-age">Age</em>
+                                }
+                            </div>
+                        </button>
                     }
+                </div>
+
+                <div class="sales-pagination">
+                    <button type="button"
+                            class="sales-page-btn"
+                            disabled="@(_productPage <= 1 ? "disabled" : null)"
+                            @onclick="PreviousProductPage">
+                        <i class="bi bi-chevron-left"></i>
+                        Previous
+                    </button>
+
+                    <span>Page @_productPage of @ProductTotalPages</span>
+
+                    <button type="button"
+                            class="sales-page-btn"
+disabled="@(_productPage >= ProductTotalPages ? "disabled" : null)"
+@onclick="NextProductPage">
+                        Next
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
                 </div>
             }
         </div>
 
-        <div class="sales-panel">
-            <div class="sales-panel-header">
+        <div class="sales-checkout-panel">
+            <div class="sales-cart-top">
                 <div>
-                    <h2>Cart</h2>
-                    <p>@_cart.Count item@(_cart.Count == 1 ? "" : "s") selected.</p>
+                    <span>Total</span>
+                    <strong>@Money(TotalPreview)</strong>
+                </div>
+
+                <div class="sales-cart-count">
+                    @_cart.Count item@(_cart.Count == 1 ? "" : "s")
                 </div>
             </div>
 
             @if (_cart.Count == 0)
             {
-                <div class="sales-empty">
+                <div class="sales-empty cart-empty">
                     <strong>Your cart is empty</strong>
-                    <span>Add products or services from the left to start the sale.</span>
+                    <span>Scan a barcode or tap an item to start the sale.</span>
                 </div>
             }
             else
@@ -244,8 +251,8 @@
                     <div class="sales-warning-box">
                         <i class="bi bi-exclamation-triangle"></i>
                         <div>
-                            <strong>Age-restricted item in cart</strong>
-                            <span>Confirm age verification before completing this sale.</span>
+                            <strong>Age-restricted item</strong>
+                            <span>Confirm age verification before checkout.</span>
                         </div>
                     </div>
                 }
@@ -254,9 +261,9 @@
                     @foreach (var item in _cart)
                     {
                         <div class="sales-cart-item">
-                            <div>
-                                <strong>@item.ProductName</strong>
-                                <span>@item.SKU · @item.ProductType · @Money(item.UnitPrice) each</span>
+                            <div class="sales-cart-main">
+                                <strong>@GetCartItemName(item)</strong>
+                                <span>@item.SKU · @item.ProductType · @Money(item.UnitPrice)</span>
 
                                 @if (item.TrackStock)
                                 {
@@ -273,20 +280,20 @@
                             </div>
 
                             <div class="sales-cart-controls">
-                                <button @onclick="() => DecreaseQuantity(item.ProductId)">-</button>
+                                <button type="button" @onclick="() => DecreaseQuantity(item.ProductId, item.ProductVariantId)">-</button>
 
                                 <input type="number"
                                        min="1"
                                        step="1"
                                        value="@item.Quantity"
-                                       @onchange="(e) => UpdateQuantity(item.ProductId, e.Value?.ToString())" />
+                                       @onchange="(e) => UpdateQuantity(item.ProductId, item.ProductVariantId, e.Value?.ToString())" />
 
-                                <button @onclick="() => IncreaseQuantity(item.ProductId)">+</button>
+                                <button type="button" @onclick="() => IncreaseQuantity(item.ProductId, item.ProductVariantId)">+</button>
                             </div>
 
-                            <div class="sales-cart-total">
+                            <div class="sales-cart-line-total">
                                 <strong>@Money(item.LineTotal)</strong>
-                                <button @onclick="() => RemoveFromCart(item.ProductId)">
+                                <button type="button" @onclick="() => RemoveFromCart(item.ProductId, item.ProductVariantId)">
                                     <i class="bi bi-x-lg"></i>
                                 </button>
                             </div>
@@ -300,7 +307,7 @@
                         <div class="sales-form-row">
                             <label>Customer</label>
                             <select value="@SelectedCustomerValue" @onchange="OnCustomerChanged">
-                                <option value="">Walk-in / No selected customer</option>
+                                <option value="">Walk-in customer</option>
 
                                 @foreach (var customer in _customerOptions)
                                 {
@@ -322,12 +329,12 @@
                     </div>
 
                     <div class="sales-form-row">
-                        <label>Customer Phone</label>
+                        <label>Phone</label>
                         <input type="text" @bind="_customerPhone" placeholder="Customer phone" />
                     </div>
 
                     <div class="sales-form-row">
-                        <label>Payment Method</label>
+                        <label>Payment</label>
                         <select @bind="_paymentMethod">
                             <option value="Cash">Cash</option>
                             <option value="Card">Card</option>
@@ -342,22 +349,17 @@
                             <input type="number" min="0" step="0.01" @bind="_discountAmount" />
                         </div>
                     }
-                    else
-                    {
-                        <div class="sales-info-note">
-                            <strong>Discounts disabled</strong>
-                            <span>Discounts are switched off in Business Settings.</span>
-                        </div>
-                    }
-
-                    <div class="sales-form-row">
-                        <label>Tax</label>
-                        <input type="text" value="@Money(TaxPreview)" readonly />
-                    </div>
 
                     <div class="sales-form-row">
                         <label>Amount Paid</label>
                         <input type="number" min="0" step="0.01" @bind="_amountPaid" />
+                    </div>
+
+                    <div class="sales-quick-cash">
+                        <button type="button" @onclick="SetExactPayment">Exact</button>
+                        <button type="button" @onclick="() => AddPaidAmount(50)">+ @Money(50)</button>
+                        <button type="button" @onclick="() => AddPaidAmount(100)">+ @Money(100)</button>
+                        <button type="button" @onclick="() => AddPaidAmount(200)">+ @Money(200)</button>
                     </div>
 
                     <div class="sales-form-row">
@@ -404,9 +406,10 @@
                     </div>
                 </div>
 
-                <button class="sales-complete-btn"
-                        disabled="@(_savingSale || !HasOpenShift)"
-                        @onclick="CompleteSaleAsync">
+                <button type="button"
+                        class="sales-complete-btn"
+disabled="@((_savingSale || !HasOpenShift) ? "disabled" : null)"
+@onclick="CompleteSaleAsync">
                     <i class="bi bi-check2-circle"></i>
                     @(_savingSale ? "Completing..." : HasOpenShift ? "Complete Sale" : "Open Shift Required")
                 </button>
@@ -417,8 +420,8 @@
     <div class="sales-history-panel">
         <div class="sales-history-header">
             <div>
-                <h2>My Sales</h2>
-                <p>View sales completed by the logged-in user.</p>
+                <h2>Recent Sales</h2>
+                <p>Most recent sales first. Use filters when you need to search another period.</p>
             </div>
 
             <div class="sales-date-filters">
@@ -439,7 +442,7 @@
                     }
                 </select>
 
-                <button type="button" class="sales-primary-btn" @onclick="LoadMySalesAsync">
+                <button type="button" class="sales-primary-btn" @onclick="ApplyHistoryFilterAsync">
                     <i class="bi bi-filter"></i>
                     Filter
                 </button>
@@ -478,8 +481,6 @@
             </div>
         </div>
 
-
-
         @if (_loadingMySales)
         {
             <div class="sales-empty">
@@ -487,7 +488,7 @@
                 <span>Please wait.</span>
             </div>
         }
-        else if (_mySales.Count == 0)
+        else if (RecentMySales.Count == 0)
         {
             <div class="sales-empty">
                 <strong>No sales found</strong>
@@ -512,27 +513,29 @@
                     </thead>
 
                     <tbody>
-                        @foreach (var sale in _mySales)
+                        @foreach (var sale in PaginatedMySales)
                         {
                             <tr>
-                                <td>@sale.SaleNumber</td>
+                                <td>
+                                    <strong>@sale.SaleNumber</strong>
+                                </td>
                                 <td>@sale.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
                                 <td>@sale.PaymentMethod</td>
                                 <td>@sale.ItemCount</td>
-                                <td>@Money(sale.TotalAmount)</td>
+                                <td class="sales-money-cell">@Money(sale.TotalAmount)</td>
                                 <td>@Money(sale.ChangeAmount)</td>
                                 <td>
                                     <span class="sales-status-pill">@sale.Status</span>
                                 </td>
                                 <td class="text-end">
-                                    <button class="sales-mini-btn" @onclick="() => ViewReceiptAsync(sale.SaleId)">
+                                    <button type="button" class="sales-mini-btn" @onclick="() => ViewReceiptAsync(sale.SaleId)">
                                         <i class="bi bi-receipt"></i>
                                         Slip
                                     </button>
 
                                     @if (CanRefundStatus(sale.Status))
                                     {
-                                        <button class="sales-mini-btn refund" @onclick="() => OpenRefundModalAsync(sale.SaleId)">
+                                        <button type="button" class="sales-mini-btn refund" @onclick="() => OpenRefundModalAsync(sale.SaleId)">
                                             <i class="bi bi-arrow-counterclockwise"></i>
                                             Refund
                                         </button>
@@ -543,17 +546,38 @@
                     </tbody>
                 </table>
             </div>
+
+            <div class="sales-pagination">
+                <button type="button"
+                        class="sales-page-btn"
+                        disabled="@(_salesPage <= 1 ? "disabled" : null)"
+                        @onclick="PreviousSalesPage">
+                    <i class="bi bi-chevron-left"></i>
+                    Previous
+                </button>
+
+                <span>Page @_salesPage of @SalesTotalPages</span>
+
+                <button type="button"
+                        class="sales-page-btn"
+disabled="@(_salesPage >= SalesTotalPages ? "disabled" : null)"
+@onclick="NextSalesPage">
+                    Next
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
         }
     </div>
+
     <div class="sales-history-panel">
         <div class="sales-history-header">
             <div>
                 <h2>Refund / Return History</h2>
-                <p>Refunds, returns and voids processed in the selected period.</p>
+                <p>Recent refunds, returns and voids processed in the selected period.</p>
             </div>
         </div>
 
-        @if (_returnHistory.Count == 0)
+        @if (RecentReturnHistory.Count == 0)
         {
             <div class="sales-empty">
                 <strong>No refunds found</strong>
@@ -579,7 +603,7 @@
                     </thead>
 
                     <tbody>
-                        @foreach (var item in _returnHistory)
+                        @foreach (var item in PaginatedReturnHistory)
                         {
                             <tr>
                                 <td>@item.ReturnNumber</td>
@@ -588,7 +612,7 @@
                                 <td>@item.ReturnType</td>
                                 <td>@item.RefundMethod</td>
                                 <td>@item.ReturnedByName</td>
-                                <td>@Money(item.TotalRefundAmount)</td>
+                                <td class="sales-money-cell">@Money(item.TotalRefundAmount)</td>
                                 <td>
                                     <span class="sales-status-pill">@item.Status</span>
                                 </td>
@@ -597,6 +621,26 @@
                         }
                     </tbody>
                 </table>
+            </div>
+
+            <div class="sales-pagination">
+                <button type="button"
+                        class="sales-page-btn"
+                        disabled="@(_returnPage <= 1 ? "disabled" : null)"
+                        @onclick="PreviousReturnPage">
+                    <i class="bi bi-chevron-left"></i>
+                    Previous
+                </button>
+
+                <span>Page @_returnPage of @ReturnTotalPages</span>
+
+                <button type="button"
+                        class="sales-page-btn"
+disabled="@(_returnPage >= ReturnTotalPages ? "disabled" : null)"
+@onclick="NextReturnPage">
+                    Next
+                    <i class="bi bi-chevron-right"></i>
+                </button>
             </div>
         }
     </div>
@@ -611,9 +655,7 @@
             </div>
 
             <h3>Age Verification Required</h3>
-            <p>
-                This sale contains an age-restricted item. Confirm that the customer is eligible before completing the sale.
-            </p>
+            <p>This sale contains an age-restricted item. Confirm that the customer is eligible before completing the sale.</p>
 
             <div class="sales-modal-actions">
                 <button type="button" class="sales-ghost-btn" @onclick="CloseAgeModal">Cancel</button>
@@ -781,8 +823,8 @@
 
                     <button type="button"
                             class="sales-primary-btn"
-                            disabled="@_savingRefund"
-                            @onclick="SaveRefundAsync">
+disabled="@(_savingRefund ? "disabled" : null)"
+@onclick="SaveRefundAsync">
                         <i class="bi bi-arrow-counterclockwise"></i>
                         @(_savingRefund ? "Processing..." : "Process Refund")
                     </button>
@@ -925,93 +967,74 @@
         animation: salesIn .22s ease both;
     }
 
-    .sales-header {
+    .sales-pos-top {
         display: flex;
         justify-content: space-between;
         align-items: flex-end;
         gap: 18px;
-        margin-bottom: 18px;
+        margin-bottom: 16px;
     }
 
     .sales-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
 
-    .sales-header h1 {
+    .sales-pos-top h1 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.45rem;
-        font-weight: 680;
-        letter-spacing: -.03em;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
-    .sales-header p {
+    .sales-pos-top p {
         margin: 6px 0 0;
-        color: #64748b;
+        color: #667085;
         font-size: .88rem;
     }
 
-    .sales-settings-strip {
-        display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
+    .sales-top-actions {
+        display: flex;
+        align-items: center;
         gap: 10px;
-        margin-bottom: 16px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
     }
 
-        .sales-settings-strip div {
-            padding: 13px;
-            border-radius: 16px;
-            background: #ffffff;
-            border: 1px solid #e7edf5;
-            box-shadow: 0 12px 28px rgba(15,23,42,.04);
-        }
-
-        .sales-settings-strip span,
-        .sales-settings-strip strong {
-            display: block;
-        }
-
-        .sales-settings-strip span {
-            color: #64748b;
-            font-size: .72rem;
-            font-weight: 650;
-        }
-
-        .sales-settings-strip strong {
-            margin-top: 4px;
-            color: #0f172a;
-            font-size: .84rem;
-            font-weight: 720;
-        }
-
-    .sales-grid {
+    .sales-pos-layout {
         display: grid;
-        grid-template-columns: minmax(0, 1.1fr) minmax(380px, .9fr);
+        grid-template-columns: minmax(0, 1.15fr) minmax(390px, .85fr);
         gap: 16px;
         align-items: start;
     }
 
-    .sales-panel,
+    .sales-items-panel,
+    .sales-checkout-panel,
     .sales-history-panel {
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        border-radius: 20px;
-        box-shadow: 0 16px 34px rgba(15, 23, 42, .055);
+        border: 1px solid #e8eaef;
+        border-radius: 22px;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
         overflow: hidden;
+    }
+
+    .sales-checkout-panel {
+        position: sticky;
+        top: 88px;
     }
 
     .sales-panel-header,
     .sales-history-header {
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
         display: flex;
         justify-content: space-between;
         gap: 14px;
@@ -1021,36 +1044,65 @@
         .sales-panel-header h2,
         .sales-history-header h2 {
             margin: 0;
-            color: #0f172a;
-            font-size: .92rem;
+            color: #111827;
+            font-size: .94rem;
             font-weight: 720;
         }
 
         .sales-panel-header p,
         .sales-history-header p {
             margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .76rem;
+            color: #98a2b3;
+            font-size: .75rem;
+        }
+
+    .sales-scan-box {
+        display: grid;
+        grid-template-columns: minmax(240px, 1fr) auto;
+        gap: 10px;
+        padding: 14px 18px 10px;
+    }
+
+    .sales-barcode-box {
+        min-height: 48px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 14px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
+        color: #8FA6A1;
+    }
+
+        .sales-barcode-box input {
+            width: 100%;
+            border: 0;
+            outline: none;
+            background: transparent;
+            color: #111827;
+            font-size: 16px;
+            font-weight: 650;
         }
 
     .sales-search-row {
         display: grid;
         grid-template-columns: 1fr auto;
         gap: 10px;
-        padding: 14px 18px;
-        border-bottom: 1px solid #edf2f7;
+        padding: 0 18px 14px;
+        border-bottom: 1px solid #f1f2f5;
     }
 
     .sales-search {
-        min-height: 40px;
+        min-height: 42px;
         display: flex;
         align-items: center;
         gap: 10px;
         padding: 0 13px;
-        border-radius: 12px;
+        border-radius: 14px;
         border: 1px solid #e5e7eb;
-        background: #f8fafc;
-        color: #94a3b8;
+        background: #fafafa;
+        color: #98a2b3;
     }
 
         .sales-search input {
@@ -1058,55 +1110,70 @@
             border: 0;
             outline: none;
             background: transparent;
-            color: #0f172a;
-            font-size: .86rem;
+            color: #111827;
+            font-size: 16px;
         }
 
     .sales-primary-btn,
     .sales-ghost-btn,
-    .sales-add-btn,
     .sales-complete-btn,
-    .sales-mini-btn {
+    .sales-mini-btn,
+    .sales-open-shift-btn,
+    .sales-page-btn {
         min-height: 38px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
         padding: 0 14px;
-        border-radius: 11px;
+        border-radius: 12px;
         font-size: .8rem;
-        font-weight: 650;
+        font-weight: 680;
         border: 0;
         transition: all .18s ease;
         white-space: nowrap;
+        text-decoration: none;
     }
 
     .sales-primary-btn,
-    .sales-complete-btn {
-        background: #111827;
+    .sales-complete-btn,
+    .sales-open-shift-btn {
+        background: #252525;
         color: #ffffff;
     }
 
-    .sales-ghost-btn {
+    .sales-ghost-btn,
+    .sales-page-btn {
         background: #ffffff;
         color: #475569;
         border: 1px solid #e5e7eb;
     }
 
-    .sales-add-btn {
-        background: #eef5ff;
-        color: #2563eb;
-    }
-
-        .sales-add-btn:disabled {
-            opacity: .5;
-            cursor: not-allowed;
+        .sales-ghost-btn.compact {
+            min-height: 34px;
+            padding: 0 11px;
+            font-size: .74rem;
         }
 
-    .sales-complete-btn {
-        width: calc(100% - 36px);
-        margin: 0 18px 18px;
-        min-height: 44px;
+        .sales-primary-btn:hover,
+        .sales-ghost-btn:hover,
+        .sales-page-btn:hover,
+        .sales-open-shift-btn:hover {
+            transform: translateY(-1px);
+        }
+
+    .sales-shift-pill {
+        min-height: 38px;
+        padding: 0 13px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #15803d;
+        background: #ecfdf5;
+        border: 1px solid #bbf7d0;
+        font-size: .78rem;
+        font-weight: 750;
     }
 
     .sales-alert {
@@ -1143,67 +1210,137 @@
             color: inherit;
         }
 
-    .sales-product-list,
-    .sales-cart-list {
+    .sales-shift-warning {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 16px;
+        padding: 15px;
+        border-radius: 18px;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+    }
+
+        .sales-shift-warning strong,
+        .sales-shift-warning span {
+            display: block;
+        }
+
+        .sales-shift-warning strong {
+            color: #9a3412;
+            font-size: .9rem;
+            font-weight: 750;
+        }
+
+        .sales-shift-warning span {
+            margin-top: 3px;
+            color: #c2410c;
+            font-size: .78rem;
+        }
+
+    .sales-product-grid {
         padding: 14px 18px;
         display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 10px;
     }
 
-    .sales-product-card {
-        display: flex;
-        justify-content: space-between;
-        gap: 14px;
-        align-items: flex-start;
+    .sales-product-tile {
+        border: 1px solid #e8eaef;
+        background: #ffffff;
+        border-radius: 18px;
         padding: 13px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
+        text-align: left;
+        cursor: pointer;
+        transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
     }
 
-    .sales-product-left {
+        .sales-product-tile:hover {
+            transform: translateY(-2px);
+            border-color: #dce7e4;
+            box-shadow: 0 12px 26px rgba(17, 24, 39, .06);
+        }
+
+        .sales-product-tile.disabled {
+            opacity: .52;
+            cursor: not-allowed;
+        }
+
+    .sales-product-tile-top {
         display: flex;
-        gap: 11px;
+        justify-content: space-between;
+        gap: 10px;
         align-items: flex-start;
+        margin-bottom: 10px;
     }
 
     .sales-product-avatar {
         width: 40px;
         height: 40px;
-        border-radius: 14px;
-        background: #eef5ff;
-        color: #2563eb;
+        border-radius: 15px;
+        background: #f2f6f5;
+        color: #8FA6A1;
         display: flex;
         align-items: center;
         justify-content: center;
         font-size: .8rem;
-        font-weight: 750;
+        font-weight: 760;
         flex: 0 0 auto;
     }
 
-    .sales-product-left strong,
-    .sales-cart-item strong {
-        display: block;
-        color: #0f172a;
-        font-size: .86rem;
-        font-weight: 720;
+    .sales-product-price {
+        text-align: right;
     }
 
-    .sales-product-left span,
-    .sales-cart-item span,
-    .sales-product-left small,
-    .sales-cart-item small {
+        .sales-product-price strong {
+            display: block;
+            color: #111827;
+            font-size: .9rem;
+            font-weight: 760;
+        }
+
+        .sales-product-price span {
+            display: inline-flex;
+            margin-top: 4px;
+            padding: 3px 7px;
+            border-radius: 999px;
+            background: #f5f3ff;
+            color: #7c3aed;
+            font-size: .65rem;
+            font-weight: 750;
+        }
+
+    .sales-product-name strong {
         display: block;
-        color: #64748b;
-        font-size: .73rem;
-        margin-top: 2px;
+        color: #111827;
+        font-size: .86rem;
+        font-weight: 720;
+        line-height: 1.25;
     }
+
+    .sales-product-name span,
+    .sales-product-meta span {
+        display: block;
+        color: #667085;
+        font-size: .72rem;
+        margin-top: 3px;
+    }
+
+    .sales-product-meta .stock {
+        color: #15803d;
+        font-weight: 700;
+    }
+
+        .sales-product-meta .stock.danger {
+            color: #d92d20;
+        }
 
     .sales-item-tags {
         display: flex;
         flex-wrap: wrap;
         gap: 5px;
-        margin-top: 7px;
+        margin-top: 9px;
     }
 
         .sales-item-tags em {
@@ -1233,7 +1370,7 @@
     }
 
     .tag-voucher {
-        color: #d97706;
+        color: #b7791f;
         background: #fffbeb;
     }
 
@@ -1242,14 +1379,9 @@
         background: #f0fdfa;
     }
 
-    .tag-stock {
-        color: #15803d;
-        background: #ecfdf5;
-    }
-
-    .tag-muted {
-        color: #64748b;
-        background: #f1f5f9;
+    .tag-variant {
+        color: #7c3aed;
+        background: #f5f3ff;
     }
 
     .tag-age {
@@ -1257,19 +1389,90 @@
         background: #fffbeb;
     }
 
-    .sales-product-right {
-        text-align: right;
+    .sales-pagination {
+        padding: 13px 18px;
+        border-top: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        color: #667085;
+        font-size: .78rem;
+        font-weight: 700;
     }
 
-        .sales-product-right strong {
+    .sales-page-btn:disabled {
+        opacity: .45;
+        cursor: not-allowed;
+    }
+
+    .sales-cart-top {
+        padding: 18px;
+        background: #252525;
+        color: #ffffff;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 14px;
+    }
+
+        .sales-cart-top span {
             display: block;
-            color: #0f172a;
-            font-size: .86rem;
-            margin-bottom: 8px;
+            color: rgba(255,255,255,.72);
+            font-size: .76rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .04em;
         }
 
-    .sales-warning-box,
-    .sales-info-note {
+        .sales-cart-top strong {
+            display: block;
+            margin-top: 4px;
+            font-size: 1.65rem;
+            line-height: 1;
+            font-weight: 760;
+            letter-spacing: -.04em;
+        }
+
+    .sales-cart-count {
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.12);
+        border: 1px solid rgba(255,255,255,.16);
+        font-size: .76rem;
+        font-weight: 700;
+    }
+
+    .sales-empty {
+        margin: 18px;
+        padding: 34px 20px;
+        border-radius: 18px;
+        background: #fafafa;
+        border: 1px dashed #d0d5dd;
+        text-align: center;
+    }
+
+        .sales-empty strong,
+        .sales-empty span {
+            display: block;
+        }
+
+        .sales-empty strong {
+            color: #111827;
+            font-size: .9rem;
+        }
+
+        .sales-empty span {
+            margin-top: 4px;
+            color: #667085;
+            font-size: .78rem;
+        }
+
+    .cart-empty {
+        margin-top: 22px;
+    }
+
+    .sales-warning-box {
         margin: 14px 18px 0;
         display: flex;
         gap: 10px;
@@ -1280,36 +1483,48 @@
         color: #92400e;
     }
 
-    .sales-info-note {
-        margin: 0;
-        display: block;
-        background: #f8fafc;
-        border-color: #e7edf5;
-        color: #475569;
-    }
-
         .sales-warning-box strong,
-        .sales-warning-box span,
-        .sales-info-note strong,
-        .sales-info-note span {
+        .sales-warning-box span {
             display: block;
         }
 
-        .sales-warning-box span,
-        .sales-info-note span {
+        .sales-warning-box span {
             margin-top: 3px;
             font-size: .75rem;
         }
+
+    .sales-cart-list {
+        padding: 14px 18px;
+        display: grid;
+        gap: 10px;
+        max-height: 360px;
+        overflow-y: auto;
+    }
 
     .sales-cart-item {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto auto;
         align-items: center;
         gap: 12px;
-        padding: 13px;
+        padding: 12px;
         border-radius: 16px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+    }
+
+    .sales-cart-main strong {
+        display: block;
+        color: #111827;
+        font-size: .84rem;
+        font-weight: 720;
+    }
+
+    .sales-cart-main span,
+    .sales-cart-main small {
+        display: block;
+        color: #667085;
+        font-size: .72rem;
+        margin-top: 2px;
     }
 
     .sales-cart-controls {
@@ -1319,72 +1534,97 @@
     }
 
         .sales-cart-controls button {
-            width: 28px;
-            height: 28px;
-            border-radius: 8px;
+            width: 30px;
+            height: 30px;
+            border-radius: 10px;
             border: 1px solid #e5e7eb;
             background: #ffffff;
+            color: #111827;
+            font-weight: 800;
         }
 
         .sales-cart-controls input {
             width: 58px;
-            height: 30px;
+            height: 31px;
             text-align: center;
-            border-radius: 8px;
+            border-radius: 10px;
             border: 1px solid #e5e7eb;
             background: #ffffff;
         }
 
-    .sales-cart-total {
+    .sales-cart-line-total {
         text-align: right;
     }
 
-        .sales-cart-total button {
+        .sales-cart-line-total strong {
+            display: block;
+            color: #111827;
+            font-size: .84rem;
+            font-weight: 760;
+        }
+
+        .sales-cart-line-total button {
             margin-top: 5px;
             border: 0;
             background: transparent;
-            color: #dc2626;
+            color: #d92d20;
         }
 
     .sales-payment-box {
         margin: 0 18px 14px;
         padding: 14px;
-        border-radius: 16px;
+        border-radius: 18px;
         background: #ffffff;
-        border: 1px solid #e7edf5;
+        border: 1px solid #e8eaef;
         display: grid;
         gap: 10px;
     }
 
     .sales-form-row {
         display: grid;
-        grid-template-columns: 130px 1fr;
+        grid-template-columns: 110px 1fr;
         align-items: center;
         gap: 10px;
     }
 
         .sales-form-row label {
-            color: #64748b;
-            font-size: .78rem;
-            font-weight: 650;
+            color: #667085;
+            font-size: .76rem;
+            font-weight: 700;
         }
 
         .sales-form-row input,
         .sales-form-row select,
         .sales-form-row textarea {
             min-height: 38px;
-            border-radius: 10px;
+            border-radius: 12px;
             border: 1px solid #e5e7eb;
             padding: 0 10px;
-            font-size: .84rem;
+            font-size: 16px;
             outline: none;
             width: 100%;
         }
 
         .sales-form-row textarea {
             padding-top: 9px;
-            min-height: 70px;
+            min-height: 62px;
             resize: vertical;
+        }
+
+    .sales-quick-cash {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+        .sales-quick-cash button {
+            min-height: 34px;
+            border-radius: 11px;
+            border: 1px solid #e8eaef;
+            background: #fafafa;
+            color: #344054;
+            font-size: .76rem;
+            font-weight: 750;
         }
 
     .sales-check-row {
@@ -1428,46 +1668,29 @@
             display: flex;
             justify-content: space-between;
             padding: 6px 0;
-            color: #64748b;
+            color: #667085;
             font-size: .84rem;
         }
 
         .sales-totals strong {
-            color: #0f172a;
+            color: #111827;
         }
 
         .sales-totals .final {
             margin-top: 4px;
             padding-top: 10px;
             border-top: 1px solid #edf2f7;
-            font-size: .95rem;
-            color: #0f172a;
+            font-size: 1rem;
+            color: #111827;
         }
 
-    .sales-empty {
-        margin: 18px;
-        padding: 34px 20px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px dashed #dbe3ef;
-        text-align: center;
+    .sales-complete-btn {
+        width: calc(100% - 36px);
+        margin: 0 18px 18px;
+        min-height: 48px;
+        font-size: .9rem;
+        border-radius: 15px;
     }
-
-        .sales-empty strong,
-        .sales-empty span {
-            display: block;
-        }
-
-        .sales-empty strong {
-            color: #0f172a;
-            font-size: .9rem;
-        }
-
-        .sales-empty span {
-            margin-top: 4px;
-            color: #64748b;
-            font-size: .78rem;
-        }
 
     .sales-history-panel {
         margin-top: 16px;
@@ -1478,17 +1701,18 @@
         gap: 8px;
         align-items: center;
         flex-wrap: wrap;
+        justify-content: flex-end;
     }
 
         .sales-date-filters input,
         .sales-filter-select {
             min-height: 38px;
-            border-radius: 10px;
+            border-radius: 11px;
             border: 1px solid #e5e7eb;
             padding: 0 10px;
-            font-size: .82rem;
+            font-size: 16px;
             background: #ffffff;
-            color: #0f172a;
+            color: #111827;
             outline: none;
         }
 
@@ -1497,27 +1721,27 @@
         grid-template-columns: repeat(6, minmax(0, 1fr));
         gap: 10px;
         padding: 14px 18px;
-        border-bottom: 1px solid #edf2f7;
+        border-bottom: 1px solid #f1f2f5;
     }
 
     .sales-summary-card {
         padding: 13px;
         border-radius: 15px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
     }
 
         .sales-summary-card span {
             display: block;
-            color: #64748b;
+            color: #667085;
             font-size: .72rem;
-            font-weight: 650;
+            font-weight: 700;
         }
 
         .sales-summary-card strong {
             display: block;
             margin-top: 4px;
-            color: #0f172a;
+            color: #111827;
             font-size: .95rem;
             font-weight: 720;
         }
@@ -1528,48 +1752,60 @@
 
     .sales-history-table {
         width: 100%;
-        min-width: 850px;
+        min-width: 900px;
         border-collapse: collapse;
     }
 
         .sales-history-table th {
             padding: 12px 16px;
-            background: #f8fafc;
-            color: #64748b;
+            background: #fafafa;
+            color: #667085;
             font-size: .7rem;
             font-weight: 750;
             text-transform: uppercase;
             letter-spacing: .05em;
-            border-bottom: 1px solid #e7edf5;
+            border-bottom: 1px solid #e8eaef;
         }
 
         .sales-history-table td {
             padding: 14px 16px;
             color: #334155;
             font-size: .82rem;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f2f5;
+            vertical-align: middle;
         }
+
+    .sales-money-cell {
+        color: #111827 !important;
+        font-weight: 750;
+    }
 
     .sales-status-pill {
         display: inline-flex;
         padding: 5px 9px;
         border-radius: 999px;
         background: #ecfdf5;
-        color: #16a34a;
+        color: #15803d;
         font-size: .72rem;
         font-weight: 750;
     }
 
     .sales-mini-btn {
         min-height: 30px;
-        border-radius: 9px;
-        border: 1px solid #bfdbfe;
-        background: #eff6ff;
-        color: #2563eb;
+        border-radius: 10px;
+        border: 1px solid #dce7e4;
+        background: #f2f6f5;
+        color: #8FA6A1;
         padding: 0 10px;
         font-size: .74rem;
         font-weight: 700;
     }
+
+        .sales-mini-btn.refund {
+            color: #7c3aed;
+            background: #f5f3ff;
+            border-color: #ddd6fe;
+        }
 
     .sales-modal-backdrop,
     .receipt-backdrop {
@@ -1583,14 +1819,19 @@
         padding: 20px;
     }
 
-    .sales-confirm-card {
+    .sales-confirm-card,
+    .receipt-card,
+    .sales-refund-card {
         width: 100%;
-        max-width: 430px;
         background: #ffffff;
         border-radius: 22px;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, .24);
+    }
+
+    .sales-confirm-card {
+        max-width: 430px;
         padding: 24px;
         text-align: center;
-        box-shadow: 0 24px 60px rgba(15, 23, 42, .24);
     }
 
     .sales-confirm-icon {
@@ -1607,14 +1848,14 @@
     }
 
     .sales-confirm-card h3 {
-        color: #0f172a;
+        color: #111827;
         margin: 0;
         font-size: 1rem;
         font-weight: 750;
     }
 
     .sales-confirm-card p {
-        color: #64748b;
+        color: #667085;
         margin: 8px 0 18px;
         font-size: .84rem;
         line-height: 1.5;
@@ -1627,14 +1868,10 @@
     }
 
     .receipt-card {
-        width: 100%;
         max-width: 460px;
         max-height: calc(100vh - 40px);
         overflow-y: auto;
-        background: #ffffff;
-        border-radius: 22px;
         padding: 20px;
-        box-shadow: 0 24px 60px rgba(15, 23, 42, .24);
     }
 
     .receipt-top {
@@ -1647,14 +1884,14 @@
 
         .receipt-top h3 {
             margin: 0;
-            color: #0f172a;
+            color: #111827;
             font-size: 1rem;
             font-weight: 750;
         }
 
         .receipt-top p {
             margin: 3px 0 0;
-            color: #64748b;
+            color: #667085;
             font-size: .78rem;
         }
 
@@ -1671,11 +1908,12 @@
         gap: 3px;
         padding: 10px 0;
         border-bottom: 1px dashed #cbd5e1;
-        color: #64748b;
+        color: #667085;
         font-size: .72rem;
     }
 
-    .receipt-meta {
+    .receipt-meta,
+    .receipt-totals {
         display: grid;
         gap: 8px;
         padding: 14px 0;
@@ -1691,13 +1929,13 @@
 
         .receipt-meta span,
         .receipt-totals span {
-            color: #64748b;
+            color: #667085;
             font-size: .78rem;
         }
 
         .receipt-meta strong,
         .receipt-totals strong {
-            color: #0f172a;
+            color: #111827;
             font-size: .78rem;
             text-align: right;
         }
@@ -1716,22 +1954,16 @@
     }
 
         .receipt-item strong {
-            color: #0f172a;
+            color: #111827;
             font-size: .82rem;
         }
 
         .receipt-item span {
             display: block;
             margin-top: 2px;
-            color: #64748b;
+            color: #667085;
             font-size: .72rem;
         }
-
-    .receipt-totals {
-        padding: 14px 0;
-        display: grid;
-        gap: 8px;
-    }
 
     .receipt-total-final {
         padding-top: 8px;
@@ -1747,80 +1979,198 @@
     .receipt-footer {
         text-align: center;
         padding-top: 12px;
-        border-top: 1px dashed #cbd5e1;
     }
 
         .receipt-footer p {
-            color: #64748b;
+            color: #667085;
             font-size: .78rem;
             margin-bottom: 8px;
         }
 
         .receipt-footer small {
             display: block;
-            color: #94a3b8;
+            color: #98a2b3;
             font-size: .7rem;
             margin-bottom: 12px;
         }
 
-    .sales-shift-warning {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 14px;
-        margin-bottom: 16px;
-        padding: 15px;
-        border-radius: 18px;
-        background: #fff7ed;
-        border: 1px solid #fed7aa;
+    .sales-refund-card {
+        max-width: 980px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+        padding: 22px;
     }
 
-        .sales-shift-warning strong,
-        .sales-shift-warning span {
-            display: block;
+    .sales-refund-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding-bottom: 16px;
+        margin-bottom: 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .sales-refund-header span {
+            color: #7c3aed;
+            font-size: .72rem;
+            font-weight: 750;
+            letter-spacing: .06em;
+            text-transform: uppercase;
         }
 
-        .sales-shift-warning strong {
-            color: #9a3412;
-            font-size: .9rem;
+        .sales-refund-header h3 {
+            margin: 4px 0 0;
+            color: #111827;
+            font-size: 1.1rem;
             font-weight: 750;
         }
 
-        .sales-shift-warning span {
-            margin-top: 3px;
-            color: #c2410c;
-            font-size: .78rem;
+        .sales-refund-header p {
+            margin: 5px 0 0;
+            color: #667085;
+            font-size: .84rem;
         }
 
-    .sales-open-shift-btn {
-        min-height: 36px;
+    .sales-refund-close {
+        width: 34px;
+        height: 34px;
         border-radius: 10px;
-        padding: 0 13px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        background: #111827;
-        color: #ffffff;
-        font-size: .78rem;
-        font-weight: 700;
-        text-decoration: none;
-        white-space: nowrap;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        color: #667085;
     }
 
-    .sales-shift-active {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 16px;
-        padding: 9px 12px;
-        border-radius: 999px;
-        color: #15803d;
-        background: #ecfdf5;
-        border: 1px solid #bbf7d0;
-        font-size: .78rem;
-        font-weight: 700;
+    .sales-refund-summary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
     }
+
+        .sales-refund-summary div,
+        .sales-refund-options {
+            padding: 13px;
+            border-radius: 16px;
+            background: #fafafa;
+            border: 1px solid #e8eaef;
+        }
+
+        .sales-refund-summary span,
+        .sales-refund-summary strong {
+            display: block;
+        }
+
+        .sales-refund-summary span {
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .sales-refund-summary strong {
+            margin-top: 4px;
+            color: #111827;
+            font-size: .84rem;
+            font-weight: 720;
+        }
+
+    .sales-refund-options {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .sales-refund-table-wrap {
+        overflow-x: auto;
+        border: 1px solid #e8eaef;
+        border-radius: 16px;
+    }
+
+    .sales-refund-table {
+        width: 100%;
+        min-width: 760px;
+        border-collapse: collapse;
+    }
+
+        .sales-refund-table th {
+            padding: 12px 14px;
+            background: #fafafa;
+            color: #667085;
+            font-size: .7rem;
+            font-weight: 750;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            border-bottom: 1px solid #e8eaef;
+        }
+
+        .sales-refund-table td {
+            padding: 13px 14px;
+            border-bottom: 1px solid #f1f2f5;
+            color: #334155;
+            font-size: .82rem;
+            vertical-align: middle;
+        }
+
+            .sales-refund-table td strong,
+            .sales-refund-table td span {
+                display: block;
+            }
+
+            .sales-refund-table td strong {
+                color: #111827;
+                font-size: .84rem;
+            }
+
+            .sales-refund-table td span {
+                margin-top: 2px;
+                color: #667085;
+                font-size: .72rem;
+            }
+
+    .refund-qty-control {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+        .refund-qty-control input {
+            width: 80px;
+            min-height: 34px;
+            border-radius: 9px;
+            border: 1px solid #e5e7eb;
+            padding: 0 8px;
+        }
+
+        .refund-qty-control button {
+            min-height: 34px;
+            border: 0;
+            border-radius: 9px;
+            padding: 0 10px;
+            background: #f5f3ff;
+            color: #7c3aed;
+            font-size: .74rem;
+            font-weight: 700;
+        }
+
+    .sales-refund-total {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 0;
+        margin-top: 12px;
+        border-top: 1px solid #edf2f7;
+    }
+
+        .sales-refund-total span {
+            color: #667085;
+            font-size: .86rem;
+            font-weight: 650;
+        }
+
+        .sales-refund-total strong {
+            color: #111827;
+            font-size: 1rem;
+            font-weight: 750;
+        }
 
     @@keyframes salesIn {
         from {
@@ -1835,66 +2185,65 @@
     }
 
     @@media (max-width: 1199px) {
-        .sales-grid {
+        .sales-pos-layout {
             grid-template-columns: 1fr;
         }
 
-        .sales-settings-strip,
+        .sales-checkout-panel {
+            position: static;
+        }
+
         .sales-summary-grid {
             grid-template-columns: repeat(3, minmax(0, 1fr));
         }
     }
 
     @@media (max-width: 768px) {
-        .sales-header,
-        .sales-history-header {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-            .sales-header .sales-ghost-btn {
-                width: 100%;
-            }
-
-        .sales-settings-strip,
-        .sales-summary-grid,
-        .sales-search-row {
-            grid-template-columns: 1fr;
-        }
-
-        .sales-barcode-row {
-            grid-template-columns: 1fr;
-        }
-
-            .sales-barcode-row button {
-                width: 100%;
-            }
-
+        .sales-pos-top,
+        .sales-history-header,
         .sales-shift-warning {
             flex-direction: column;
             align-items: flex-start;
         }
 
+        .sales-top-actions,
+        .sales-top-actions button,
+        .sales-top-actions a,
         .sales-open-shift-btn {
             width: 100%;
         }
 
-        .sales-cart-item {
-            grid-template-columns: 1fr;
-        }
-
-        .sales-cart-total {
-            text-align: left;
-        }
-
+        .sales-scan-box,
+        .sales-search-row,
+        .sales-product-grid,
+        .sales-summary-grid,
+        .sales-refund-summary,
         .sales-form-row {
             grid-template-columns: 1fr;
+        }
+
+        .sales-cart-item {
+            grid-template-columns: 1fr;
+            align-items: flex-start;
+        }
+
+        .sales-cart-line-total {
+            text-align: left;
         }
 
         .sales-date-filters,
         .sales-date-filters input,
         .sales-filter-select,
         .sales-date-filters button {
+            width: 100%;
+        }
+
+        .sales-pagination {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .sales-page-btn {
             width: 100%;
         }
 
@@ -1905,6 +2254,10 @@
             .sales-modal-actions button {
                 width: 100%;
             }
+
+        .sales-quick-cash {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
     }
 
     @@media print {
@@ -1938,235 +2291,6 @@
             display: none;
         }
     }
-
-    .sales-mini-btn.refund {
-        color: #7c3aed;
-        background: #f5f3ff;
-        border-color: #ddd6fe;
-    }
-
-    .sales-refund-card {
-        width: 100%;
-        max-width: 980px;
-        max-height: calc(100vh - 40px);
-        overflow-y: auto;
-        background: #ffffff;
-        border-radius: 22px;
-        padding: 22px;
-        box-shadow: 0 24px 60px rgba(15, 23, 42, .24);
-    }
-
-    .sales-refund-header {
-        display: flex;
-        justify-content: space-between;
-        gap: 18px;
-        padding-bottom: 16px;
-        margin-bottom: 18px;
-        border-bottom: 1px solid #edf2f7;
-    }
-
-        .sales-refund-header span {
-            color: #7c3aed;
-            font-size: .72rem;
-            font-weight: 750;
-            letter-spacing: .06em;
-            text-transform: uppercase;
-        }
-
-        .sales-refund-header h3 {
-            margin: 4px 0 0;
-            color: #0f172a;
-            font-size: 1.1rem;
-            font-weight: 750;
-        }
-
-        .sales-refund-header p {
-            margin: 5px 0 0;
-            color: #64748b;
-            font-size: .84rem;
-        }
-
-    .sales-refund-close {
-        width: 34px;
-        height: 34px;
-        border-radius: 10px;
-        border: 1px solid #e5e7eb;
-        background: #ffffff;
-        color: #64748b;
-    }
-
-    .sales-refund-summary {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 10px;
-        margin-bottom: 14px;
-    }
-
-        .sales-refund-summary div {
-            padding: 13px;
-            border-radius: 16px;
-            background: #f8fafc;
-            border: 1px solid #e7edf5;
-        }
-
-        .sales-refund-summary span,
-        .sales-refund-summary strong {
-            display: block;
-        }
-
-        .sales-refund-summary span {
-            color: #64748b;
-            font-size: .72rem;
-            font-weight: 650;
-        }
-
-        .sales-refund-summary strong {
-            margin-top: 4px;
-            color: #0f172a;
-            font-size: .84rem;
-            font-weight: 720;
-        }
-
-    .sales-refund-options {
-        padding: 14px;
-        border-radius: 18px;
-        background: #ffffff;
-        border: 1px solid #e7edf5;
-        display: grid;
-        gap: 10px;
-        margin-bottom: 14px;
-    }
-
-    .sales-refund-table-wrap {
-        overflow-x: auto;
-        border: 1px solid #e7edf5;
-        border-radius: 16px;
-    }
-
-    .sales-refund-table {
-        width: 100%;
-        min-width: 760px;
-        border-collapse: collapse;
-    }
-
-        .sales-refund-table th {
-            padding: 12px 14px;
-            background: #f8fafc;
-            color: #64748b;
-            font-size: .7rem;
-            font-weight: 750;
-            text-transform: uppercase;
-            letter-spacing: .05em;
-            border-bottom: 1px solid #e7edf5;
-        }
-
-        .sales-refund-table td {
-            padding: 13px 14px;
-            border-bottom: 1px solid #f1f5f9;
-            color: #334155;
-            font-size: .82rem;
-            vertical-align: middle;
-        }
-
-            .sales-refund-table td strong,
-            .sales-refund-table td span {
-                display: block;
-            }
-
-            .sales-refund-table td strong {
-                color: #0f172a;
-                font-size: .84rem;
-            }
-
-            .sales-refund-table td span {
-                margin-top: 2px;
-                color: #64748b;
-                font-size: .72rem;
-            }
-
-    .refund-qty-control {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-
-        .refund-qty-control input {
-            width: 80px;
-            min-height: 34px;
-            border-radius: 9px;
-            border: 1px solid #e5e7eb;
-            padding: 0 8px;
-        }
-
-        .refund-qty-control button {
-            min-height: 34px;
-            border: 0;
-            border-radius: 9px;
-            padding: 0 10px;
-            background: #eef5ff;
-            color: #2563eb;
-            font-size: .74rem;
-            font-weight: 700;
-        }
-
-    .sales-refund-total {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 14px 0;
-        margin-top: 12px;
-        border-top: 1px solid #edf2f7;
-    }
-
-        .sales-refund-total span {
-            color: #64748b;
-            font-size: .86rem;
-            font-weight: 650;
-        }
-
-        .sales-refund-total strong {
-            color: #0f172a;
-            font-size: 1rem;
-            font-weight: 750;
-        }
-
-    .sales-refund-summary {
-        grid-template-columns: 1fr;
-    }
-
-    .sales-barcode-row {
-        display: grid;
-        grid-template-columns: minmax(240px, 1fr) auto;
-        gap: 10px;
-        padding: 0 18px 12px;
-    }
-
-    .sales-barcode-box {
-        min-height: 44px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 0 13px;
-        border-radius: 14px;
-        background: #ecfdf5;
-        border: 1px solid #bbf7d0;
-        color: #15803d;
-    }
-
-        .sales-barcode-box input {
-            width: 100%;
-            border: 0;
-            outline: none;
-            background: transparent;
-            color: #0f172a;
-            font-size: .9rem;
-            font-weight: 650;
-        }
-
-            .sales-barcode-box input::placeholder {
-                color: #64748b;
-                font-weight: 500;
-            }
 </style>
 
 @code {
@@ -2206,6 +2330,15 @@
     private string? _customerPhone;
     private string? _saleNotes;
 
+    private int _productPage = 1;
+    private int _productPageSize = 8;
+
+    private int _salesPage = 1;
+    private int _salesPageSize = 8;
+
+    private int _returnPage = 1;
+    private int _returnPageSize = 6;
+
     private decimal Subtotal => _cart.Sum(x => x.LineTotal);
     private decimal DiscountAmount => _settings.AllowDiscounts ? _discountAmount : 0;
     private decimal TaxableAmount => Math.Max(0, Subtotal - DiscountAmount);
@@ -2219,6 +2352,65 @@
 
     private bool CustomersEnabled => _settings.CustomersEnabled;
     private string SelectedCustomerValue => _selectedCustomerId?.ToString() ?? "";
+
+    private int ProductTotalPages =>
+        _products.Count == 0
+            ? 1
+            : (int)Math.Ceiling(_products.Count / (double)_productPageSize);
+
+    private int SafeProductPage => Math.Min(Math.Max(_productPage, 1), ProductTotalPages);
+
+    private int ProductPageStart =>
+        _products.Count == 0
+            ? 0
+            : ((SafeProductPage - 1) * _productPageSize) + 1;
+
+    private int ProductPageEnd =>
+        _products.Count == 0
+            ? 0
+            : Math.Min(SafeProductPage * _productPageSize, _products.Count);
+
+    private List<SaleProductOptionViewModel> PaginatedProducts =>
+        _products
+            .Skip((SafeProductPage - 1) * _productPageSize)
+            .Take(_productPageSize)
+            .ToList();
+
+    private List<SaleHistoryRowViewModel> RecentMySales =>
+        _mySales
+            .OrderByDescending(x => x.CreatedAt)
+            .ToList();
+
+    private int SalesTotalPages =>
+        RecentMySales.Count == 0
+            ? 1
+            : (int)Math.Ceiling(RecentMySales.Count / (double)_salesPageSize);
+
+    private int SafeSalesPage => Math.Min(Math.Max(_salesPage, 1), SalesTotalPages);
+
+    private List<SaleHistoryRowViewModel> PaginatedMySales =>
+        RecentMySales
+            .Skip((SafeSalesPage - 1) * _salesPageSize)
+            .Take(_salesPageSize)
+            .ToList();
+
+    private List<SaleReturnHistoryRowViewModel> RecentReturnHistory =>
+        _returnHistory
+            .OrderByDescending(x => x.CreatedAt)
+            .ToList();
+
+    private int ReturnTotalPages =>
+        RecentReturnHistory.Count == 0
+            ? 1
+            : (int)Math.Ceiling(RecentReturnHistory.Count / (double)_returnPageSize);
+
+    private int SafeReturnPage => Math.Min(Math.Max(_returnPage, 1), ReturnTotalPages);
+
+    private List<SaleReturnHistoryRowViewModel> PaginatedReturnHistory =>
+        RecentReturnHistory
+            .Skip((SafeReturnPage - 1) * _returnPageSize)
+            .Take(_returnPageSize)
+            .ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -2239,14 +2431,29 @@
 
         await LoadProducts();
         await LoadMySalesAsync();
-        await LoadReturnHistoryAsync();
     }
 
     private async Task LoadProducts()
     {
         _loadingProducts = true;
+        _productPage = 1;
         _products = await SaleService.SearchProductsAsync(_searchTerm);
         _loadingProducts = false;
+    }
+
+    private async Task HandleProductSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await LoadProducts();
+        }
+    }
+
+    private async Task ApplyHistoryFilterAsync()
+    {
+        _salesPage = 1;
+        _returnPage = 1;
+        await LoadMySalesAsync();
     }
 
     private async Task LoadMySalesAsync()
@@ -2255,11 +2462,57 @@
 
         _mySales = await SaleService.GetMySalesAsync(_fromDate, _toDate, _branchFilter);
         _salesSummary = await SaleService.GetMySalesSummaryAsync(_fromDate, _toDate, _branchFilter);
-
-        // Refund history will be made branch-aware when we update RefundService next.
         _returnHistory = await RefundService.GetReturnHistoryAsync(_fromDate, _toDate, _branchFilter);
 
         _loadingMySales = false;
+    }
+
+    private void NextProductPage()
+    {
+        if (_productPage < ProductTotalPages)
+        {
+            _productPage++;
+        }
+    }
+
+    private void PreviousProductPage()
+    {
+        if (_productPage > 1)
+        {
+            _productPage--;
+        }
+    }
+
+    private void NextSalesPage()
+    {
+        if (_salesPage < SalesTotalPages)
+        {
+            _salesPage++;
+        }
+    }
+
+    private void PreviousSalesPage()
+    {
+        if (_salesPage > 1)
+        {
+            _salesPage--;
+        }
+    }
+
+    private void NextReturnPage()
+    {
+        if (_returnPage < ReturnTotalPages)
+        {
+            _returnPage++;
+        }
+    }
+
+    private void PreviousReturnPage()
+    {
+        if (_returnPage > 1)
+        {
+            _returnPage--;
+        }
     }
 
     private async Task HandleBarcodeKeyDown(KeyboardEventArgs e)
@@ -2294,14 +2547,14 @@
 
         if (IsAddDisabled(product))
         {
-            ShowMessage($"{product.ProductName} cannot be added. Check stock or item status.", false);
+            ShowMessage($"{GetProductDisplayName(product)} cannot be added. Check stock or item status.", false);
             return;
         }
 
         AddToCart(product);
 
         _barcodeValue = null;
-        ShowMessage($"{product.ProductName} added to cart.", true);
+        ShowMessage($"{GetProductDisplayName(product)} added to cart.", true);
     }
 
     private void AddToCart(SaleProductOptionViewModel product)
@@ -2312,13 +2565,18 @@
             return;
         }
 
-        var existing = _cart.FirstOrDefault(x => x.ProductId == product.Id);
+        var productId = GetProductId(product);
+        var productVariantId = product.ProductVariantId;
+
+        var existing = _cart.FirstOrDefault(x =>
+            x.ProductId == productId &&
+            x.ProductVariantId == productVariantId);
 
         if (existing != null)
         {
             if (existing.TrackStock && !_settings.AllowNegativeStock && existing.Quantity + 1 > existing.AvailableStock)
             {
-                ShowMessage($"Not enough stock for {existing.ProductName}.", false);
+                ShowMessage($"Not enough stock for {GetCartItemName(existing)}.", false);
                 return;
             }
 
@@ -2328,9 +2586,17 @@
 
         _cart.Add(new SaleCartLineViewModel
         {
-            ProductId = product.Id,
+            ProductId = productId,
+            ProductVariantId = productVariantId,
             ProductName = product.ProductName,
-            SKU = product.SKU,
+            DisplayName = GetProductDisplayName(product),
+            SKU = GetProductSku(product),
+            Barcode = product.Barcode,
+            VariantName = product.VariantName,
+            VariantSize = product.VariantSize,
+            VariantColor = product.VariantColor,
+            VariantSKU = product.VariantSKU,
+            VariantBarcode = product.VariantBarcode,
             ProductType = product.ProductType,
             TrackStock = product.TrackStock,
             AgeRestricted = product.AgeRestricted,
@@ -2354,37 +2620,37 @@
                product.QuantityInStock <= 0;
     }
 
-    private void IncreaseQuantity(int productId)
+    private void IncreaseQuantity(int productId, int? productVariantId)
     {
-        var item = _cart.FirstOrDefault(x => x.ProductId == productId);
+        var item = FindCartItem(productId, productVariantId);
         if (item == null) return;
 
         if (item.TrackStock && !_settings.AllowNegativeStock && item.Quantity + 1 > item.AvailableStock)
         {
-            ShowMessage($"Not enough stock for {item.ProductName}.", false);
+            ShowMessage($"Not enough stock for {GetCartItemName(item)}.", false);
             return;
         }
 
         item.Quantity += 1;
     }
 
-    private void DecreaseQuantity(int productId)
+    private void DecreaseQuantity(int productId, int? productVariantId)
     {
-        var item = _cart.FirstOrDefault(x => x.ProductId == productId);
+        var item = FindCartItem(productId, productVariantId);
         if (item == null) return;
 
         if (item.Quantity <= 1)
         {
-            RemoveFromCart(productId);
+            RemoveFromCart(productId, productVariantId);
             return;
         }
 
         item.Quantity -= 1;
     }
 
-    private void UpdateQuantity(int productId, string? value)
+    private void UpdateQuantity(int productId, int? productVariantId, string? value)
     {
-        var item = _cart.FirstOrDefault(x => x.ProductId == productId);
+        var item = FindCartItem(productId, productVariantId);
         if (item == null) return;
 
         if (!decimal.TryParse(value, out var quantity) || quantity <= 0)
@@ -2396,16 +2662,17 @@
         if (item.TrackStock && !_settings.AllowNegativeStock && quantity > item.AvailableStock)
         {
             item.Quantity = item.AvailableStock;
-            ShowMessage($"Quantity adjusted to available stock for {item.ProductName}.", false);
+            ShowMessage($"Quantity adjusted to available stock for {GetCartItemName(item)}.", false);
             return;
         }
 
         item.Quantity = quantity;
     }
 
-    private void RemoveFromCart(int productId)
+    private void RemoveFromCart(int productId, int? productVariantId)
     {
-        var item = _cart.FirstOrDefault(x => x.ProductId == productId);
+        var item = FindCartItem(productId, productVariantId);
+
         if (item != null)
         {
             _cart.Remove(item);
@@ -2415,6 +2682,13 @@
         {
             _ageRestrictionConfirmed = false;
         }
+    }
+
+    private SaleCartLineViewModel? FindCartItem(int productId, int? productVariantId)
+    {
+        return _cart.FirstOrDefault(x =>
+            x.ProductId == productId &&
+            x.ProductVariantId == productVariantId);
     }
 
     private async Task CompleteSaleAsync()
@@ -2473,6 +2747,7 @@
             Items = _cart.Select(x => new CreateSaleItemRequest
             {
                 ProductId = x.ProductId,
+                ProductVariantId = x.ProductVariantId,
                 Quantity = x.Quantity
             }).ToList()
         };
@@ -2517,6 +2792,9 @@
 
             _openShift = await CashierShiftService.GetOpenShiftAsync();
 
+            _salesPage = 1;
+            _returnPage = 1;
+
             await LoadProducts();
             await LoadMySalesAsync();
         }
@@ -2532,6 +2810,16 @@
         _customerPhone = null;
         _saleNotes = null;
         _ageRestrictionConfirmed = false;
+    }
+
+    private void SetExactPayment()
+    {
+        _amountPaid = TotalPreview;
+    }
+
+    private void AddPaidAmount(decimal amount)
+    {
+        _amountPaid += amount;
     }
 
     private async Task ViewReceiptAsync(int saleId)
@@ -2578,17 +2866,6 @@
         return $"{symbol} {value:0.00}";
     }
 
-    private string GetTaxLabel()
-    {
-        if (!_settings.TaxEnabled)
-        {
-            return "Disabled";
-        }
-
-        var taxName = string.IsNullOrWhiteSpace(_settings.TaxName) ? "Tax" : _settings.TaxName;
-        return $"{taxName} {_settings.TaxRate:0.##}%";
-    }
-
     private string GetTypeClass(string? type)
     {
         return type switch
@@ -2606,6 +2883,35 @@
         return string.IsNullOrWhiteSpace(unit) ? "" : unit;
     }
 
+    private int GetProductId(SaleProductOptionViewModel product)
+    {
+        return product.ProductId > 0 ? product.ProductId : product.Id;
+    }
+
+    private string GetProductDisplayName(SaleProductOptionViewModel product)
+    {
+        return string.IsNullOrWhiteSpace(product.DisplayName)
+            ? product.ProductName
+            : product.DisplayName;
+    }
+
+    private string GetProductSku(SaleProductOptionViewModel product)
+    {
+        if (!string.IsNullOrWhiteSpace(product.VariantSKU))
+        {
+            return product.VariantSKU;
+        }
+
+        return product.SKU;
+    }
+
+    private string GetCartItemName(SaleCartLineViewModel item)
+    {
+        return string.IsNullOrWhiteSpace(item.DisplayName)
+            ? item.ProductName
+            : item.DisplayName;
+    }
+
     private string GetInitials(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -2620,6 +2926,7 @@
 
         return string.Join("", words);
     }
+
     private void OnCustomerChanged(ChangeEventArgs e)
     {
         var value = e.Value?.ToString();
@@ -2659,10 +2966,6 @@
             ? 0
             : _refundableSale.Items.Sum(x => GetRefundQuantity(x.SaleItemId) * x.UnitPrice);
 
-    private async Task LoadReturnHistoryAsync()
-    {
-        _returnHistory = await RefundService.GetReturnHistoryAsync(_fromDate, _toDate, _branchFilter);
-    }
     private bool CanRefundStatus(string status)
     {
         return status == "Completed" || status == "Partially Refunded";
@@ -2772,9 +3075,11 @@
         {
             CloseRefundModal();
 
+            _salesPage = 1;
+            _returnPage = 1;
+
             await LoadProducts();
             await LoadMySalesAsync();
-            await LoadReturnHistoryAsync();
         }
     }
 }

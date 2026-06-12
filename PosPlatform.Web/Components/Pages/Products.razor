@@ -158,7 +158,7 @@
                        placeholder="Search by name, SKU, barcode, or item type" />
             </div>
 
-            <select class="catalog-filter" @bind="_statusFilter">
+            <select class="catalog-filter" value="@_statusFilter" @onchange="StatusFilterChanged">
                 <option value="all">All items</option>
                 <option value="active">Active only</option>
                 <option value="inactive">Inactive only</option>
@@ -194,7 +194,7 @@
             <div class="catalog-table-header">
                 <div>
                     <h2>@CatalogueTitle list</h2>
-                    <p>@VisibleProducts.Count item@(VisibleProducts.Count == 1 ? "" : "s") showing</p>
+                    <p>@TotalFilteredProducts item@(TotalFilteredProducts == 1 ? "" : "s") showing</p>
                 </div>
 
                 <span class="catalog-status-note">
@@ -213,7 +213,7 @@
                     </div>
                 </div>
             }
-            else if (VisibleProducts.Count == 0)
+            else if (TotalFilteredProducts == 0)
             {
                 <div class="catalog-empty">
                     <div class="catalog-empty-icon">
@@ -252,7 +252,7 @@
                         </thead>
 
                         <tbody>
-                            @foreach (var item in VisibleProducts)
+                            @foreach (var item in PaginatedProducts)
                             {
                                 <tr>
                                     <td>
@@ -338,32 +338,73 @@
                                         </span>
                                     </td>
 
-                                    <td>
-                                        <div class="catalog-row-actions">
-                                            <button type="button" class="row-action edit" @onclick="() => OpenEditModal(item.Id)">
-                                                <i class="bi bi-pencil"></i>
-                                                Edit
-                                            </button>
+                                    <td class="catalog-actions-cell">
+                                        <details class="catalog-action-menu">
+                                            <summary>
+                                                <span>Actions</span>
+                                                <i class="bi bi-chevron-down"></i>
+                                            </summary>
 
-                                            <button type="button" class="row-action edit" @onclick="() => ManageVariants(item.Id)">
-                                                <i class="bi bi-layers"></i>
-                                                Variants
-                                            </button>
+                                            <div class="catalog-action-dropdown">
+                                                <button type="button" @onclick="() => OpenEditModal(item.Id)">
+                                                    <i class="bi bi-pencil"></i>
+                                                    <span>Edit item</span>
+                                                </button>
 
-                                            <button type="button" class="row-action status" @onclick="() => ToggleStatus(item.Id)">
-                                                <i class="bi @(item.IsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
-                                                @(item.IsActive ? "Pause" : "Activate")
-                                            </button>
+                                                <button type="button" @onclick="() => ManageVariants(item.Id)">
+                                                    <i class="bi bi-layers"></i>
+                                                    <span>Manage variants</span>
+                                                </button>
 
-                                            <button type="button" class="row-action delete" @onclick="() => ConfirmDelete(item.Id, item.ProductName)">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
-                                        </div>
+                                                <button type="button" @onclick="() => ToggleStatus(item.Id)">
+                                                    <i class="bi @(item.IsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
+                                                    <span>@(item.IsActive ? "Pause item" : "Activate item")</span>
+                                                </button>
+
+                                                <button type="button" class="danger" @onclick="() => ConfirmDelete(item.Id, item.ProductName)">
+                                                    <i class="bi bi-trash"></i>
+                                                    <span>Delete item</span>
+                                                </button>
+                                            </div>
+                                        </details>
                                     </td>
                                 </tr>
                             }
                         </tbody>
                     </table>
+                </div>
+
+                <div class="catalog-pagination">
+                    <div class="catalog-page-info">
+                        Showing
+                        <strong>@PageStart</strong>
+                        -
+                        <strong>@PageEnd</strong>
+                        of
+                        <strong>@TotalFilteredProducts</strong>
+                    </div>
+
+                    <div class="catalog-page-controls">
+                        <button type="button"
+                                class="catalog-page-btn"
+                                disabled="@(_currentPage <= 1)"
+                                @onclick="PreviousPage">
+                            <i class="bi bi-chevron-left"></i>
+                            Previous
+                        </button>
+
+                        <span class="catalog-page-count">
+                            Page @_currentPage of @TotalPages
+                        </span>
+
+                        <button type="button"
+                                class="catalog-page-btn"
+                                disabled="@(_currentPage >= TotalPages)"
+                                @onclick="NextPage">
+                            Next
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
                 </div>
             }
         </div>
@@ -420,12 +461,12 @@
 
                     <div class="col-md-6">
                         <label class="catalog-label">Product Type</label>
-                        <InputSelect class="catalog-input" @bind-Value="_form.ProductType" @onchange="HandleProductTypeChanged">
+                        <select class="catalog-input" value="@_form.ProductType" @onchange="HandleProductTypeChanged">
                             @foreach (var option in ProductTypeOptions)
                             {
                                 <option value="@option">@option</option>
                             }
-                        </InputSelect>
+                        </select>
                     </div>
 
                     <div class="col-md-6">
@@ -598,24 +639,24 @@
         align-items: center;
         gap: 8px;
         margin-bottom: 8px;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 750;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
         text-transform: uppercase;
-        letter-spacing: .06em;
+        letter-spacing: .08em;
     }
 
     .catalog-header h1 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.45rem;
-        font-weight: 680;
-        letter-spacing: -.03em;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
     .catalog-header p {
         margin: 6px 0 0;
-        color: #64748b;
+        color: #667085;
         font-size: .88rem;
     }
 
@@ -624,14 +665,14 @@
     .catalog-ghost-btn,
     .catalog-danger-btn {
         min-height: 38px;
-        border-radius: 11px;
+        border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
         padding: 0 14px;
         font-size: .8rem;
-        font-weight: 650;
+        font-weight: 680;
         border: 0;
         transition: all .18s ease;
         white-space: nowrap;
@@ -639,13 +680,14 @@
 
     .catalog-primary-btn {
         color: #fff;
-        background: #111827;
-        box-shadow: 0 12px 24px rgba(15, 23, 42, .14);
+        background: #252525;
+        box-shadow: 0 12px 24px rgba(17, 24, 39, .12);
     }
 
     .catalog-secondary-btn {
-        color: #2563eb;
-        background: #eef5ff;
+        color: #8FA6A1;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
     }
 
     .catalog-ghost-btn {
@@ -656,7 +698,7 @@
 
     .catalog-danger-btn {
         color: #fff;
-        background: #ef4444;
+        background: #d92d20;
     }
 
         .catalog-primary-btn:hover,
@@ -736,7 +778,7 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        background: #111827;
+        background: #252525;
         color: #ffffff;
         font-size: .78rem;
         font-weight: 700;
@@ -755,8 +797,8 @@
             padding: 13px;
             border-radius: 16px;
             background: #ffffff;
-            border: 1px solid #e7edf5;
-            box-shadow: 0 12px 28px rgba(15,23,42,.04);
+            border: 1px solid #e8eaef;
+            box-shadow: 0 10px 24px rgba(17, 24, 39, .035);
         }
 
         .catalog-settings-strip span,
@@ -765,14 +807,16 @@
         }
 
         .catalog-settings-strip span {
-            color: #64748b;
-            font-size: .72rem;
-            font-weight: 650;
+            color: #98a2b3;
+            font-size: .7rem;
+            font-weight: 700;
+            letter-spacing: .03em;
+            text-transform: uppercase;
         }
 
         .catalog-settings-strip strong {
             margin-top: 4px;
-            color: #0f172a;
+            color: #111827;
             font-size: .84rem;
             font-weight: 720;
         }
@@ -791,9 +835,9 @@
         min-height: 82px;
         padding: 16px;
         border-radius: 18px;
-        background: rgba(255,255,255,.88);
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 10px 24px rgba(17, 24, 39, .035);
     }
 
     .catalog-summary-icon {
@@ -812,12 +856,12 @@
         }
 
         .catalog-summary-icon.green {
-            color: #16a34a;
-            background: #ecfdf5;
+            color: #8FA6A1;
+            background: #f2f6f5;
         }
 
         .catalog-summary-icon.amber {
-            color: #d97706;
+            color: #b7791f;
             background: #fffbeb;
         }
 
@@ -828,7 +872,7 @@
 
     .catalog-summary-card span {
         display: block;
-        color: #64748b;
+        color: #667085;
         font-size: .76rem;
         font-weight: 650;
     }
@@ -836,10 +880,49 @@
     .catalog-summary-card strong {
         display: block;
         margin-top: 3px;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.05rem;
         font-weight: 720;
     }
+
+    .catalog-barcode-row {
+        display: grid;
+        grid-template-columns: minmax(240px, 1fr) auto;
+        gap: 10px;
+        padding: 14px;
+        margin-bottom: 16px;
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 10px 24px rgba(17, 24, 39, .035);
+    }
+
+    .catalog-barcode-box {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 13px;
+        border-radius: 14px;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
+        color: #8FA6A1;
+    }
+
+        .catalog-barcode-box input {
+            width: 100%;
+            border: 0;
+            outline: none;
+            background: transparent;
+            color: #111827;
+            font-size: .9rem;
+            font-weight: 650;
+        }
+
+            .catalog-barcode-box input::placeholder {
+                color: #667085;
+                font-weight: 500;
+            }
 
     .catalog-control-panel {
         display: grid;
@@ -849,8 +932,8 @@
         margin-bottom: 16px;
         border-radius: 18px;
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 10px 24px rgba(17, 24, 39, .035);
     }
 
     .catalog-search-box {
@@ -860,9 +943,9 @@
         min-height: 40px;
         padding: 0 13px;
         border-radius: 12px;
-        background: #f8fafc;
+        background: #fafafa;
         border: 1px solid #e5e7eb;
-        color: #94a3b8;
+        color: #98a2b3;
     }
 
         .catalog-search-box input,
@@ -871,24 +954,24 @@
             border: 0;
             outline: none;
             background: transparent;
-            color: #0f172a;
-            font-size: .85rem;
+            color: #111827;
+            font-size: 16px;
         }
 
     .catalog-filter {
         min-height: 40px;
         padding: 0 12px;
         border-radius: 12px;
-        background: #f8fafc;
+        background: #fafafa;
         border: 1px solid #e5e7eb;
     }
 
     .catalog-table-card {
-        overflow: hidden;
+        overflow: visible;
         border-radius: 18px;
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 16px 34px rgba(15,23,42,.06);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
     }
 
     .catalog-table-header {
@@ -897,19 +980,19 @@
         justify-content: space-between;
         gap: 12px;
         padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+        border-bottom: 1px solid #f1f2f5;
     }
 
         .catalog-table-header h2 {
             margin: 0;
-            color: #0f172a;
+            color: #111827;
             font-size: .92rem;
             font-weight: 720;
         }
 
         .catalog-table-header p {
             margin: 4px 0 0;
-            color: #94a3b8;
+            color: #98a2b3;
             font-size: .76rem;
         }
 
@@ -919,14 +1002,15 @@
         gap: 7px;
         padding: 7px 10px;
         border-radius: 999px;
-        color: #2563eb;
-        background: #eef5ff;
+        color: #8FA6A1;
+        background: #f2f6f5;
         font-size: .74rem;
         font-weight: 700;
     }
 
     .catalog-table-wrap {
         overflow-x: auto;
+        padding-bottom: 90px;
     }
 
     .catalog-table {
@@ -937,9 +1021,9 @@
 
         .catalog-table th {
             padding: 12px 16px;
-            color: #64748b;
-            background: #f8fafc;
-            border-bottom: 1px solid #e7edf5;
+            color: #667085;
+            background: #fafafa;
+            border-bottom: 1px solid #e8eaef;
             font-size: .7rem;
             font-weight: 750;
             letter-spacing: .05em;
@@ -950,13 +1034,13 @@
         .catalog-table td {
             padding: 15px 16px;
             color: #334155;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f2f5;
             font-size: .82rem;
             vertical-align: middle;
         }
 
         .catalog-table tbody tr:hover {
-            background: #fbfdff;
+            background: #fcfcfd;
         }
 
     .catalog-actions-col {
@@ -977,15 +1061,15 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #2563eb;
-        background: #eef5ff;
+        color: #8FA6A1;
+        background: #f2f6f5;
         font-size: .78rem;
         font-weight: 750;
     }
 
     .catalog-product-cell strong {
         display: block;
-        color: #0f172a;
+        color: #111827;
         font-size: .86rem;
         font-weight: 700;
     }
@@ -993,7 +1077,7 @@
     .catalog-product-cell span {
         display: block;
         margin-top: 2px;
-        color: #94a3b8;
+        color: #98a2b3;
         font-size: .72rem;
     }
 
@@ -1005,8 +1089,8 @@
         min-height: 28px;
         padding: 0 9px;
         border-radius: 999px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
         color: #475569;
         font-size: .74rem;
         font-weight: 650;
@@ -1043,7 +1127,7 @@
         }
 
         .catalog-type-pill.voucher {
-            color: #d97706;
+            color: #b7791f;
             background: #fffbeb;
             border-color: #fde68a;
         }
@@ -1057,18 +1141,18 @@
     .catalog-type-note {
         display: block;
         margin-top: 4px;
-        color: #64748b;
+        color: #667085;
         font-size: .7rem;
     }
 
     .catalog-price {
-        color: #0f172a;
+        color: #111827;
         font-weight: 700;
     }
 
     .catalog-stock strong {
         display: block;
-        color: #0f172a;
+        color: #111827;
         font-size: .84rem;
     }
 
@@ -1081,7 +1165,7 @@
     }
 
     .catalog-stock .low {
-        color: #dc2626;
+        color: #d92d20;
     }
 
     .catalog-rule-tags {
@@ -1111,8 +1195,8 @@
         }
 
         .catalog-rule.muted {
-            color: #64748b;
-            background: #f1f5f9;
+            color: #667085;
+            background: #f3f4f6;
         }
 
     .catalog-pill {
@@ -1131,60 +1215,176 @@
         }
 
         .catalog-pill.inactive {
-            color: #64748b;
-            background: #f1f5f9;
+            color: #667085;
+            background: #f3f4f6;
         }
 
-    .catalog-row-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: 6px;
+    .catalog-actions-cell {
+        position: relative;
+        text-align: right;
+        min-width: 150px;
     }
 
-    .row-action {
-        min-height: 31px;
-        border-radius: 9px;
+    .catalog-action-menu {
+        position: relative;
+        display: inline-block;
+    }
+
+        .catalog-action-menu summary {
+            list-style: none;
+            min-height: 34px;
+            border-radius: 11px;
+            border: 1px solid #e5e7eb;
+            background: #ffffff;
+            color: #252525;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 0 11px;
+            font-size: .74rem;
+            font-weight: 750;
+            cursor: pointer;
+            user-select: none;
+            box-shadow: 0 8px 18px rgba(17, 24, 39, .04);
+        }
+
+            .catalog-action-menu summary::-webkit-details-marker {
+                display: none;
+            }
+
+        .catalog-action-menu[open] summary {
+            background: #f8fafc;
+            border-color: #d0d5dd;
+        }
+
+        .catalog-action-menu summary i {
+            font-size: .68rem;
+            color: #98a2b3;
+            transition: transform .18s ease;
+        }
+
+        .catalog-action-menu[open] summary i {
+            transform: rotate(180deg);
+        }
+
+    .catalog-action-dropdown {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        width: 195px;
+        padding: 7px;
+        border-radius: 15px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 18px 38px rgba(17, 24, 39, .14);
+        z-index: 100;
+        display: grid;
+        gap: 4px;
+        text-align: left;
+    }
+
+        .catalog-action-dropdown button {
+            width: 100%;
+            min-height: 36px;
+            border: 0;
+            border-radius: 11px;
+            background: transparent;
+            color: #344054;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 10px;
+            font-size: .78rem;
+            font-weight: 650;
+            text-align: left;
+        }
+
+            .catalog-action-dropdown button:hover {
+                background: #f8fafc;
+                color: #252525;
+            }
+
+            .catalog-action-dropdown button i {
+                width: 18px;
+                color: #8FA6A1;
+            }
+
+            .catalog-action-dropdown button.danger {
+                color: #d92d20;
+            }
+
+                .catalog-action-dropdown button.danger i {
+                    color: #d92d20;
+                }
+
+    .catalog-pagination {
+        padding: 14px 18px;
+        border-top: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        background: #ffffff;
+    }
+
+    .catalog-page-info {
+        color: #667085;
+        font-size: .78rem;
+        font-weight: 600;
+    }
+
+        .catalog-page-info strong {
+            color: #111827;
+        }
+
+    .catalog-page-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .catalog-page-btn {
+        min-height: 34px;
+        border-radius: 11px;
         border: 1px solid #e5e7eb;
-        background: #fff;
+        background: #ffffff;
+        color: #344054;
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        padding: 0 9px;
-        font-size: .72rem;
+        justify-content: center;
+        gap: 7px;
+        padding: 0 11px;
+        font-size: .76rem;
         font-weight: 700;
-        transition: all .18s ease;
-        white-space: nowrap;
     }
 
-        .row-action:hover {
-            transform: translateY(-1px);
+        .catalog-page-btn:disabled {
+            opacity: .45;
+            cursor: not-allowed;
         }
 
-        .row-action.edit {
-            color: #2563eb;
-            background: #eff6ff;
-            border-color: #bfdbfe;
-        }
-
-        .row-action.status {
-            color: #b45309;
-            background: #fffbeb;
-            border-color: #fde68a;
-        }
-
-        .row-action.delete {
-            color: #dc2626;
-            background: #fef2f2;
-            border-color: #fecaca;
-        }
+    .catalog-page-count {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 11px;
+        border-radius: 11px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+        color: #667085;
+        font-size: .76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
 
     .catalog-loading,
     .catalog-empty {
         margin: 18px;
         padding: 34px 20px;
         border-radius: 16px;
-        background: #f8fafc;
-        border: 1px dashed #dbe3ef;
+        background: #fafafa;
+        border: 1px dashed #d0d5dd;
     }
 
     .catalog-loading {
@@ -1199,12 +1399,12 @@
         }
 
         .catalog-loading strong {
-            color: #0f172a;
+            color: #111827;
             font-size: .88rem;
         }
 
         .catalog-loading span {
-            color: #64748b;
+            color: #667085;
             font-size: .78rem;
         }
 
@@ -1212,8 +1412,8 @@
         width: 13px;
         height: 13px;
         border-radius: 50%;
-        background: #2563eb;
-        box-shadow: 0 0 0 8px rgba(37,99,235,.12);
+        background: #8FA6A1;
+        box-shadow: 0 0 0 8px rgba(143, 166, 161, .14);
     }
 
     .catalog-empty {
@@ -1225,8 +1425,8 @@
         height: 48px;
         margin: 0 auto 12px;
         border-radius: 16px;
-        background: #eef5ff;
-        color: #2563eb;
+        background: #f2f6f5;
+        color: #8FA6A1;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1234,7 +1434,7 @@
 
     .catalog-empty h3 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: .98rem;
         font-weight: 720;
     }
@@ -1242,7 +1442,7 @@
     .catalog-empty p {
         margin: 7px auto 16px;
         max-width: 390px;
-        color: #64748b;
+        color: #667085;
         font-size: .84rem;
     }
 
@@ -1285,7 +1485,7 @@
     }
 
         .catalog-modal-header span {
-            color: #2563eb;
+            color: #8FA6A1;
             font-size: .72rem;
             font-weight: 750;
             letter-spacing: .06em;
@@ -1295,7 +1495,7 @@
         .catalog-modal-header h4,
         .catalog-delete-modal h4 {
             margin: 3px 0 0;
-            color: #0f172a;
+            color: #111827;
             font-size: 1.08rem;
             font-weight: 720;
         }
@@ -1303,7 +1503,7 @@
         .catalog-modal-header p,
         .catalog-delete-modal p {
             margin: 5px 0 0;
-            color: #64748b;
+            color: #667085;
             font-size: .84rem;
             line-height: 1.5;
         }
@@ -1319,8 +1519,8 @@
         .catalog-info-note {
             padding: 13px;
             border-radius: 16px;
-            background: #f8fafc;
-            border: 1px solid #e7edf5;
+            background: #fafafa;
+            border: 1px solid #e8eaef;
         }
 
             .catalog-modal-context span,
@@ -1331,27 +1531,27 @@
             }
 
         .catalog-modal-context span {
-            color: #64748b;
+            color: #667085;
             font-size: .72rem;
             font-weight: 650;
         }
 
         .catalog-modal-context strong {
             margin-top: 4px;
-            color: #0f172a;
+            color: #111827;
             font-size: .84rem;
             font-weight: 720;
         }
 
     .catalog-info-note strong {
-        color: #0f172a;
+        color: #111827;
         font-size: .85rem;
         font-weight: 720;
     }
 
     .catalog-info-note span {
         margin-top: 3px;
-        color: #64748b;
+        color: #667085;
         font-size: .76rem;
     }
 
@@ -1361,7 +1561,7 @@
         border-radius: 10px;
         border: 1px solid #e5e7eb;
         background: #fff;
-        color: #64748b;
+        color: #667085;
     }
 
     .catalog-label {
@@ -1379,14 +1579,14 @@
         border-radius: 12px;
         border: 1px solid #e5e7eb;
         background: #fff;
-        color: #0f172a;
-        font-size: .9rem;
+        color: #111827;
+        font-size: 16px;
         outline: none;
     }
 
         .catalog-input:focus {
-            border-color: #bfdbfe;
-            box-shadow: 0 0 0 4px rgba(37, 99, 235, .08);
+            border-color: #d0d5dd;
+            box-shadow: none;
         }
 
     .catalog-textarea {
@@ -1406,8 +1606,8 @@
         gap: 10px;
         padding: 12px;
         border-radius: 14px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
     }
 
         .catalog-check input {
@@ -1420,13 +1620,13 @@
         }
 
         .catalog-check strong {
-            color: #0f172a;
+            color: #111827;
             font-size: .85rem;
         }
 
         .catalog-check small {
             margin-top: 2px;
-            color: #64748b;
+            color: #667085;
             font-size: .76rem;
         }
 
@@ -1453,8 +1653,8 @@
         height: 52px;
         margin: 0 auto 14px;
         border-radius: 18px;
-        color: #dc2626;
-        background: #fef2f2;
+        color: #d92d20;
+        background: #fef3f2;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1555,46 +1755,27 @@
             .catalog-modal-actions button {
                 width: 100%;
             }
-    }
 
-    .catalog-barcode-row {
-        display: grid;
-        grid-template-columns: minmax(240px, 1fr) auto;
-        gap: 10px;
-        padding: 14px;
-        margin-bottom: 16px;
-        border-radius: 18px;
-        background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.045);
-    }
-
-    .catalog-barcode-box {
-        min-height: 44px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 0 13px;
-        border-radius: 14px;
-        background: #ecfdf5;
-        border: 1px solid #bbf7d0;
-        color: #15803d;
-    }
-
-        .catalog-barcode-box input {
-            width: 100%;
-            border: 0;
-            outline: none;
-            background: transparent;
-            color: #0f172a;
-            font-size: .9rem;
-            font-weight: 650;
+        .catalog-pagination {
+            flex-direction: column;
+            align-items: flex-start;
         }
 
-            .catalog-barcode-box input::placeholder {
-                color: #64748b;
-                font-weight: 500;
-            }
+        .catalog-page-controls,
+        .catalog-page-btn {
+            width: 100%;
+        }
+
+        .catalog-page-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .catalog-page-count {
+            justify-content: center;
+            width: 100%;
+        }
+    }
 </style>
 
 @code {
@@ -1614,6 +1795,9 @@
     private bool _showDeleteConfirm;
     private int _deleteId;
     private string _deleteProductName = string.Empty;
+
+    private int _currentPage = 1;
+    private int _pageSize = 10;
 
     private bool ProductsEnabled => _settings.ProductsEnabled;
     private bool StockEnabled => _settings.StockTrackingEnabled;
@@ -1676,7 +1860,7 @@
     private int LowStockProducts => StockEnabled ? _products.Count(x => x.TrackStock && x.QuantityInStock <= x.ReorderLevel) : 0;
     private decimal InventoryValue => _products.Where(x => x.TrackStock).Sum(x => x.QuantityInStock * x.CostPrice);
 
-    private List<ProductListItemViewModel> VisibleProducts =>
+    private List<ProductListItemViewModel> FilteredProducts =>
         _statusFilter switch
         {
             "active" => _products.Where(x => x.IsActive).ToList(),
@@ -1690,6 +1874,32 @@
             "age" when AgeRestrictedEnabled => _products.Where(x => x.AgeRestricted).ToList(),
             _ => _products
         };
+
+    private int TotalFilteredProducts => FilteredProducts.Count;
+
+    private int TotalPages =>
+        TotalFilteredProducts == 0
+            ? 1
+            : (int)Math.Ceiling(TotalFilteredProducts / (double)_pageSize);
+
+    private int SafeCurrentPage =>
+        Math.Min(Math.Max(_currentPage, 1), TotalPages);
+
+    private int PageStart =>
+        TotalFilteredProducts == 0
+            ? 0
+            : ((SafeCurrentPage - 1) * _pageSize) + 1;
+
+    private int PageEnd =>
+        TotalFilteredProducts == 0
+            ? 0
+            : Math.Min(SafeCurrentPage * _pageSize, TotalFilteredProducts);
+
+    private List<ProductListItemViewModel> PaginatedProducts =>
+        FilteredProducts
+            .Skip((SafeCurrentPage - 1) * _pageSize)
+            .Take(_pageSize)
+            .ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -1714,6 +1924,7 @@
     private async Task LoadProducts()
     {
         _loading = true;
+        _currentPage = 1;
         _products = await ProductService.GetProductsAsync(_searchTerm);
         _loading = false;
     }
@@ -1740,24 +1951,47 @@
 
         _searchTerm = code;
         _statusFilter = "all";
+        _currentPage = 1;
 
         await LoadProducts();
 
         _barcodeScanning = false;
 
-        if (VisibleProducts.Count == 0)
+        if (TotalFilteredProducts == 0)
         {
             ShowMessage($"No item found for barcode or SKU: {code}", false);
             return;
         }
 
-        ShowMessage($"{VisibleProducts.Count} item found for: {code}", true);
+        ShowMessage($"{TotalFilteredProducts} item found for: {code}", true);
         _barcodeValue = null;
     }
 
     private async Task LoadCategories()
     {
         _categories = await ProductService.GetCategoriesAsync();
+    }
+
+    private void StatusFilterChanged(ChangeEventArgs e)
+    {
+        _statusFilter = e.Value?.ToString() ?? "all";
+        _currentPage = 1;
+    }
+
+    private void NextPage()
+    {
+        if (_currentPage < TotalPages)
+        {
+            _currentPage++;
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (_currentPage > 1)
+        {
+            _currentPage--;
+        }
     }
 
     private void OpenAddModal()
@@ -1880,6 +2114,7 @@
         _searchTerm = null;
         _barcodeValue = null;
         _statusFilter = "all";
+        _currentPage = 1;
         await LoadProducts();
     }
 
@@ -1969,6 +2204,7 @@
 
         return string.Join("", words);
     }
+
     private void ManageVariants(int productId)
     {
         NavigationManager.NavigateTo($"/product-variants/{productId}");
