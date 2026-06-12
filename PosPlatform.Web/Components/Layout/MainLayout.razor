@@ -87,7 +87,10 @@
     {
         try
         {
-            await JS.InvokeVoidAsync("window.scrollTo", 0, 0);
+            await JS.InvokeVoidAsync(
+                "eval",
+                "const main = document.querySelector('.pos-main'); if (main) { main.scrollTo({ top: 0, left: 0 }); } else { window.scrollTo(0, 0); }"
+            );
         }
         catch
         {

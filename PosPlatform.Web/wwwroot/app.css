@@ -1028,3 +1028,142 @@ textarea,
         padding: 14px;
     }
 }
+/* ===============================
+   Independent sidebar + page scroll
+   =============================== */
+
+/* Stop the browser window from being the main scroll area */
+html,
+body {
+    height: 100%;
+    overflow: hidden;
+}
+
+/* The app shell fills the screen and does not scroll as one big page */
+.pos-shell {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+}
+
+/* Sidebar gets its own fixed-height scroll area */
+.pos-sidebar {
+    height: 100dvh;
+    min-height: 0;
+    max-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: sticky;
+    top: 0;
+}
+
+/* Keep logo/brand fixed at the top of the sidebar */
+.pos-sidebar-brand {
+    flex: 0 0 auto;
+}
+
+/* Only the menu links scroll */
+.pos-sidebar-nav {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 4px;
+    overscroll-behavior: contain;
+}
+
+/* Keep the bottom role/access card separate from the scrolling menu */
+.pos-sidebar-card {
+    flex: 0 0 auto;
+    margin-top: 12px;
+}
+
+/* Main area scrolls by itself */
+.pos-main {
+    height: 100dvh;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+}
+
+/* Keep the topbar stuck inside the main scroll area */
+.pos-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+}
+
+/* Smoother sidebar scrollbar */
+.pos-sidebar-nav {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+
+    .pos-sidebar-nav::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .pos-sidebar-nav::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .pos-sidebar-nav::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 999px;
+    }
+
+        .pos-sidebar-nav::-webkit-scrollbar-thumb:hover {
+            background: #98a2b3;
+        }
+
+/* Collapsed sidebar must still scroll independently */
+.pos-sidebar-toggle:checked ~ .pos-shell .pos-sidebar {
+    height: 100dvh;
+    max-height: 100dvh;
+}
+
+.pos-sidebar-toggle:checked ~ .pos-shell .pos-sidebar-nav {
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Mobile drawer also scrolls separately */
+@media (max-width: 991px) {
+    html,
+    body {
+        height: 100%;
+        overflow: hidden;
+    }
+
+    .pos-shell {
+        height: 100dvh;
+        min-height: 100dvh;
+        overflow: hidden;
+        display: block;
+    }
+
+    .pos-sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        height: 100dvh;
+        max-height: 100dvh;
+        overflow: hidden;
+    }
+
+    .pos-sidebar-nav {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        overscroll-behavior: contain;
+    }
+
+    .pos-main {
+        height: 100dvh;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+}
