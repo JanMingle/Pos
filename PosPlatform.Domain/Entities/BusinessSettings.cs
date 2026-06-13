@@ -36,6 +36,12 @@
         public string? ReceiptFooterMessage { get; set; } = "Thank you for your purchase.";
         public string? ReturnPolicyText { get; set; }
 
+        /*
+         * false = business registered but setup is not complete yet
+         * true  = business completed VAT, modules, POS rules and receipt settings
+         */
+        public bool SetupCompleted { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }

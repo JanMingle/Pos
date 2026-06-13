@@ -3,7 +3,7 @@
 @using PosPlatform.Web.Components.Layout
 @inject NavigationManager Nav
 
-<PageTitle>Login</PageTitle>
+<PageTitle>Login | JMingle</PageTitle>
 
 @code {
     private string? Error => GetQueryValue("error");
@@ -21,121 +21,221 @@
     <div class="login-card">
         <section class="login-brand-panel">
             <div class="login-brand-top">
-                <div class="login-logo">P</div>
+                <div class="login-logo">J</div>
+
                 <div>
-                    <strong>POS Platform</strong>
+                    <strong>JMingle</strong>
                     <span>Business Control Center</span>
                 </div>
             </div>
 
             <div class="login-hero-copy">
-                <span class="login-kicker">Built for many business types</span>
-                <h1>Run sales, stock and users from one clean workspace.</h1>
+                <span class="login-kicker">
+                    <i class="bi bi-stars"></i>
+                    Smarter business management
+                </span>
+
+                <h1>Run your business from one clean JMingle workspace.</h1>
+
                 <p>
-                    Sign in to manage your products, sales, inventory, users, reports and business settings.
+                    Sign in to manage sales, stock, customers, invoices, branches, users,
+                    reports and daily operations from one secure dashboard.
                 </p>
+            </div>
+
+            <div class="login-preview-card">
+                <div class="preview-top">
+                    <div>
+                        <span>Today’s overview</span>
+                        <strong>Business health</strong>
+                    </div>
+
+                    <div class="preview-status">
+                        <span></span>
+                        Live
+                    </div>
+                </div>
+
+                <div class="preview-metrics">
+                    <div>
+                        <span>Sales</span>
+                        <strong>R 12,450</strong>
+                    </div>
+
+                    <div>
+                        <span>Profit</span>
+                        <strong>R 4,820</strong>
+                    </div>
+
+                    <div>
+                        <span>Stock Alerts</span>
+                        <strong>8</strong>
+                    </div>
+                </div>
+
+                <div class="preview-chart">
+                    <div style="height: 38%;"></div>
+                    <div style="height: 62%;"></div>
+                    <div style="height: 48%;"></div>
+                    <div style="height: 78%;"></div>
+                    <div style="height: 54%;"></div>
+                    <div style="height: 88%;"></div>
+                </div>
             </div>
 
             <div class="login-feature-grid">
                 <div>
                     <i class="bi bi-cart-check"></i>
                     <strong>Sales</strong>
-                    <span>Process transactions and receipts.</span>
+                    <span>Process transactions, receipts and refunds.</span>
                 </div>
 
                 <div>
                     <i class="bi bi-boxes"></i>
                     <strong>Stock</strong>
-                    <span>Track inventory and movement history.</span>
+                    <span>Track inventory, purchases and movements.</span>
                 </div>
 
                 <div>
-                    <i class="bi bi-people"></i>
-                    <strong>Users</strong>
-                    <span>Control roles and access.</span>
+                    <i class="bi bi-bar-chart"></i>
+                    <strong>Reports</strong>
+                    <span>Understand performance and daily activity.</span>
                 </div>
             </div>
         </section>
 
         <section class="login-form-panel">
-            <div class="login-form-header">
-                <span>Welcome back</span>
-                <h2>Sign in to your account</h2>
-                <p>Enter your business account details to continue.</p>
+            <div class="login-form-card">
+                <div class="login-form-header">
+                    <span>Welcome back</span>
+                    <h2>Sign in to JMingle</h2>
+                    <p>Enter your business account details to continue.</p>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(Error))
+                {
+                    <div class="login-alert">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <span>@Error</span>
+                    </div>
+                }
+
+                <form method="post" action="/account/login" class="login-form">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="ReturnUrl" value="@ReturnUrl" />
+
+                    <div>
+                        <label>Email Address</label>
+                        <div class="login-input-wrap">
+                            <i class="bi bi-envelope"></i>
+                            <input name="Email" type="email" required autocomplete="email" placeholder="you@business.co.za" />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label>Password</label>
+                        <div class="login-input-wrap">
+                            <i class="bi bi-lock"></i>
+                            <input name="Password" type="password" required autocomplete="current-password" placeholder="Enter your password" />
+                        </div>
+                    </div>
+
+                    <button type="submit" class="login-submit">
+                        <span>Sign In</span>
+                        <i class="bi bi-arrow-right"></i>
+                    </button>
+                </form>
+
+                <div class="login-footer-link">
+                    <span>No account yet?</span>
+                    <a href="/register-business">Register your business</a>
+                </div>
             </div>
 
-            @if (!string.IsNullOrWhiteSpace(Error))
-            {
-                <div class="login-alert">
-                    <i class="bi bi-exclamation-triangle"></i>
-                    <span>@Error</span>
-                </div>
-            }
-
-            <form method="post" action="/account/login" class="login-form">
-                <AntiforgeryToken />
-                <input type="hidden" name="ReturnUrl" value="@ReturnUrl" />
-
+            <div class="login-security-note">
                 <div>
-                    <label>Email Address</label>
-                    <div class="login-input-wrap">
-                        <i class="bi bi-envelope"></i>
-                        <input name="Email" type="email" required placeholder="you@business.co.za" />
-                    </div>
+                    <i class="bi bi-shield-check"></i>
                 </div>
 
-                <div>
-                    <label>Password</label>
-                    <div class="login-input-wrap">
-                        <i class="bi bi-lock"></i>
-                        <input name="Password" type="password" required placeholder="Enter your password" />
-                    </div>
-                </div>
-
-                <button type="submit" class="login-submit">
-                    Sign In
-                    <i class="bi bi-arrow-right"></i>
-                </button>
-            </form>
-
-            <div class="login-footer-link">
-                <span>No account yet?</span>
-                <a href="/register-business">Register your business</a>
+                <span>
+                    Secure access for owners, managers, cashiers, inventory users and accounting teams.
+                </span>
             </div>
         </section>
     </div>
 </div>
 
 <style>
+    html,
+    body {
+        height: auto !important;
+        min-height: 100%;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+    }
+
     .login-shell {
-        min-height: calc(100vh - 120px);
-        padding: 26px;
+        min-height: calc(100dvh - 90px);
+        padding: 28px;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: radial-gradient(circle at top left, rgba(37, 99, 235, .12), transparent 34%), linear-gradient(135deg, #f8fbff, #eef4fb);
+        overflow: visible;
+        background: radial-gradient(circle at 12% 8%, rgba(143, 166, 161, .22), transparent 28%), radial-gradient(circle at 88% 16%, rgba(37, 99, 235, .10), transparent 30%), linear-gradient(135deg, #ffffff 0%, #f6f7f9 48%, #f2f6f5 100%);
     }
 
     .login-card {
         width: 100%;
-        max-width: 1080px;
+        max-width: 1120px;
         display: grid;
         grid-template-columns: 1.05fr .95fr;
         overflow: hidden;
-        border-radius: 28px;
-        background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 28px 80px rgba(15, 23, 42, .14);
+        border-radius: 32px;
+        background: rgba(255, 255, 255, .94);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 30px 90px rgba(17, 24, 39, .14);
+        backdrop-filter: blur(18px);
     }
 
     .login-brand-panel {
+        position: relative;
         padding: 38px;
         color: #ffffff;
-        background: radial-gradient(circle at top right, rgba(56, 189, 248, .26), transparent 32%), linear-gradient(135deg, #0f172a, #1d4ed8);
+        background: radial-gradient(circle at top right, rgba(143, 166, 161, .34), transparent 34%), radial-gradient(circle at bottom left, rgba(255, 255, 255, .10), transparent 30%), linear-gradient(135deg, #111827 0%, #252525 54%, #3a3a3a 100%);
         display: flex;
         flex-direction: column;
         justify-content: space-between;
-        gap: 34px;
+        gap: 28px;
+        overflow: hidden;
+    }
+
+        .login-brand-panel::before {
+            content: "";
+            position: absolute;
+            inset: auto -70px -90px auto;
+            width: 260px;
+            height: 260px;
+            border-radius: 50%;
+            background: rgba(143, 166, 161, .18);
+            filter: blur(2px);
+        }
+
+        .login-brand-panel::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image: linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px);
+            background-size: 34px 34px;
+            mask-image: linear-gradient(180deg, rgba(0,0,0,.8), transparent 85%);
+            pointer-events: none;
+        }
+
+    .login-brand-top,
+    .login-hero-copy,
+    .login-preview-card,
+    .login-feature-grid {
+        position: relative;
+        z-index: 1;
     }
 
     .login-brand-top {
@@ -145,15 +245,18 @@
     }
 
     .login-logo {
-        width: 44px;
-        height: 44px;
-        border-radius: 16px;
+        width: 46px;
+        height: 46px;
+        min-width: 46px;
+        border-radius: 17px;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: rgba(255,255,255,.14);
-        border: 1px solid rgba(255,255,255,.2);
-        font-weight: 750;
+        background: #ffffff;
+        color: #252525;
+        border: 1px solid rgba(255,255,255,.28);
+        font-weight: 820;
+        box-shadow: 0 18px 40px rgba(0,0,0,.18);
     }
 
     .login-brand-top strong,
@@ -162,45 +265,154 @@
     }
 
     .login-brand-top strong {
-        font-size: .95rem;
-        font-weight: 750;
+        font-size: 1rem;
+        font-weight: 780;
+        letter-spacing: -.02em;
     }
 
     .login-brand-top span {
         margin-top: 2px;
         color: rgba(255,255,255,.68);
         font-size: .72rem;
+        font-weight: 650;
     }
 
     .login-kicker {
         display: inline-flex;
-        margin-bottom: 12px;
-        padding: 7px 10px;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 13px;
+        padding: 8px 11px;
         border-radius: 999px;
         background: rgba(255,255,255,.12);
-        color: rgba(255,255,255,.86);
+        border: 1px solid rgba(255,255,255,.16);
+        color: rgba(255,255,255,.88);
         font-size: .72rem;
-        font-weight: 700;
-        letter-spacing: .04em;
+        font-weight: 760;
+        letter-spacing: .05em;
         text-transform: uppercase;
     }
 
     .login-hero-copy h1 {
         margin: 0;
-        max-width: 520px;
-        font-size: 2.15rem;
-        line-height: 1.08;
-        font-weight: 720;
-        letter-spacing: -.04em;
+        max-width: 540px;
+        font-size: 2.25rem;
+        line-height: 1.06;
+        font-weight: 820;
+        letter-spacing: -.055em;
     }
 
     .login-hero-copy p {
-        margin: 14px 0 0;
-        max-width: 510px;
-        color: rgba(255,255,255,.78);
-        font-size: .95rem;
-        line-height: 1.65;
+        margin: 15px 0 0;
+        max-width: 520px;
+        color: rgba(255,255,255,.76);
+        font-size: .96rem;
+        line-height: 1.7;
     }
+
+    .login-preview-card {
+        padding: 16px;
+        border-radius: 22px;
+        background: rgba(255,255,255,.11);
+        border: 1px solid rgba(255,255,255,.16);
+        box-shadow: 0 22px 50px rgba(0,0,0,.14);
+        backdrop-filter: blur(18px);
+    }
+
+    .preview-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: flex-start;
+        margin-bottom: 14px;
+    }
+
+        .preview-top span,
+        .preview-top strong {
+            display: block;
+        }
+
+        .preview-top span {
+            color: rgba(255,255,255,.62);
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .preview-top strong {
+            margin-top: 3px;
+            color: #ffffff;
+            font-size: .92rem;
+            font-weight: 780;
+        }
+
+    .preview-status {
+        min-height: 26px;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: rgba(143, 166, 161, .22);
+        color: #ffffff;
+        font-size: .7rem;
+        font-weight: 760;
+    }
+
+        .preview-status span {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #8FA6A1;
+        }
+
+    .preview-metrics {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 9px;
+        margin-bottom: 14px;
+    }
+
+        .preview-metrics div {
+            padding: 11px;
+            border-radius: 15px;
+            background: rgba(255,255,255,.10);
+            border: 1px solid rgba(255,255,255,.12);
+        }
+
+        .preview-metrics span,
+        .preview-metrics strong {
+            display: block;
+        }
+
+        .preview-metrics span {
+            color: rgba(255,255,255,.62);
+            font-size: .68rem;
+            font-weight: 700;
+        }
+
+        .preview-metrics strong {
+            margin-top: 4px;
+            color: #ffffff;
+            font-size: .82rem;
+            font-weight: 780;
+        }
+
+    .preview-chart {
+        height: 92px;
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 8px;
+        align-items: end;
+        padding: 12px;
+        border-radius: 17px;
+        background: rgba(0,0,0,.14);
+    }
+
+        .preview-chart div {
+            border-radius: 999px 999px 6px 6px;
+            background: linear-gradient(180deg, #ffffff, #8FA6A1);
+            opacity: .94;
+        }
 
     .login-feature-grid {
         display: grid;
@@ -210,15 +422,22 @@
 
         .login-feature-grid div {
             padding: 13px;
-            border-radius: 16px;
-            background: rgba(255,255,255,.1);
-            border: 1px solid rgba(255,255,255,.16);
+            border-radius: 17px;
+            background: rgba(255,255,255,.10);
+            border: 1px solid rgba(255,255,255,.15);
         }
 
         .login-feature-grid i {
-            display: block;
-            margin-bottom: 8px;
-            font-size: 1rem;
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 9px;
+            border-radius: 12px;
+            background: rgba(255,255,255,.12);
+            color: #ffffff;
+            font-size: .98rem;
         }
 
         .login-feature-grid strong,
@@ -227,14 +446,16 @@
         }
 
         .login-feature-grid strong {
+            color: #ffffff;
             font-size: .8rem;
+            font-weight: 760;
         }
 
         .login-feature-grid span {
             margin-top: 3px;
-            color: rgba(255,255,255,.68);
+            color: rgba(255,255,255,.66);
             font-size: .7rem;
-            line-height: 1.35;
+            line-height: 1.38;
         }
 
     .login-form-panel {
@@ -242,28 +463,36 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
+        background: radial-gradient(circle at top right, rgba(143, 166, 161, .14), transparent 32%), #ffffff;
+    }
+
+    .login-form-card {
+        width: 100%;
+        max-width: 420px;
+        margin: 0 auto;
     }
 
     .login-form-header span {
-        color: #2563eb;
+        color: #8FA6A1;
         font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        font-weight: 780;
+        letter-spacing: .08em;
         text-transform: uppercase;
     }
 
     .login-form-header h2 {
-        margin: 7px 0 0;
-        color: #0f172a;
-        font-size: 1.45rem;
-        font-weight: 720;
-        letter-spacing: -.03em;
+        margin: 8px 0 0;
+        color: #111827;
+        font-size: 1.55rem;
+        font-weight: 800;
+        letter-spacing: -.04em;
     }
 
     .login-form-header p {
-        margin: 7px 0 0;
-        color: #64748b;
-        font-size: .88rem;
+        margin: 8px 0 0;
+        color: #667085;
+        font-size: .9rem;
+        line-height: 1.55;
     }
 
     .login-alert {
@@ -273,7 +502,7 @@
         gap: 10px;
         padding: 12px 14px;
         border-radius: 14px;
-        background: #fef2f2;
+        background: #fef3f2;
         border: 1px solid #fecaca;
         color: #991b1b;
         font-size: .84rem;
@@ -281,72 +510,127 @@
     }
 
     .login-form {
-        margin-top: 22px;
+        margin-top: 24px;
         display: grid;
         gap: 15px;
     }
 
         .login-form label {
             display: block;
-            margin-bottom: 6px;
+            margin-bottom: 7px;
             color: #475569;
             font-size: .78rem;
-            font-weight: 700;
+            font-weight: 760;
         }
 
     .login-input-wrap {
-        min-height: 44px;
+        min-height: 46px;
         display: flex;
         align-items: center;
         gap: 10px;
         padding: 0 13px;
-        border-radius: 13px;
+        border-radius: 15px;
         border: 1px solid #e5e7eb;
-        background: #f8fafc;
-        color: #94a3b8;
+        background: #fafafa;
+        color: #98a2b3;
+        transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
     }
+
+        .login-input-wrap:focus-within {
+            border-color: #cfd8d5;
+            background: #ffffff;
+            box-shadow: 0 0 0 4px rgba(143, 166, 161, .11);
+        }
+
+        .login-input-wrap i {
+            color: #8FA6A1;
+        }
 
         .login-input-wrap input {
             width: 100%;
             border: 0;
             outline: none;
             background: transparent;
-            color: #0f172a;
-            font-size: .9rem;
+            color: #111827;
+            font-size: 16px;
         }
 
+            .login-input-wrap input::placeholder {
+                color: #98a2b3;
+            }
+
     .login-submit {
-        margin-top: 4px;
-        min-height: 44px;
+        margin-top: 5px;
+        min-height: 46px;
         border: 0;
-        border-radius: 13px;
-        background: #111827;
+        border-radius: 15px;
+        background: #252525;
         color: #ffffff;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 9px;
-        font-size: .88rem;
-        font-weight: 700;
-        box-shadow: 0 14px 28px rgba(15,23,42,.18);
+        font-size: .9rem;
+        font-weight: 760;
+        box-shadow: 0 16px 34px rgba(17,24,39,.18);
+        transition: transform .18s ease, box-shadow .18s ease;
     }
 
+        .login-submit:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 20px 40px rgba(17,24,39,.22);
+        }
+
     .login-footer-link {
-        margin-top: 22px;
+        margin-top: 24px;
         text-align: center;
         font-size: .84rem;
-        color: #64748b;
+        color: #667085;
     }
 
         .login-footer-link a {
-            color: #2563eb;
-            font-weight: 700;
+            color: #252525;
+            font-weight: 760;
             margin-left: 4px;
+            text-decoration: none;
+        }
+
+            .login-footer-link a:hover {
+                text-decoration: underline;
+            }
+
+    .login-security-note {
+        width: 100%;
+        max-width: 420px;
+        margin: 18px auto 0;
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 13px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
+        color: #475569;
+        font-size: .78rem;
+        line-height: 1.45;
+    }
+
+        .login-security-note div {
+            width: 30px;
+            height: 30px;
+            min-width: 30px;
+            border-radius: 11px;
+            background: #ffffff;
+            color: #8FA6A1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
     @@media (max-width: 991px) {
         .login-card {
             grid-template-columns: 1fr;
+            max-width: 720px;
         }
 
         .login-brand-panel,
@@ -355,22 +639,40 @@
         }
 
         .login-hero-copy h1 {
-            font-size: 1.65rem;
+            font-size: 1.75rem;
         }
 
         .login-feature-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .preview-metrics {
             grid-template-columns: 1fr;
         }
     }
 
     @@media (max-width: 640px) {
         .login-shell {
-            padding: 12px;
+            min-height: auto;
+            padding: 12px 12px 28px;
+            align-items: flex-start;
+        }
+
+        .login-card {
+            border-radius: 24px;
         }
 
         .login-brand-panel,
         .login-form-panel {
             padding: 22px;
+        }
+
+        .login-hero-copy h1 {
+            font-size: 1.45rem;
+        }
+
+        .preview-chart {
+            height: 74px;
         }
     }
 </style>

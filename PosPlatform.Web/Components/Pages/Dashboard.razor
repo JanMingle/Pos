@@ -3,29 +3,48 @@
 @rendermode InteractiveServer
 @layout MainLayout
 @attribute [Authorize]
+@using System.Globalization
 @using PosPlatform.Web.Components.Layout
 @using PosPlatform.Web.Models.Dashboard
 @using PosPlatform.Web.Models.Settings
 @using PosPlatform.Web.Services
+@using PosPlatform.Web.Components.Shared
 @inject DashboardService DashboardService
 @inject BusinessSettingsService BusinessSettingsService
-@using PosPlatform.Web.Components.Shared
+@inject NavigationManager Nav
 
 <PageTitle>Dashboard</PageTitle>
 
 <section class="dash-page">
-    <div class="dash-top">
-        <div class="dash-title-area">
+    <div class="dash-hero">
+        <div class="dash-hero-content">
             <div class="dash-kicker">
                 <i class="bi bi-speedometer2"></i>
-                Dashboard
+                Business dashboard
             </div>
 
             <h1>@Greeting, @_settings.BusinessName</h1>
             <p>Track today’s sales, profit, stock alerts, cashier shift and recent business activity.</p>
+
+            <div class="dash-hero-badges">
+                <span>
+                    <i class="bi bi-shop"></i>
+                    @_dashboard.SelectedBranchName
+                </span>
+
+                <span>
+                    <i class="bi bi-briefcase"></i>
+                    @_settings.BusinessType
+                </span>
+
+                <span>
+                    <i class="bi bi-cash"></i>
+                    @_settings.CurrencyCode · @_settings.CurrencySymbol
+                </span>
+            </div>
         </div>
 
-        <div class="dash-toolbar">
+        <div class="dash-hero-actions">
             <select class="dash-select" @bind="_branchFilter">
                 <option value="">All branches</option>
                 @foreach (var branch in _dashboard.Branches)
@@ -49,28 +68,6 @@
                 <i class="bi bi-cart-check"></i>
                 New Sale
             </a>
-        </div>
-    </div>
-
-    <div class="dash-branch-strip">
-        <div>
-            <span>Current view</span>
-            <strong>@_dashboard.SelectedBranchName</strong>
-        </div>
-
-        <div>
-            <span>Business</span>
-            <strong>@_settings.BusinessType</strong>
-        </div>
-
-        <div>
-            <span>Currency</span>
-            <strong>@_settings.CurrencyCode · @_settings.CurrencySymbol</strong>
-        </div>
-
-        <div>
-            <span>Stock tracking</span>
-            <strong>@(_settings.StockTrackingEnabled ? "Enabled" : "Disabled")</strong>
         </div>
     </div>
 
@@ -141,6 +138,208 @@
                 <span>Low Stock</span>
                 <strong>@_dashboard.LowStockCount</strong>
                 <small>@_dashboard.OutOfStockCount out of stock</small>
+            </div>
+        </div>
+
+        <div class="dash-insight-grid">
+            <div class="dash-insight-card">
+                <span>Today’s Health</span>
+                <strong class="@GetProfitTextClass(_dashboard.TodayNetProfit)">
+                    @ProfitStatus
+                </strong>
+                <small>@Money(_dashboard.TodayNetProfit) net profit</small>
+            </div>
+
+            <div class="dash-insight-card">
+                <span>Average Sale</span>
+                <strong>@Money(AverageSaleToday)</strong>
+                <small>Based on today’s transactions</small>
+            </div>
+
+            <div class="dash-insight-card">
+                <span>Payment Mix</span>
+                <strong>@TopPaymentMethod</strong>
+                <small>Current shift strongest method</small>
+            </div>
+
+            <div class="dash-insight-card">
+                <span>Stock Health</span>
+                <strong>@StockHealthStatus</strong>
+                <small>@_dashboard.LowStockCount low · @_dashboard.OutOfStockCount out</small>
+            </div>
+        </div>
+
+        <div class="dash-chart-grid">
+            <div class="dash-chart-card">
+                <div class="dash-panel-header">
+                    <div>
+                        <h2>Today’s Money Flow</h2>
+                        <p>Sales, profit, expenses and refunds compared visually.</p>
+                    </div>
+                </div>
+
+                <div class="dash-bar-chart">
+                    <div class="dash-bar-row">
+                        <div class="dash-bar-label">
+                            <span>Net Sales</span>
+                            <strong>@Money(_dashboard.TodayNetSales)</strong>
+                        </div>
+                        <div class="dash-bar-track">
+                            <div class="dash-bar-fill dark" style="@GetBarStyle(_dashboard.TodayNetSales, MoneyFlowMax)"></div>
+                        </div>
+                    </div>
+
+                    <div class="dash-bar-row">
+                        <div class="dash-bar-label">
+                            <span>Gross Profit</span>
+                            <strong>@Money(_dashboard.TodayGrossProfit)</strong>
+                        </div>
+                        <div class="dash-bar-track">
+                            <div class="dash-bar-fill green" style="@GetBarStyle(_dashboard.TodayGrossProfit, MoneyFlowMax)"></div>
+                        </div>
+                    </div>
+
+                    <div class="dash-bar-row">
+                        <div class="dash-bar-label">
+                            <span>Expenses</span>
+                            <strong>@Money(_dashboard.TodayExpenses)</strong>
+                        </div>
+                        <div class="dash-bar-track">
+                            <div class="dash-bar-fill red" style="@GetBarStyle(_dashboard.TodayExpenses, MoneyFlowMax)"></div>
+                        </div>
+                    </div>
+
+                    <div class="dash-bar-row">
+                        <div class="dash-bar-label">
+                            <span>Refunds</span>
+                            <strong>@Money(_dashboard.TodayRefunds)</strong>
+                        </div>
+                        <div class="dash-bar-track">
+                            <div class="dash-bar-fill amber" style="@GetBarStyle(_dashboard.TodayRefunds, MoneyFlowMax)"></div>
+                        </div>
+                    </div>
+
+                    <div class="dash-bar-row">
+                        <div class="dash-bar-label">
+                            <span>Net Profit</span>
+                            <strong class="@GetProfitTextClass(_dashboard.TodayNetProfit)">
+                                @Money(_dashboard.TodayNetProfit)
+                            </strong>
+                        </div>
+                        <div class="dash-bar-track">
+                            <div class="dash-bar-fill @(_dashboard.TodayNetProfit >= 0 ? "green" : "red")" style="@GetBarStyle(_dashboard.TodayNetProfit, MoneyFlowMax)"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dash-chart-card">
+                <div class="dash-panel-header">
+                    <div>
+                        <h2>Payment Mix</h2>
+                        <p>Current open shift sales by payment method.</p>
+                    </div>
+
+                    <a href="/cashier-shift" class="dash-panel-link">Open Shifts</a>
+                </div>
+
+                <div class="dash-donut-layout">
+                    <div class="dash-donut" style="@GetPaymentDonutStyle()">
+                        <div>
+                            <strong>@Money(PaymentMixTotal)</strong>
+                            <span>Total shift sales</span>
+                        </div>
+                    </div>
+
+                    <div class="dash-donut-legend">
+                        <div>
+                            <span class="legend-dot cash"></span>
+                            <strong>Cash</strong>
+                            <em>@PercentageText(CurrentCashSales, PaymentMixTotal)</em>
+                        </div>
+
+                        <div>
+                            <span class="legend-dot card"></span>
+                            <strong>Card</strong>
+                            <em>@PercentageText(CurrentCardSales, PaymentMixTotal)</em>
+                        </div>
+
+                        <div>
+                            <span class="legend-dot eft"></span>
+                            <strong>EFT</strong>
+                            <em>@PercentageText(CurrentEftSales, PaymentMixTotal)</em>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dash-chart-card">
+                <div class="dash-panel-header">
+                    <div>
+                        <h2>Stock Health</h2>
+                        <p>Low-stock and out-of-stock risk view.</p>
+                    </div>
+
+                    <a href="/stock" class="dash-panel-link">View Stock</a>
+                </div>
+
+                <div class="dash-stock-chart">
+                    <div class="dash-stock-meter">
+                        <div style="@GetBarStyle(_dashboard.LowStockCount, StockAlertMax)"></div>
+                    </div>
+
+                    <div class="dash-stock-stats">
+                        <div>
+                            <span>Low Stock</span>
+                            <strong>@_dashboard.LowStockCount</strong>
+                        </div>
+
+                        <div>
+                            <span>Out of Stock</span>
+                            <strong class="danger">@_dashboard.OutOfStockCount</strong>
+                        </div>
+
+                        <div>
+                            <span>Status</span>
+                            <strong>@StockHealthStatus</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dash-chart-card">
+                <div class="dash-panel-header">
+                    <div>
+                        <h2>Today’s Activity</h2>
+                        <p>Transactions, expenses and refund counts.</p>
+                    </div>
+                </div>
+
+                <div class="dash-activity-bars">
+                    <div>
+                        <span>Sales</span>
+                        <strong>@_dashboard.TodayTransactionCount</strong>
+                        <div>
+                            <em style="@GetBarStyle(_dashboard.TodayTransactionCount, ActivityMax)"></em>
+                        </div>
+                    </div>
+
+                    <div>
+                        <span>Expenses</span>
+                        <strong>@_dashboard.TodayExpenseCount</strong>
+                        <div>
+                            <em class="red" style="@GetBarStyle(_dashboard.TodayExpenseCount, ActivityMax)"></em>
+                        </div>
+                    </div>
+
+                    <div>
+                        <span>Refunds</span>
+                        <strong>@_dashboard.TodayRefundCount</strong>
+                        <div>
+                            <em class="amber" style="@GetBarStyle(_dashboard.TodayRefundCount, ActivityMax)"></em>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -419,15 +618,20 @@
         animation: dashIn .22s ease both;
     }
 
-    .dash-top {
+    .dash-hero {
         display: flex;
         justify-content: space-between;
-        align-items: flex-end;
+        align-items: flex-start;
         gap: 18px;
+        padding: 20px;
         margin-bottom: 16px;
+        border-radius: 24px;
+        background: radial-gradient(circle at top right, rgba(143, 166, 161, .22), transparent 34%), linear-gradient(135deg, #ffffff, #f8fafc);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
     }
 
-    .dash-title-area {
+    .dash-hero-content {
         min-width: 0;
     }
 
@@ -443,22 +647,47 @@
         margin-bottom: 8px;
     }
 
-    .dash-title-area h1 {
+    .dash-hero h1 {
         margin: 0;
         color: #111827;
-        font-size: 1.45rem;
-        font-weight: 720;
-        letter-spacing: -.035em;
+        font-size: 1.55rem;
+        font-weight: 780;
+        letter-spacing: -.04em;
     }
 
-    .dash-title-area p {
+    .dash-hero p {
         margin: 7px 0 0;
         color: #667085;
-        font-size: .88rem;
-        max-width: 720px;
+        font-size: .9rem;
+        max-width: 760px;
     }
 
-    .dash-toolbar {
+    .dash-hero-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 14px;
+    }
+
+        .dash-hero-badges span {
+            min-height: 30px;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 0 11px;
+            border-radius: 999px;
+            background: #ffffff;
+            border: 1px solid #e8eaef;
+            color: #475569;
+            font-size: .74rem;
+            font-weight: 720;
+        }
+
+        .dash-hero-badges i {
+            color: #8FA6A1;
+        }
+
+    .dash-hero-actions {
         display: flex;
         align-items: center;
         justify-content: flex-end;
@@ -491,7 +720,12 @@
         text-decoration: none;
         white-space: nowrap;
         border: 0;
+        transition: transform .18s ease;
     }
+
+        .dash-btn:hover {
+            transform: translateY(-1px);
+        }
 
     .dash-btn-dark {
         color: #ffffff;
@@ -505,57 +739,39 @@
         border: 1px solid #e5e7eb;
     }
 
-    .dash-branch-strip {
+    .dash-summary-grid,
+    .dash-insight-grid,
+    .dash-chart-grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 10px;
-        margin-bottom: 14px;
-    }
-
-        .dash-branch-strip div {
-            padding: 13px 14px;
-            border-radius: 18px;
-            background: #ffffff;
-            border: 1px solid #e8eaef;
-            box-shadow: 0 10px 24px rgba(17, 24, 39, .035);
-        }
-
-        .dash-branch-strip span,
-        .dash-branch-strip strong {
-            display: block;
-        }
-
-        .dash-branch-strip span {
-            color: #98a2b3;
-            font-size: .7rem;
-            font-weight: 700;
-            letter-spacing: .03em;
-            text-transform: uppercase;
-        }
-
-        .dash-branch-strip strong {
-            margin-top: 5px;
-            color: #111827;
-            font-size: .82rem;
-            font-weight: 690;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-    .dash-summary-grid {
-        display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr));
         gap: 12px;
         margin: 16px 0;
     }
 
-    .dash-summary-card {
-        padding: 15px;
-        border-radius: 20px;
+    .dash-summary-grid {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .dash-insight-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .dash-chart-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .dash-summary-card,
+    .dash-insight-card,
+    .dash-chart-card,
+    .dash-panel {
         background: #ffffff;
         border: 1px solid #e8eaef;
         box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
+    }
+
+    .dash-summary-card,
+    .dash-insight-card {
+        padding: 15px;
+        border-radius: 20px;
     }
 
         .dash-summary-card.hero {
@@ -565,18 +781,27 @@
 
         .dash-summary-card span,
         .dash-summary-card strong,
-        .dash-summary-card small {
+        .dash-summary-card small,
+        .dash-insight-card span,
+        .dash-insight-card strong,
+        .dash-insight-card small {
             display: block;
         }
 
-        .dash-summary-card span {
+        .dash-summary-card span,
+        .dash-insight-card span {
             margin-top: 11px;
             color: #667085;
             font-size: .72rem;
-            font-weight: 680;
+            font-weight: 700;
         }
 
-        .dash-summary-card strong {
+        .dash-insight-card span {
+            margin-top: 0;
+        }
+
+        .dash-summary-card strong,
+        .dash-insight-card strong {
             margin-top: 6px;
             color: #111827;
             font-size: 1.05rem;
@@ -584,7 +809,8 @@
             letter-spacing: -.02em;
         }
 
-        .dash-summary-card small {
+        .dash-summary-card small,
+        .dash-insight-card small {
             margin-top: 4px;
             color: #98a2b3;
             font-size: .72rem;
@@ -634,24 +860,9 @@
             background: #eff6ff;
         }
 
-    .dash-main-grid {
-        display: grid;
-        grid-template-columns: 0.8fr 1.2fr;
-        gap: 16px;
-        align-items: start;
-    }
-
-    .dash-left-column,
-    .dash-right-column {
-        display: grid;
-        gap: 16px;
-    }
-
+    .dash-chart-card,
     .dash-panel {
-        background: #ffffff;
-        border: 1px solid #e8eaef;
         border-radius: 22px;
-        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
         overflow: hidden;
     }
 
@@ -696,6 +907,279 @@
         font-weight: 700;
         text-decoration: none;
         white-space: nowrap;
+    }
+
+    .dash-bar-chart {
+        padding: 16px 18px;
+        display: grid;
+        gap: 13px;
+    }
+
+    .dash-bar-row {
+        display: grid;
+        gap: 7px;
+    }
+
+    .dash-bar-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+        .dash-bar-label span {
+            color: #667085;
+            font-size: .78rem;
+            font-weight: 700;
+        }
+
+        .dash-bar-label strong {
+            color: #111827;
+            font-size: .78rem;
+            font-weight: 760;
+            text-align: right;
+        }
+
+    .dash-bar-track {
+        height: 10px;
+        border-radius: 999px;
+        background: #f3f4f6;
+        overflow: hidden;
+    }
+
+    .dash-bar-fill {
+        height: 100%;
+        min-width: 4px;
+        border-radius: 999px;
+    }
+
+        .dash-bar-fill.dark {
+            background: #252525;
+        }
+
+        .dash-bar-fill.green {
+            background: #8FA6A1;
+        }
+
+        .dash-bar-fill.red {
+            background: #d92d20;
+        }
+
+        .dash-bar-fill.amber {
+            background: #b7791f;
+        }
+
+    .dash-donut-layout {
+        padding: 16px 18px;
+        display: grid;
+        grid-template-columns: 190px minmax(0, 1fr);
+        gap: 16px;
+        align-items: center;
+    }
+
+    .dash-donut {
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        position: relative;
+        box-shadow: inset 0 0 0 1px rgba(17,24,39,.06);
+    }
+
+        .dash-donut::after {
+            content: "";
+            position: absolute;
+            width: 112px;
+            height: 112px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 10px 24px rgba(17,24,39,.08);
+        }
+
+        .dash-donut div {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            padding: 10px;
+        }
+
+        .dash-donut strong {
+            display: block;
+            color: #111827;
+            font-size: .92rem;
+            font-weight: 780;
+        }
+
+        .dash-donut span {
+            display: block;
+            margin-top: 3px;
+            color: #667085;
+            font-size: .68rem;
+            font-weight: 700;
+        }
+
+    .dash-donut-legend {
+        display: grid;
+        gap: 9px;
+    }
+
+        .dash-donut-legend div {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 8px;
+            align-items: center;
+            padding: 9px 10px;
+            border-radius: 13px;
+            background: #fafafa;
+            border: 1px solid #e8eaef;
+        }
+
+    .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+    }
+
+        .legend-dot.cash {
+            background: #252525;
+        }
+
+        .legend-dot.card {
+            background: #8FA6A1;
+        }
+
+        .legend-dot.eft {
+            background: #b7791f;
+        }
+
+    .dash-donut-legend strong {
+        color: #111827;
+        font-size: .78rem;
+    }
+
+    .dash-donut-legend em {
+        color: #667085;
+        font-style: normal;
+        font-size: .76rem;
+        font-weight: 700;
+    }
+
+    .dash-stock-chart {
+        padding: 18px;
+        display: grid;
+        gap: 15px;
+    }
+
+    .dash-stock-meter {
+        height: 16px;
+        border-radius: 999px;
+        background: #f3f4f6;
+        overflow: hidden;
+    }
+
+        .dash-stock-meter div {
+            height: 100%;
+            min-width: 4px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #b7791f, #d92d20);
+        }
+
+    .dash-stock-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+        .dash-stock-stats div {
+            padding: 12px;
+            border-radius: 15px;
+            background: #fafafa;
+            border: 1px solid #e8eaef;
+        }
+
+        .dash-stock-stats span,
+        .dash-stock-stats strong {
+            display: block;
+        }
+
+        .dash-stock-stats span {
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .dash-stock-stats strong {
+            margin-top: 4px;
+            color: #111827;
+            font-size: .9rem;
+            font-weight: 760;
+        }
+
+            .dash-stock-stats strong.danger {
+                color: #d92d20;
+            }
+
+    .dash-activity-bars {
+        padding: 18px;
+        display: grid;
+        gap: 12px;
+    }
+
+        .dash-activity-bars > div {
+            display: grid;
+            grid-template-columns: 90px 50px minmax(0, 1fr);
+            gap: 10px;
+            align-items: center;
+        }
+
+        .dash-activity-bars span {
+            color: #667085;
+            font-size: .76rem;
+            font-weight: 700;
+        }
+
+        .dash-activity-bars strong {
+            color: #111827;
+            font-size: .86rem;
+            font-weight: 760;
+            text-align: right;
+        }
+
+        .dash-activity-bars div div {
+            height: 10px;
+            border-radius: 999px;
+            background: #f3f4f6;
+            overflow: hidden;
+        }
+
+        .dash-activity-bars em {
+            display: block;
+            height: 100%;
+            min-width: 4px;
+            border-radius: 999px;
+            background: #8FA6A1;
+        }
+
+            .dash-activity-bars em.red {
+                background: #d92d20;
+            }
+
+            .dash-activity-bars em.amber {
+                background: #b7791f;
+            }
+
+    .dash-main-grid {
+        display: grid;
+        grid-template-columns: 0.8fr 1.2fr;
+        gap: 16px;
+        align-items: start;
+    }
+
+    .dash-left-column,
+    .dash-right-column {
+        display: grid;
+        gap: 16px;
     }
 
     .dash-shift-empty {
@@ -999,6 +1483,18 @@
         font-size: .78rem;
     }
 
+    .difference-good {
+        color: #15803d !important;
+    }
+
+    .difference-bad {
+        color: #d92d20 !important;
+    }
+
+    .difference-neutral {
+        color: #111827 !important;
+    }
+
     @@keyframes dashIn {
         from {
             opacity: 0;
@@ -1021,20 +1517,28 @@
         }
     }
 
+    @@media (max-width: 1199px) {
+        .dash-insight-grid,
+        .dash-chart-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
     @@media (max-width: 991px) {
-        .dash-top {
+        .dash-hero {
             flex-direction: column;
             align-items: flex-start;
         }
 
-        .dash-toolbar,
-        .dash-toolbar .dash-btn,
+        .dash-hero-actions,
+        .dash-hero-actions .dash-btn,
         .dash-select {
             width: 100%;
         }
 
-        .dash-branch-strip {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+        .dash-insight-grid,
+        .dash-chart-grid {
+            grid-template-columns: 1fr;
         }
 
         .two-column-panel {
@@ -1045,17 +1549,25 @@
             border-left: 0;
             border-top: 1px solid #f1f2f5;
         }
+
+        .dash-donut-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .dash-donut {
+            margin: 0 auto;
+        }
     }
 
     @@media (max-width: 640px) {
-        .dash-title-area h1 {
-            font-size: 1.2rem;
+        .dash-hero h1 {
+            font-size: 1.25rem;
         }
 
-        .dash-branch-strip,
         .dash-summary-grid,
         .dash-shift-metrics,
-        .dash-quick-actions {
+        .dash-quick-actions,
+        .dash-stock-stats {
             grid-template-columns: 1fr;
         }
 
@@ -1075,6 +1587,14 @@
 
         .dash-list-left {
             align-items: flex-start;
+        }
+
+        .dash-activity-bars > div {
+            grid-template-columns: 1fr;
+        }
+
+        .dash-activity-bars strong {
+            text-align: left;
         }
     }
 </style>
@@ -1106,12 +1626,74 @@
         }
     }
 
+    private decimal CurrentCashSales => _dashboard.OpenShift?.CashSales ?? 0m;
+    private decimal CurrentCardSales => _dashboard.OpenShift?.CardSales ?? 0m;
+    private decimal CurrentEftSales => _dashboard.OpenShift?.EftSales ?? 0m;
+
+    private decimal PaymentMixTotal =>
+        CurrentCashSales + CurrentCardSales + CurrentEftSales;
+
+    private decimal AverageSaleToday =>
+        _dashboard.TodayTransactionCount <= 0
+            ? 0
+            : _dashboard.TodayNetSales / _dashboard.TodayTransactionCount;
+
+    private decimal MoneyFlowMax =>
+        MaxOf(
+            _dashboard.TodayNetSales,
+            _dashboard.TodayGrossProfit,
+            _dashboard.TodayExpenses,
+            _dashboard.TodayRefunds,
+            Math.Abs(_dashboard.TodayNetProfit));
+
+    private int ActivityMax =>
+        Math.Max(1, MaxOfInt(_dashboard.TodayTransactionCount, _dashboard.TodayExpenseCount, _dashboard.TodayRefundCount));
+
+    private int StockAlertMax =>
+        Math.Max(1, _dashboard.LowStockCount + _dashboard.OutOfStockCount);
+
+    private string ProfitStatus =>
+        _dashboard.TodayNetProfit > 0
+            ? "Profitable"
+            : _dashboard.TodayNetProfit < 0
+                ? "Loss today"
+                : "Break-even";
+
+    private string StockHealthStatus =>
+        _dashboard.OutOfStockCount > 0
+            ? "Needs attention"
+            : _dashboard.LowStockCount > 0
+                ? "Watch stock"
+                : "Healthy";
+
+    private string TopPaymentMethod
+    {
+        get
+        {
+            var methods = new List<(string Name, decimal Value)>
+            {
+                ("Cash", CurrentCashSales),
+                ("Card", CurrentCardSales),
+                ("EFT", CurrentEftSales)
+            };
+
+            var top = methods.OrderByDescending(x => x.Value).FirstOrDefault();
+
+            return top.Value <= 0 ? "No data" : top.Name;
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         _settings = await BusinessSettingsService.GetSettingsAsync();
+
+        if (!_settings.SetupCompleted)
+        {
+            Nav.NavigateTo("/setup-business", true); return;
+        }
+
         await LoadDashboardAsync();
     }
-
     private async Task LoadDashboardAsync()
     {
         _loading = true;
@@ -1126,5 +1708,89 @@
             : _settings.CurrencySymbol;
 
         return $"{symbol} {value:0.00}";
+    }
+
+    private decimal MaxOf(params decimal[] values)
+    {
+        var max = values
+            .Select(Math.Abs)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        return max <= 0 ? 1 : max;
+    }
+
+    private int MaxOfInt(params int[] values)
+    {
+        return values
+            .DefaultIfEmpty(0)
+            .Max();
+    }
+
+    private string GetBarStyle(decimal value, decimal max)
+    {
+        if (max <= 0)
+        {
+            return "width:0%;";
+        }
+
+        var width = Math.Min(100, Math.Abs(value) / max * 100);
+
+        return $"width:{width.ToString("0.##", CultureInfo.InvariantCulture)}%;";
+    }
+
+    private string GetBarStyle(int value, int max)
+    {
+        if (max <= 0)
+        {
+            return "width:0%;";
+        }
+
+        var width = Math.Min(100, value / (decimal)max * 100);
+
+        return $"width:{width.ToString("0.##", CultureInfo.InvariantCulture)}%;";
+    }
+
+    private string PercentageText(decimal value, decimal total)
+    {
+        if (total <= 0)
+        {
+            return "0%";
+        }
+
+        var percentage = value / total * 100;
+
+        return $"{percentage.ToString("0.##", CultureInfo.InvariantCulture)}%";
+    }
+
+    private string GetPaymentDonutStyle()
+    {
+        if (PaymentMixTotal <= 0)
+        {
+            return "background:#f3f4f6;";
+        }
+
+        var cashEnd = CurrentCashSales / PaymentMixTotal * 100;
+        var cardEnd = cashEnd + (CurrentCardSales / PaymentMixTotal * 100);
+
+        var cash = cashEnd.ToString("0.##", CultureInfo.InvariantCulture);
+        var card = cardEnd.ToString("0.##", CultureInfo.InvariantCulture);
+
+        return $"background:conic-gradient(#252525 0 {cash}%, #8FA6A1 {cash}% {card}%, #b7791f {card}% 100%);";
+    }
+
+    private string GetProfitTextClass(decimal value)
+    {
+        if (value > 0)
+        {
+            return "difference-good";
+        }
+
+        if (value < 0)
+        {
+            return "difference-bad";
+        }
+
+        return "difference-neutral";
     }
 }

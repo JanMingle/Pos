@@ -1,0 +1,834 @@
+﻿@page "/setup-business"
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@layout MainLayout
+@attribute [Authorize]
+@using PosPlatform.Web.Components.Layout
+@using PosPlatform.Web.Models.Settings
+@using PosPlatform.Web.Services
+@inject BusinessSettingsService BusinessSettingsService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Complete Business Setup | JMingle</PageTitle>
+
+<section class="setup-page">
+    <div class="setup-hero">
+        <div>
+            <div class="setup-kicker">
+                <i class="bi bi-stars"></i>
+                Final setup
+            </div>
+
+            <h1>Complete your JMingle setup</h1>
+            <p>
+                Before opening your dashboard, confirm VAT, modules, POS rules and receipt settings.
+                You can still update these later from Settings.
+            </p>
+        </div>
+
+        <div class="setup-progress-card">
+            <span>Setup status</span>
+            <strong>Almost ready</strong>
+            <div class="setup-progress">
+                <div></div>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="setup-alert @(_isSuccess ? "success" : "danger")">
+            <i class="bi @(_isSuccess ? "bi-check-circle" : "bi-exclamation-triangle")"></i>
+            <span>@_message</span>
+        </div>
+    }
+
+    @if (_loading)
+    {
+        <div class="setup-empty">
+            <strong>Loading setup...</strong>
+            <span>Please wait while we prepare your business settings.</span>
+        </div>
+    }
+    else
+    {
+        <EditForm Model="_form" OnValidSubmit="SaveSetupAsync" OnInvalidSubmit="HandleInvalidSubmit">
+            <DataAnnotationsValidator />
+
+            <div class="setup-grid">
+                <div class="setup-panel">
+                    <div class="setup-panel-header">
+                        <div class="setup-panel-icon">
+                            <i class="bi bi-cash-stack"></i>
+                        </div>
+
+                        <div>
+                            <h2>VAT / Tax Settings</h2>
+                            <p>Choose whether your business will calculate VAT or tax.</p>
+                        </div>
+                    </div>
+
+                    <div class="setup-form-grid">
+                        <label class="setup-check-card span-2">
+                            <InputCheckbox @bind-Value="_form.TaxEnabled" />
+                            <span>
+                                <strong>Enable VAT / tax</strong>
+                                <small>Turn this on if receipts and sales must include VAT/tax calculation.</small>
+                            </span>
+                        </label>
+
+                        <div>
+                            <label>Tax Name</label>
+                            <InputText class="setup-input" @bind-Value="_form.TaxName" />
+                        </div>
+
+                        <div>
+                            <label>Tax Rate %</label>
+                            <InputNumber class="setup-input" @bind-Value="_form.TaxRate" />
+                        </div>
+
+                        <div>
+                            <label>Currency Code</label>
+                            <InputText class="setup-input" @bind-Value="_form.CurrencyCode" />
+                        </div>
+
+                        <div>
+                            <label>Currency Symbol</label>
+                            <InputText class="setup-input" @bind-Value="_form.CurrencySymbol" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="setup-panel">
+                    <div class="setup-panel-header">
+                        <div class="setup-panel-icon">
+                            <i class="bi bi-grid-1x2"></i>
+                        </div>
+
+                        <div>
+                            <h2>Modules & POS Rules</h2>
+                            <p>Select which JMingle modules and checkout rules this business will use.</p>
+                        </div>
+                    </div>
+
+                    <div class="setup-switch-grid">
+                        <label class="setup-check-card">
+                            <InputCheckbox @bind-Value="_form.ProductsEnabled" />
+                            <span>
+                                <strong>Products</strong>
+                                <small>Enable product catalogue.</small>
+                            </span>
+                        </label>
+
+                        <label class="setup-check-card">
+                            <InputCheckbox @bind-Value="_form.StockTrackingEnabled" />
+                            <span>
+                                <strong>Stock Tracking</strong>
+                                <small>Track quantities and movement history.</small>
+                            </span>
+                        </label>
+
+                        <label class="setup-check-card">
+                            <InputCheckbox @bind-Value="_form.ServicesEnabled" />
+                            <span>
+                                <strong>Services</strong>
+                                <small>Useful for service businesses.</small>
+                            </span>
+                        </label>
+
+                        <label class="setup-check-card">
+                            <InputCheckbox @bind-Value="_form.AppointmentsEnabled" />
+                            <span>
+                                <strong>Appointments</strong>
+                                <small>Enable booking-related setup later.</small>
+                            </span>
+                        </label>
+
+                        <label class="setup-check-card">
+                            <InputCheckbox @bind-Value="_form.CustomersEnabled" />
+                            <span>
+                                <strong>Customers</strong>
+                                <small>Track customer profiles and history.</small>
+                            </span>
+                        </label>
+
+                        <label class="setup-check-card">
+                            <InputCheckbox @bind-Value="_form.AgeRestrictedProductsEnabled" />
+                            <span>
+                                <strong>Age-Restricted Products</strong>
+                                <small>Use when products need age checks.</small>
+                            </span>
+                        </label>
+
+                        <label class="setup-check-card">
+                            <InputCheckbox @bind-Value="_form.AllowDiscounts" />
+                            <span>
+                                <strong>Allow Discounts</strong>
+                                <small>Allow discounts during checkout.</small>
+                            </span>
+                        </label>
+
+                        <label class="setup-check-card">
+                            <InputCheckbox @bind-Value="_form.AllowNegativeStock" />
+                            <span>
+                                <strong>Allow Negative Stock</strong>
+                                <small>Usually keep this off for stock control.</small>
+                            </span>
+                        </label>
+
+                        <label class="setup-check-card">
+                            <InputCheckbox @bind-Value="_form.RequireCustomerForSale" />
+                            <span>
+                                <strong>Require Customer for Sale</strong>
+                                <small>Useful for account-based sales.</small>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="setup-panel">
+                    <div class="setup-panel-header">
+                        <div class="setup-panel-icon">
+                            <i class="bi bi-receipt"></i>
+                        </div>
+
+                        <div>
+                            <h2>Receipt Settings</h2>
+                            <p>Set the wording customers will see on receipts.</p>
+                        </div>
+                    </div>
+
+                    <div class="setup-form-grid">
+                        <div class="span-2">
+                            <label>Receipt Title</label>
+                            <InputText class="setup-input" @bind-Value="_form.ReceiptTitle" />
+                        </div>
+
+                        <div class="span-2">
+                            <label>Receipt Footer Message</label>
+                            <InputTextArea class="setup-input setup-textarea" @bind-Value="_form.ReceiptFooterMessage" />
+                        </div>
+
+                        <div class="span-2">
+                            <label>Return Policy Text</label>
+                            <InputTextArea class="setup-input setup-textarea" @bind-Value="_form.ReturnPolicyText" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="setup-preview-panel">
+                    <div class="setup-panel-header">
+                        <div class="setup-panel-icon">
+                            <i class="bi bi-eye"></i>
+                        </div>
+
+                        <div>
+                            <h2>Setup Preview</h2>
+                            <p>Quick view of your selected rules.</p>
+                        </div>
+                    </div>
+
+                    <div class="setup-preview-box">
+                        <div>
+                            <span>VAT / Tax</span>
+                            <strong>@GetTaxLabel()</strong>
+                        </div>
+
+                        <div>
+                            <span>Stock</span>
+                            <strong>@YesNo(_form.StockTrackingEnabled)</strong>
+                        </div>
+
+                        <div>
+                            <span>Customers</span>
+                            <strong>@YesNo(_form.CustomersEnabled)</strong>
+                        </div>
+
+                        <div>
+                            <span>Discounts</span>
+                            <strong>@YesNo(_form.AllowDiscounts)</strong>
+                        </div>
+                    </div>
+
+                    <div class="setup-receipt-preview">
+                        <strong>@_form.BusinessName</strong>
+                        <span>@_form.ReceiptTitle</span>
+                        <small>@_form.ReceiptFooterMessage</small>
+
+                        @if (!string.IsNullOrWhiteSpace(_form.ReturnPolicyText))
+                        {
+                            <em>@_form.ReturnPolicyText</em>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <ValidationSummary class="setup-validation" />
+
+            <div class="setup-actions">
+                <button type="submit" class="@SaveButtonClass">
+                    <i class="bi bi-check2-circle"></i>
+                    @(_saving ? "Saving setup..." : "Complete Setup & Open Dashboard")
+                </button>
+            </div>
+        </EditForm>
+    }
+</section>
+
+<style>
+    .setup-page {
+        animation: setupIn .22s ease both;
+    }
+
+    .setup-hero {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        align-items: flex-start;
+        padding: 22px;
+        margin-bottom: 16px;
+        border-radius: 24px;
+        background: radial-gradient(circle at top right, rgba(143, 166, 161, .24), transparent 34%), #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
+    }
+
+    .setup-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 800;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+
+    .setup-hero h1 {
+        margin: 0;
+        color: #111827;
+        font-size: 1.55rem;
+        font-weight: 820;
+        letter-spacing: -.04em;
+    }
+
+    .setup-hero p {
+        margin: 8px 0 0;
+        color: #667085;
+        font-size: .9rem;
+        max-width: 760px;
+        line-height: 1.6;
+    }
+
+    .setup-progress-card {
+        min-width: 230px;
+        padding: 14px;
+        border-radius: 18px;
+        background: #252525;
+        color: #ffffff;
+    }
+
+        .setup-progress-card span,
+        .setup-progress-card strong {
+            display: block;
+        }
+
+        .setup-progress-card span {
+            color: rgba(255,255,255,.62);
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .setup-progress-card strong {
+            margin-top: 4px;
+            font-size: .95rem;
+            font-weight: 820;
+        }
+
+    .setup-progress {
+        height: 8px;
+        margin-top: 12px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.14);
+        overflow: hidden;
+    }
+
+        .setup-progress div {
+            width: 86%;
+            height: 100%;
+            background: linear-gradient(90deg, #ffffff, #8FA6A1);
+            border-radius: inherit;
+        }
+
+    .setup-alert,
+    .setup-validation {
+        margin-bottom: 16px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        font-size: .84rem;
+        font-weight: 650;
+    }
+
+        .setup-alert.success {
+            background: #ecfdf5;
+            color: #15803d;
+            border: 1px solid #bbf7d0;
+        }
+
+        .setup-alert.danger,
+        .setup-validation {
+            background: #fef3f2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+    .setup-empty {
+        padding: 34px;
+        border-radius: 20px;
+        background: #ffffff;
+        border: 1px dashed #d0d5dd;
+        text-align: center;
+    }
+
+        .setup-empty strong,
+        .setup-empty span {
+            display: block;
+        }
+
+        .setup-empty strong {
+            color: #111827;
+            font-size: .92rem;
+        }
+
+        .setup-empty span {
+            margin-top: 5px;
+            color: #667085;
+            font-size: .8rem;
+        }
+
+    .setup-grid {
+        display: grid;
+        grid-template-columns: 1.1fr .9fr;
+        gap: 16px;
+        align-items: start;
+    }
+
+    .setup-panel,
+    .setup-preview-panel {
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        border-radius: 22px;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
+        padding: 18px;
+    }
+
+    .setup-preview-panel {
+        position: sticky;
+        top: 88px;
+    }
+
+    .setup-panel-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 11px;
+        margin-bottom: 15px;
+    }
+
+    .setup-panel-icon {
+        width: 38px;
+        height: 38px;
+        min-width: 38px;
+        border-radius: 14px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .setup-panel-header h2 {
+        margin: 0;
+        color: #111827;
+        font-size: .98rem;
+        font-weight: 820;
+    }
+
+    .setup-panel-header p {
+        margin: 4px 0 0;
+        color: #98a2b3;
+        font-size: .76rem;
+        line-height: 1.45;
+    }
+
+    .setup-form-grid,
+    .setup-switch-grid {
+        display: grid;
+        gap: 12px;
+    }
+
+    .setup-form-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .setup-switch-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .span-2 {
+        grid-column: 1 / -1;
+    }
+
+    .setup-form-grid label:not(.setup-check-card) {
+        display: block;
+        margin-bottom: 7px;
+        color: #475569;
+        font-size: .78rem;
+        font-weight: 760;
+    }
+
+    .setup-input {
+        width: 100%;
+        min-height: 44px;
+        border-radius: 14px;
+        border: 1px solid #e5e7eb;
+        background: #fafafa;
+        color: #111827;
+        padding: 0 12px;
+        font-size: 16px;
+        outline: none;
+    }
+
+        .setup-input:focus {
+            border-color: #cfd8d5;
+            box-shadow: 0 0 0 4px rgba(143,166,161,.11);
+            background: #ffffff;
+        }
+
+    .setup-textarea {
+        min-height: 92px;
+        padding-top: 11px;
+        resize: vertical;
+    }
+
+    .setup-check-card {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 13px;
+        border-radius: 17px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+        cursor: pointer;
+        transition: border-color .18s ease, background .18s ease, transform .18s ease;
+    }
+
+        .setup-check-card:hover {
+            transform: translateY(-1px);
+            background: #ffffff;
+            border-color: #dce7e4;
+        }
+
+        .setup-check-card input[type="checkbox"] {
+            margin-top: 4px;
+            accent-color: #8FA6A1;
+        }
+
+        .setup-check-card strong,
+        .setup-check-card small {
+            display: block;
+        }
+
+        .setup-check-card strong {
+            color: #111827;
+            font-size: .8rem;
+            font-weight: 820;
+        }
+
+        .setup-check-card small {
+            margin-top: 3px;
+            color: #667085;
+            font-size: .7rem;
+            line-height: 1.4;
+        }
+
+    .setup-preview-box {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+        .setup-preview-box div {
+            padding: 12px;
+            border-radius: 16px;
+            background: #fafafa;
+            border: 1px solid #e8eaef;
+        }
+
+        .setup-preview-box span,
+        .setup-preview-box strong {
+            display: block;
+        }
+
+        .setup-preview-box span {
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .setup-preview-box strong {
+            margin-top: 4px;
+            color: #111827;
+            font-size: .86rem;
+            font-weight: 820;
+        }
+
+    .setup-receipt-preview {
+        padding: 18px;
+        border-radius: 20px;
+        background: #252525;
+        color: #ffffff;
+        text-align: center;
+    }
+
+        .setup-receipt-preview strong,
+        .setup-receipt-preview span,
+        .setup-receipt-preview small,
+        .setup-receipt-preview em {
+            display: block;
+        }
+
+        .setup-receipt-preview strong {
+            font-size: .95rem;
+            font-weight: 820;
+        }
+
+        .setup-receipt-preview span {
+            margin-top: 10px;
+            color: rgba(255,255,255,.78);
+            font-size: .82rem;
+            font-weight: 700;
+        }
+
+        .setup-receipt-preview small {
+            margin-top: 12px;
+            color: rgba(255,255,255,.64);
+            font-size: .74rem;
+        }
+
+        .setup-receipt-preview em {
+            margin-top: 10px;
+            color: rgba(255,255,255,.52);
+            font-size: .7rem;
+            font-style: normal;
+        }
+
+    .setup-actions {
+        margin-top: 16px;
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .setup-primary-btn {
+        min-height: 46px;
+        border: 0;
+        border-radius: 15px;
+        padding: 0 18px;
+        background: #252525;
+        color: #ffffff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        font-size: .9rem;
+        font-weight: 780;
+        box-shadow: 0 16px 34px rgba(17,24,39,.18);
+    }
+
+        .setup-primary-btn.is-disabled {
+            opacity: .55;
+            pointer-events: none;
+        }
+
+    @@keyframes setupIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width: 1200px) {
+        .setup-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .setup-preview-panel {
+            position: static;
+        }
+    }
+
+    @@media (max-width: 991px) {
+        .setup-hero {
+            flex-direction: column;
+        }
+
+        .setup-progress-card {
+            width: 100%;
+        }
+
+        .setup-switch-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 640px) {
+        .setup-form-grid,
+        .setup-switch-grid,
+        .setup-preview-box {
+            grid-template-columns: 1fr;
+        }
+
+        .span-2 {
+            grid-column: span 1;
+        }
+
+        .setup-actions,
+        .setup-primary-btn {
+            width: 100%;
+        }
+    }
+</style>
+
+@code {
+    private BusinessSettingsFormModel _form = new();
+
+    private bool _loading = true;
+    private bool _saving;
+
+    private string? _message;
+    private bool _isSuccess;
+
+    private string SaveButtonClass =>
+        _saving
+            ? "setup-primary-btn is-disabled"
+            : "setup-primary-btn";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _form = await BusinessSettingsService.GetSettingsAsync();
+
+        if (_form.SetupCompleted)
+        {
+            NavigationManager.NavigateTo("/dashboard");
+            return;
+        }
+
+        EnsureDefaults();
+
+        _loading = false;
+    }
+
+    private void EnsureDefaults()
+    {
+        if (string.IsNullOrWhiteSpace(_form.BusinessName))
+        {
+            _form.BusinessName = "My Business";
+        }
+
+        if (string.IsNullOrWhiteSpace(_form.BusinessType))
+        {
+            _form.BusinessType = "General Business";
+        }
+
+        if (string.IsNullOrWhiteSpace(_form.CurrencyCode))
+        {
+            _form.CurrencyCode = "ZAR";
+        }
+
+        if (string.IsNullOrWhiteSpace(_form.CurrencySymbol))
+        {
+            _form.CurrencySymbol = "R";
+        }
+
+        if (string.IsNullOrWhiteSpace(_form.TaxName))
+        {
+            _form.TaxName = "VAT";
+        }
+
+        if (string.IsNullOrWhiteSpace(_form.ReceiptTitle))
+        {
+            _form.ReceiptTitle = "Sales Receipt";
+        }
+
+        if (string.IsNullOrWhiteSpace(_form.ReceiptFooterMessage))
+        {
+            _form.ReceiptFooterMessage = "Thank you for your purchase.";
+        }
+
+        _form.ProductsEnabled = true;
+        _form.CustomersEnabled = true;
+        _form.AllowDiscounts = true;
+    }
+
+    private async Task SaveSetupAsync()
+    {
+        if (_saving)
+        {
+            return;
+        }
+
+        _saving = true;
+        _message = null;
+        _isSuccess = false;
+
+        try
+        {
+            _form.SetupCompleted = true;
+
+            var result = await BusinessSettingsService.SaveSettingsAsync(_form);
+
+            _message = result.Message;
+            _isSuccess = result.Success;
+
+            if (result.Success)
+            {
+                NavigationManager.NavigateTo("/dashboard", true);
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void HandleInvalidSubmit()
+    {
+        _message = "Please complete all required setup fields before opening the dashboard.";
+        _isSuccess = false;
+    }
+
+    private string YesNo(bool value)
+    {
+        return value ? "Enabled" : "Disabled";
+    }
+
+    private string GetTaxLabel()
+    {
+        if (!_form.TaxEnabled)
+        {
+            return "Disabled";
+        }
+
+        var taxName = string.IsNullOrWhiteSpace(_form.TaxName) ? "Tax" : _form.TaxName;
+        return $"{taxName} {_form.TaxRate:0.##}%";
+    }
+}

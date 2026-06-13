@@ -71,7 +71,18 @@ namespace PosPlatform.Web.Services
             {
                 return new BusinessSettingsFormModel
                 {
-                    BusinessName = "My Business"
+                    BusinessName = "My Business",
+                    BusinessType = "General Business",
+                    CurrencyCode = "ZAR",
+                    CurrencySymbol = "R",
+                    TaxName = "VAT",
+                    ReceiptTitle = "Sales Receipt",
+                    ReceiptFooterMessage = "Thank you for your purchase.",
+                    ProductsEnabled = true,
+                    StockTrackingEnabled = true,
+                    CustomersEnabled = true,
+                    AllowDiscounts = true,
+                    SetupCompleted = false
                 };
             }
 
@@ -95,13 +106,21 @@ namespace PosPlatform.Web.Services
                     Phone = tenant?.Phone,
                     CurrencyCode = "ZAR",
                     CurrencySymbol = "R",
+                    TaxEnabled = false,
                     TaxName = "VAT",
+                    TaxRate = 0,
                     ReceiptTitle = "Sales Receipt",
                     ReceiptFooterMessage = "Thank you for your purchase.",
                     ProductsEnabled = true,
                     StockTrackingEnabled = true,
+                    ServicesEnabled = false,
+                    AppointmentsEnabled = false,
                     CustomersEnabled = true,
-                    AllowDiscounts = true
+                    AgeRestrictedProductsEnabled = false,
+                    AllowNegativeStock = false,
+                    RequireCustomerForSale = false,
+                    AllowDiscounts = true,
+                    SetupCompleted = false
                 };
             }
 
@@ -129,7 +148,8 @@ namespace PosPlatform.Web.Services
                 AllowDiscounts = settings.AllowDiscounts,
                 ReceiptTitle = settings.ReceiptTitle,
                 ReceiptFooterMessage = settings.ReceiptFooterMessage,
-                ReturnPolicyText = settings.ReturnPolicyText
+                ReturnPolicyText = settings.ReturnPolicyText,
+                SetupCompleted = settings.SetupCompleted
             };
         }
 
@@ -208,7 +228,8 @@ namespace PosPlatform.Web.Services
                     settings.AllowDiscounts,
                     settings.ReceiptTitle,
                     settings.ReceiptFooterMessage,
-                    settings.ReturnPolicyText
+                    settings.ReturnPolicyText,
+                    settings.SetupCompleted
                 };
             }
 
@@ -217,11 +238,14 @@ namespace PosPlatform.Web.Services
             settings.Address = Clean(model.Address);
             settings.Phone = Clean(model.Phone);
             settings.Email = Clean(model.Email);
+
             settings.CurrencyCode = model.CurrencyCode.Trim().ToUpperInvariant();
             settings.CurrencySymbol = model.CurrencySymbol.Trim();
 
             settings.TaxEnabled = model.TaxEnabled;
-            settings.TaxName = string.IsNullOrWhiteSpace(model.TaxName) ? "VAT" : model.TaxName.Trim();
+            settings.TaxName = string.IsNullOrWhiteSpace(model.TaxName)
+                ? "VAT"
+                : model.TaxName.Trim();
             settings.TaxRate = model.TaxEnabled ? model.TaxRate : 0;
 
             settings.ProductsEnabled = model.ProductsEnabled;
@@ -241,6 +265,13 @@ namespace PosPlatform.Web.Services
 
             settings.ReceiptFooterMessage = Clean(model.ReceiptFooterMessage);
             settings.ReturnPolicyText = Clean(model.ReturnPolicyText);
+
+            /*
+             * Important:
+             * This is what allows /setup-business to move forward to /dashboard.
+             */
+            settings.SetupCompleted = model.SetupCompleted;
+
             settings.UpdatedAt = DateTime.UtcNow;
 
             var tenant = await _db.Tenants.FirstOrDefaultAsync(x => x.Id == tenantId.Value);
@@ -303,7 +334,8 @@ namespace PosPlatform.Web.Services
                         settings.AllowDiscounts,
                         settings.ReceiptTitle,
                         settings.ReceiptFooterMessage,
-                        settings.ReturnPolicyText
+                        settings.ReturnPolicyText,
+                        settings.SetupCompleted
                     },
                     Tenant = tenant == null ? null : new
                     {

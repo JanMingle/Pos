@@ -5,6 +5,7 @@
 @rendermode InteractiveServer
 @layout MainLayout
 @attribute [Authorize]
+@implements IDisposable
 @using PosPlatform.Web.Components.Layout
 @using PosPlatform.Web.Models.Sales
 @using PosPlatform.Web.Models.Settings
@@ -118,14 +119,14 @@
             <div class="sales-search-row">
                 <div class="sales-search">
                     <i class="bi bi-search"></i>
-                    <input @bind="_searchTerm"
-                           @bind:event="oninput"
+                    <input value="@_searchTerm"
+                           @oninput="HandleProductSearchInput"
                            @onkeydown="HandleProductSearchKeyDown"
                            placeholder="Search product, variant, service, SKU or barcode..." />
                 </div>
 
                 <button type="button" class="sales-primary-btn" @onclick="LoadProducts">
-                    Search
+                    Refresh
                 </button>
             </div>
 
@@ -335,7 +336,7 @@ disabled="@(_productPage >= ProductTotalPages ? "disabled" : null)"
 
                     <div class="sales-form-row">
                         <label>Payment</label>
-                        <select @bind="_paymentMethod">
+                        <select value="@_paymentMethod" @onchange="OnPaymentMethodChanged">
                             <option value="Cash">Cash</option>
                             <option value="Card">Card</option>
                             <option value="EFT">EFT</option>
@@ -351,9 +352,21 @@ disabled="@(_productPage >= ProductTotalPages ? "disabled" : null)"
                     }
 
                     <div class="sales-form-row">
-                        <label>Amount Paid</label>
-                        <input type="number" min="0" step="0.01" @bind="_amountPaid" />
+                        <label>@(IsCashSale ? "Amount Given *" : "Amount Paid")</label>
+                        <input type="number"
+                               min="0"
+                               step="0.01"
+                               value="@_amountPaid"
+                               @oninput="OnAmountPaidInput" />
                     </div>
+
+                    @if (!string.IsNullOrWhiteSpace(CashPaymentWarning))
+                    {
+                        <div class="sales-cash-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <span>@CashPaymentWarning</span>
+                        </div>
+                    }
 
                     <div class="sales-quick-cash">
                         <button type="button" @onclick="SetExactPayment">Exact</button>
@@ -408,10 +421,10 @@ disabled="@(_productPage >= ProductTotalPages ? "disabled" : null)"
 
                 <button type="button"
                         class="sales-complete-btn"
-disabled="@((_savingSale || !HasOpenShift) ? "disabled" : null)"
-@onclick="CompleteSaleAsync">
+                        disabled="@(IsCompleteSaleButtonDisabled ? "disabled" : null)"
+                        @onclick="CompleteSaleAsync">
                     <i class="bi bi-check2-circle"></i>
-                    @(_savingSale ? "Completing..." : HasOpenShift ? "Complete Sale" : "Open Shift Required")
+                    @GetCompleteSaleButtonText()
                 </button>
             }
         </div>
@@ -661,6 +674,57 @@ disabled="@(_returnPage >= ReturnTotalPages ? "disabled" : null)"
                 <button type="button" class="sales-ghost-btn" @onclick="CloseAgeModal">Cancel</button>
                 <button type="button" class="sales-primary-btn" @onclick="ConfirmAgeAndCompleteAsync">
                     Confirm & Complete
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showSaleConfirmModal)
+{
+    <div class="sales-modal-backdrop">
+        <div class="sales-confirm-card">
+            <div class="sales-confirm-icon">
+                <i class="bi bi-question-circle"></i>
+            </div>
+
+            <h3>Confirm Sale</h3>
+
+            <p>
+                Are you sure you want to complete this sale? This will create the receipt,
+                reduce stock where applicable and save the transaction.
+            </p>
+
+            <div class="sales-confirm-summary">
+                <div>
+                    <span>Total</span>
+                    <strong>@Money(TotalPreview)</strong>
+                </div>
+
+                <div>
+                    <span>Payment</span>
+                    <strong>@_paymentMethod</strong>
+                </div>
+
+                <div>
+                    <span>Amount Given</span>
+                    <strong>@Money(_amountPaid)</strong>
+                </div>
+
+                <div>
+                    <span>Change</span>
+                    <strong>@Money(Change)</strong>
+                </div>
+            </div>
+
+            <div class="sales-modal-actions">
+                <button type="button" class="sales-ghost-btn" @onclick="CloseSaleConfirmModal">
+                    Cancel
+                </button>
+
+                <button type="button" class="sales-primary-btn" @onclick="ConfirmSaleAsync">
+                    <i class="bi bi-check2-circle"></i>
+                    Yes, Complete Sale
                 </button>
             </div>
         </div>
@@ -2172,6 +2236,53 @@ disabled="@(_savingRefund ? "disabled" : null)"
             font-weight: 750;
         }
 
+    .sales-cash-warning {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        padding: 10px 12px;
+        border-radius: 13px;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        color: #c2410c;
+        font-size: .76rem;
+        font-weight: 700;
+        line-height: 1.4;
+    }
+
+    .sales-confirm-summary {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin: 16px 0 18px;
+    }
+
+        .sales-confirm-summary div {
+            padding: 12px;
+            border-radius: 14px;
+            background: #fafafa;
+            border: 1px solid #e8eaef;
+            text-align: left;
+        }
+
+        .sales-confirm-summary span,
+        .sales-confirm-summary strong {
+            display: block;
+        }
+
+        .sales-confirm-summary span {
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .sales-confirm-summary strong {
+            margin-top: 4px;
+            color: #111827;
+            font-size: .88rem;
+            font-weight: 780;
+        }
+
     @@keyframes salesIn {
         from {
             opacity: 0;
@@ -2311,10 +2422,14 @@ disabled="@(_savingRefund ? "disabled" : null)"
     private bool _showReceipt;
     private bool _loadingMySales;
     private bool _showAgeConfirmModal;
+    private bool _showSaleConfirmModal;
     private bool _ageRestrictionConfirmed;
 
     private string? _searchTerm;
     private string? _barcodeValue;
+
+    private CancellationTokenSource? _productSearchCts;
+    private const int ProductSearchDebounceMs = 250;
     private bool _barcodeScanning;
     private string? _message;
     private bool _isSuccess;
@@ -2346,6 +2461,44 @@ disabled="@(_savingRefund ? "disabled" : null)"
     private decimal TotalPreview => TaxableAmount + TaxPreview;
     private decimal Change => Math.Max(0, _amountPaid - TotalPreview);
     private bool CartHasAgeRestrictedItems => _cart.Any(x => x.AgeRestricted);
+
+    private bool IsCashSale =>
+    string.Equals(_paymentMethod, "Cash", StringComparison.OrdinalIgnoreCase);
+
+    private bool CashAmountMissing =>
+        IsCashSale && _amountPaid <= 0;
+
+    private bool CashAmountTooLow =>
+        IsCashSale && _amountPaid > 0 && _amountPaid < TotalPreview;
+
+    private string? CashPaymentWarning
+    {
+        get
+        {
+            if (!IsCashSale)
+            {
+                return null;
+            }
+
+            if (_amountPaid <= 0)
+            {
+                return "Enter the cash amount given by the customer before completing the sale.";
+            }
+
+            if (_amountPaid < TotalPreview)
+            {
+                return $"Cash amount is short by {Money(TotalPreview - _amountPaid)}.";
+            }
+
+            return null;
+        }
+    }
+
+    private bool IsCompleteSaleButtonDisabled =>
+        _savingSale ||
+        !HasOpenShift ||
+        CashAmountMissing ||
+        CashAmountTooLow;
 
     private List<CustomerOptionViewModel> _customerOptions = new();
     private int? _selectedCustomerId;
@@ -2412,6 +2565,12 @@ disabled="@(_savingRefund ? "disabled" : null)"
             .Take(_returnPageSize)
             .ToList();
 
+    public void Dispose()
+    {
+        _productSearchCts?.Cancel();
+        _productSearchCts?.Dispose();
+    }
+
     protected override async Task OnInitializedAsync()
     {
         if (!await UserAccessService.CanAccessAsync("sales"))
@@ -2435,16 +2594,71 @@ disabled="@(_savingRefund ? "disabled" : null)"
 
     private async Task LoadProducts()
     {
+        var searchSnapshot = _searchTerm?.Trim();
+
         _loadingProducts = true;
         _productPage = 1;
-        _products = await SaleService.SearchProductsAsync(_searchTerm);
+
+        await InvokeAsync(StateHasChanged);
+
+        var products = await SaleService.SearchProductsAsync(searchSnapshot);
+
+        var currentSearch = _searchTerm?.Trim();
+
+        if (!string.Equals(searchSnapshot, currentSearch, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _products = products;
         _loadingProducts = false;
     }
+
+    private async Task HandleProductSearchInput(ChangeEventArgs e)
+    {
+        _searchTerm = e.Value?.ToString();
+
+        _productSearchCts?.Cancel();
+
+        var cts = new CancellationTokenSource();
+        _productSearchCts = cts;
+
+        try
+        {
+            await Task.Delay(ProductSearchDebounceMs, cts.Token);
+
+            if (cts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            await InvokeAsync(async () =>
+            {
+                await LoadProducts();
+                StateHasChanged();
+            });
+        }
+        catch (TaskCanceledException)
+        {
+            // User is still typing. Ignore cancelled search.
+        }
+        finally
+        {
+            if (_productSearchCts == cts)
+            {
+                _productSearchCts.Dispose();
+                _productSearchCts = null;
+            }
+        }
+    }
+
+
 
     private async Task HandleProductSearchKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
         {
+            _productSearchCts?.Cancel();
             await LoadProducts();
         }
     }
@@ -2691,16 +2905,130 @@ disabled="@(_savingRefund ? "disabled" : null)"
             x.ProductVariantId == productVariantId);
     }
 
+
+    private void OnPaymentMethodChanged(ChangeEventArgs e)
+{
+    _paymentMethod = e.Value?.ToString() ?? "Cash";
+
+    if (!IsCashSale)
+    {
+        _amountPaid = TotalPreview;
+    }
+    else
+    {
+        _amountPaid = 0;
+    }
+}
+
+private void OnAmountPaidInput(ChangeEventArgs e)
+{
+    if (decimal.TryParse(e.Value?.ToString(), out var amount))
+    {
+        _amountPaid = amount < 0 ? 0 : amount;
+        return;
+    }
+
+    _amountPaid = 0;
+}
+
+private string GetCompleteSaleButtonText()
+{
+    if (_savingSale)
+    {
+        return "Completing...";
+    }
+
+    if (!HasOpenShift)
+    {
+        return "Open Shift Required";
+    }
+
+    if (CashAmountMissing)
+    {
+        return "Enter Amount Given";
+    }
+
+    if (CashAmountTooLow)
+    {
+        return "Cash Amount Too Low";
+    }
+
+    return "Complete Sale";
+}
+
+
     private async Task CompleteSaleAsync()
     {
-        await CompleteSaleInternalAsync(false);
+        await OpenSaleConfirmModalAsync();
+    }
+
+    private async Task OpenSaleConfirmModalAsync()
+    {
+        _openShift = await CashierShiftService.GetOpenShiftAsync();
+
+        if (!HasOpenShift)
+        {
+            ShowMessage("Open a cashier shift before completing sales.", false);
+            return;
+        }
+
+        if (_cart.Count == 0)
+        {
+            ShowMessage("Add items before completing the sale.", false);
+            return;
+        }
+
+        if (_settings.RequireCustomerForSale && string.IsNullOrWhiteSpace(_customerName))
+        {
+            ShowMessage("Customer name is required for this business.", false);
+            return;
+        }
+
+        if (IsCashSale && _amountPaid <= 0)
+        {
+            ShowMessage("Enter the cash amount given by the customer.", false);
+            return;
+        }
+
+        if (IsCashSale && _amountPaid < TotalPreview)
+        {
+            ShowMessage($"Cash amount is too low. The customer still needs {Money(TotalPreview - _amountPaid)}.", false);
+            return;
+        }
+
+        if (!IsCashSale && _amountPaid <= 0)
+        {
+            _amountPaid = TotalPreview;
+        }
+
+        if (CartHasAgeRestrictedItems && !_ageRestrictionConfirmed)
+        {
+            _showAgeConfirmModal = true;
+            return;
+        }
+
+        _showSaleConfirmModal = true;
     }
 
     private async Task ConfirmAgeAndCompleteAsync()
     {
         _ageRestrictionConfirmed = true;
         _showAgeConfirmModal = false;
-        await CompleteSaleInternalAsync(true);
+
+        await OpenSaleConfirmModalAsync();
+    }
+
+    private async Task ConfirmSaleAsync()
+    {
+        _showSaleConfirmModal = false;
+        await CompleteSaleInternalAsync(false);
+    }
+
+
+
+    private void CloseSaleConfirmModal()
+    {
+        _showSaleConfirmModal = false;
     }
 
     private async Task CompleteSaleInternalAsync(bool forceAgeConfirmed)
@@ -2723,6 +3051,23 @@ disabled="@(_savingRefund ? "disabled" : null)"
         {
             ShowMessage("Customer name is required for this business.", false);
             return;
+        }
+
+        if (IsCashSale && _amountPaid <= 0)
+        {
+            ShowMessage("Enter the cash amount given by the customer.", false);
+            return;
+        }
+
+        if (IsCashSale && _amountPaid < TotalPreview)
+        {
+            ShowMessage($"Cash amount is too low. The customer still needs {Money(TotalPreview - _amountPaid)}.", false);
+            return;
+        }
+
+        if (!IsCashSale && _amountPaid <= 0)
+        {
+            _amountPaid = TotalPreview;
         }
 
         if (CartHasAgeRestrictedItems && !_ageRestrictionConfirmed && !forceAgeConfirmed)
@@ -2810,6 +3155,8 @@ disabled="@(_savingRefund ? "disabled" : null)"
         _customerPhone = null;
         _saleNotes = null;
         _ageRestrictionConfirmed = false;
+        _showSaleConfirmModal = false;
+        _showAgeConfirmModal = false;
     }
 
     private void SetExactPayment()
@@ -3081,5 +3428,6 @@ disabled="@(_savingRefund ? "disabled" : null)"
             await LoadProducts();
             await LoadMySalesAsync();
         }
+
     }
 }

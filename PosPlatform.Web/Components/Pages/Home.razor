@@ -2,139 +2,1229 @@
 @layout PublicLayout
 @using PosPlatform.Web.Components.Layout
 
-<PageTitle>POS Platform</PageTitle>
+<PageTitle>JMingle | Business POS, Stock, Sales, Invoices and Reports</PageTitle>
 
-<div class="landing-wrapper">
-    <section class="hero-section">
-        <div class="hero-content">
-            <div class="hero-badge">Multi-tenant POS SaaS</div>
-            <h1>Run sales, stock, users, and branches in one powerful platform</h1>
-            <p>
-                Built for retail shops, taverns, internet cafes, coffee shops, mini markets,
-                and many other business types. Manage your operations from one secure system.
-            </p>
+<section class="jm-page">
+    <section class="jm-hero">
+        <div class="jm-container jm-hero-grid">
+            <div class="jm-hero-copy">
+                <div class="jm-kicker">
+                    <i class="bi bi-stars"></i>
+                    Smart business management system
+                </div>
 
-            <div class="hero-actions">
-                <a href="/register-business" class="btn btn-primary btn-lg">Register Business</a>
-                <a href="/login" class="btn btn-outline-light btn-lg">Login</a>
+                <h1>Run sales, stock, invoices, staff and reports from one JMingle workspace.</h1>
+
+                <p>
+                    JMingle helps growing businesses manage daily operations from one clean platform.
+                    Sell faster, track inventory, manage branches, control user access, monitor expenses,
+                    follow up invoices and understand performance with real-time reports.
+                </p>
+
+                <div class="jm-hero-actions">
+                    <a href="/register-business" class="jm-btn jm-btn-dark">
+                        Start your business setup
+                        <i class="bi bi-arrow-right"></i>
+                    </a>
+
+                    <a href="/login" class="jm-btn jm-btn-light">
+                        Login
+                        <i class="bi bi-box-arrow-in-right"></i>
+                    </a>
+                </div>
+
+                <div class="jm-hero-points">
+                    <span><i class="bi bi-check-circle"></i> Multi-branch ready</span>
+                    <span><i class="bi bi-check-circle"></i> Role-based access</span>
+                    <span><i class="bi bi-check-circle"></i> Sales and stock tracking</span>
+                </div>
+            </div>
+
+            <div class="jm-dashboard-preview">
+                <div class="jm-preview-top">
+                    <div>
+                        <span>JMingle Dashboard</span>
+                        <strong>Today’s business health</strong>
+                    </div>
+
+                    <div class="jm-live-pill">
+                        <span></span>
+                        Live
+                    </div>
+                </div>
+
+                <div class="jm-preview-cards">
+                    <div>
+                        <span>Net Sales</span>
+                        <strong>R 24,850</strong>
+                        <small>128 transactions</small>
+                    </div>
+
+                    <div>
+                        <span>Net Profit</span>
+                        <strong>R 8,920</strong>
+                        <small>After expenses</small>
+                    </div>
+
+                    <div>
+                        <span>Low Stock</span>
+                        <strong>14</strong>
+                        <small>Needs attention</small>
+                    </div>
+                </div>
+
+                <div class="jm-chart-card">
+                    <div class="jm-chart-header">
+                        <span>Sales performance</span>
+                        <strong>This week</strong>
+                    </div>
+
+                    <div class="jm-bars">
+                        <div style="height: 35%;"></div>
+                        <div style="height: 58%;"></div>
+                        <div style="height: 42%;"></div>
+                        <div style="height: 76%;"></div>
+                        <div style="height: 62%;"></div>
+                        <div style="height: 88%;"></div>
+                        <div style="height: 70%;"></div>
+                    </div>
+                </div>
+
+                <div class="jm-preview-list">
+                    <div>
+                        <i class="bi bi-receipt"></i>
+                        <span>Receipt #JM-1048 completed</span>
+                        <strong>R 420.00</strong>
+                    </div>
+
+                    <div>
+                        <i class="bi bi-box-seam"></i>
+                        <span>Stock alert: 3 items below reorder</span>
+                        <strong>Review</strong>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
 
-    <section class="info-section">
-        <div class="row g-4">
-            <div class="col-md-4">
-                <div class="info-card shadow-sm">
-                    <div class="info-icon">🛒</div>
-                    <h4>Sales Management</h4>
-                    <p>Process sales, manage products, and track performance across your business.</p>
-                </div>
+    <section class="jm-strip">
+        <div class="jm-container jm-strip-grid">
+            <div>
+                <strong>One system</strong>
+                <span>Sales, stock, users, expenses, invoices and reports together.</span>
             </div>
 
-            <div class="col-md-4">
-                <div class="info-card shadow-sm">
-                    <div class="info-icon">📦</div>
-                    <h4>Stock Control</h4>
-                    <p>Monitor inventory, track quantities, and know when stock is running low.</p>
-                </div>
+            <div>
+                <strong>Built for teams</strong>
+                <span>Owners, managers, cashiers and inventory users can work securely.</span>
             </div>
 
-            <div class="col-md-4">
-                <div class="info-card shadow-sm">
-                    <div class="info-icon">🏢</div>
-                    <h4>Multi-Tenant Platform</h4>
-                    <p>Each business has its own secure environment with users, branches, and settings.</p>
+            <div>
+                <strong>Business ready</strong>
+                <span>Works for retail, services, multi-branch businesses and stock-heavy operations.</span>
+            </div>
+        </div>
+    </section>
+
+    <section class="jm-section">
+        <div class="jm-container">
+            <div class="jm-section-heading">
+                <span>Why JMingle</span>
+                <h2>A practical system for everyday business operations</h2>
+                <p>
+                    JMingle is designed to help businesses move away from scattered spreadsheets,
+                    manual sales records and disconnected tools.
+                </p>
+            </div>
+
+            <div class="jm-compare-grid">
+                <div class="jm-compare-card old">
+                    <h3>Without JMingle</h3>
+
+                    <div>
+                        <i class="bi bi-x-circle"></i>
+                        <span>Sales, stock and invoices are handled in separate places.</span>
+                    </div>
+
+                    <div>
+                        <i class="bi bi-x-circle"></i>
+                        <span>Owners struggle to see what is happening in each branch.</span>
+                    </div>
+
+                    <div>
+                        <i class="bi bi-x-circle"></i>
+                        <span>Low stock, unpaid invoices and daily expenses are easy to miss.</span>
+                    </div>
+
+                    <div>
+                        <i class="bi bi-x-circle"></i>
+                        <span>Staff access is harder to control and audit.</span>
+                    </div>
+                </div>
+
+                <div class="jm-compare-card new">
+                    <h3>With JMingle</h3>
+
+                    <div>
+                        <i class="bi bi-check-circle"></i>
+                        <span>Run sales, products, stock, invoices, users and reports in one system.</span>
+                    </div>
+
+                    <div>
+                        <i class="bi bi-check-circle"></i>
+                        <span>Track branch performance, cashier shifts and daily profit clearly.</span>
+                    </div>
+
+                    <div>
+                        <i class="bi bi-check-circle"></i>
+                        <span>Monitor low stock, expenses, refunds and overdue invoices quickly.</span>
+                    </div>
+
+                    <div>
+                        <i class="bi bi-check-circle"></i>
+                        <span>Use roles and audit trails to keep business activity accountable.</span>
+                    </div>
                 </div>
             </div>
         </div>
     </section>
-</div>
+
+    <section class="jm-section jm-soft-section">
+        <div class="jm-container">
+            <div class="jm-section-heading">
+                <span>Core features</span>
+                <h2>Everything your business needs to operate better</h2>
+                <p>
+                    JMingle gives you the tools to manage the full day-to-day flow of a business,
+                    from selling to reporting.
+                </p>
+            </div>
+
+            <div class="jm-feature-grid">
+                <div class="jm-feature-card">
+                    <div class="jm-feature-icon">
+                        <i class="bi bi-cart-check"></i>
+                    </div>
+                    <h3>Point of Sale</h3>
+                    <p>Process sales, generate receipts, handle payment methods and keep transactions organised.</p>
+                </div>
+
+                <div class="jm-feature-card">
+                    <div class="jm-feature-icon">
+                        <i class="bi bi-box-seam"></i>
+                    </div>
+                    <h3>Products & Stock</h3>
+                    <p>Manage products, barcode labels, stock levels, stock purchases and stock transfers.</p>
+                </div>
+
+                <div class="jm-feature-card">
+                    <div class="jm-feature-icon">
+                        <i class="bi bi-cash-coin"></i>
+                    </div>
+                    <h3>Cashier Shifts</h3>
+                    <p>Open and close shifts, track expected cash, cash sales, card sales and till differences.</p>
+                </div>
+
+                <div class="jm-feature-card">
+                    <div class="jm-feature-icon">
+                        <i class="bi bi-people"></i>
+                    </div>
+                    <h3>Customers</h3>
+                    <p>Keep customer profiles, purchase history and account activity in one place.</p>
+                </div>
+
+                <div class="jm-feature-card">
+                    <div class="jm-feature-icon">
+                        <i class="bi bi-file-earmark-text"></i>
+                    </div>
+                    <h3>Quotes & Invoices</h3>
+                    <p>Create quotes, convert them to invoices, monitor overdue balances and follow up faster.</p>
+                </div>
+
+                <div class="jm-feature-card">
+                    <div class="jm-feature-icon">
+                        <i class="bi bi-wallet2"></i>
+                    </div>
+                    <h3>Expenses</h3>
+                    <p>Record expenses by category, vendor and payment method to understand business costs.</p>
+                </div>
+
+                <div class="jm-feature-card">
+                    <div class="jm-feature-icon">
+                        <i class="bi bi-bar-chart"></i>
+                    </div>
+                    <h3>Reports Dashboard</h3>
+                    <p>View sales, profit, stock value, refunds, expenses, payment methods and cashier performance.</p>
+                </div>
+
+                <div class="jm-feature-card">
+                    <div class="jm-feature-icon">
+                        <i class="bi bi-shield-lock"></i>
+                    </div>
+                    <h3>Users & Audit Trail</h3>
+                    <p>Control access by role and track important business actions for accountability.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="jm-section">
+        <div class="jm-container jm-industries-grid">
+            <div class="jm-industries-copy">
+                <span>Business types</span>
+                <h2>Flexible for different industries and operating styles</h2>
+                <p>
+                    Whether you sell products, manage services, run multiple branches or need better financial visibility,
+                    JMingle can be configured around the way your business works.
+                </p>
+
+                <a href="/register-business" class="jm-btn jm-btn-dark">
+                    Register your business
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+
+            <div class="jm-industry-list">
+                <div><i class="bi bi-shop"></i><span>Retail stores</span></div>
+                <div><i class="bi bi-cup-hot"></i><span>Cafés and quick service</span></div>
+                <div><i class="bi bi-tools"></i><span>Repair and service businesses</span></div>
+                <div><i class="bi bi-building"></i><span>Multi-branch businesses</span></div>
+                <div><i class="bi bi-box2-heart"></i><span>Stock-heavy businesses</span></div>
+                <div><i class="bi bi-person-workspace"></i><span>Owner-managed teams</span></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="jm-section jm-soft-section">
+        <div class="jm-container">
+            <div class="jm-section-heading">
+                <span>How it works</span>
+                <h2>Start simple, then grow into the full system</h2>
+                <p>
+                    JMingle is built so a business can start with the basics and activate more features as operations grow.
+                </p>
+            </div>
+
+            <div class="jm-steps">
+                <div>
+                    <strong>01</strong>
+                    <h3>Register your business</h3>
+                    <p>Create your business account and choose the setup that matches your operation.</p>
+                </div>
+
+                <div>
+                    <strong>02</strong>
+                    <h3>Add branches and users</h3>
+                    <p>Set up your locations, assign roles and control who can access each part of the system.</p>
+                </div>
+
+                <div>
+                    <strong>03</strong>
+                    <h3>Load products and stock</h3>
+                    <p>Add products, stock levels, suppliers, barcode labels and reorder points.</p>
+                </div>
+
+                <div>
+                    <strong>04</strong>
+                    <h3>Start selling</h3>
+                    <p>Open cashier shifts, process sales, issue receipts and track daily cash movement.</p>
+                </div>
+
+                <div>
+                    <strong>05</strong>
+                    <h3>Monitor reports</h3>
+                    <p>Use dashboards and reports to understand profit, expenses, stock and staff activity.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="jm-section">
+        <div class="jm-container jm-modules-grid">
+            <div class="jm-module-panel">
+                <div class="jm-section-heading left">
+                    <span>Platform modules</span>
+                    <h2>Designed to connect your business departments</h2>
+                    <p>
+                        JMingle brings important business functions into one connected workspace,
+                        so your team does not have to jump between many tools.
+                    </p>
+                </div>
+
+                <div class="jm-module-tags">
+                    <span>Dashboard</span>
+                    <span>Sales</span>
+                    <span>Cashier Shift</span>
+                    <span>Customers</span>
+                    <span>Products</span>
+                    <span>Barcode Labels</span>
+                    <span>Stock</span>
+                    <span>Stock Purchases</span>
+                    <span>Stock Transfers</span>
+                    <span>Suppliers</span>
+                    <span>Quotes</span>
+                    <span>Invoices</span>
+                    <span>Overdue Invoices</span>
+                    <span>Invoice Follow-ups</span>
+                    <span>Customer Statements</span>
+                    <span>Expenses</span>
+                    <span>Branches</span>
+                    <span>Users</span>
+                    <span>Reports</span>
+                    <span>Audit Trail</span>
+                    <span>Settings</span>
+                </div>
+            </div>
+
+            <div class="jm-report-card">
+                <div class="jm-report-top">
+                    <span>Reports overview</span>
+                    <strong>Know what is happening</strong>
+                </div>
+
+                <div class="jm-report-row">
+                    <span>Sales</span>
+                    <strong>R 68,420</strong>
+                </div>
+
+                <div class="jm-report-row">
+                    <span>Gross profit</span>
+                    <strong>R 21,650</strong>
+                </div>
+
+                <div class="jm-report-row">
+                    <span>Expenses</span>
+                    <strong>R 4,390</strong>
+                </div>
+
+                <div class="jm-report-row">
+                    <span>Refunds</span>
+                    <strong>R 820</strong>
+                </div>
+
+                <div class="jm-mini-donut">
+                    <div></div>
+                    <span>Sales mix</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="jm-section jm-faq-section">
+        <div class="jm-container">
+            <div class="jm-section-heading">
+                <span>Questions</span>
+                <h2>What businesses usually ask before getting started</h2>
+            </div>
+
+            <div class="jm-faq-grid">
+                <div>
+                    <h3>Can JMingle support more than one branch?</h3>
+                    <p>Yes. JMingle is designed with branches, users and permissions in mind, so you can manage different locations more clearly.</p>
+                </div>
+
+                <div>
+                    <h3>Can I control what users can access?</h3>
+                    <p>Yes. You can give different access to owners, managers, cashiers, inventory users and other staff roles.</p>
+                </div>
+
+                <div>
+                    <h3>Does it handle stock?</h3>
+                    <p>Yes. JMingle supports products, stock levels, barcode labels, stock purchases, stock transfers and low-stock alerts.</p>
+                </div>
+
+                <div>
+                    <h3>Can I track invoices and follow-ups?</h3>
+                    <p>Yes. JMingle includes quotes, invoices, overdue invoices, invoice follow-ups and customer statements.</p>
+                </div>
+
+                <div>
+                    <h3>Does it show reports?</h3>
+                    <p>Yes. The reporting dashboard helps you review sales, profit, expenses, refunds, payment methods, stock and cashier performance.</p>
+                </div>
+
+                <div>
+                    <h3>Is it only for retail?</h3>
+                    <p>No. JMingle can be used by retail, service, stock-based and multi-branch businesses that need a better operating system.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="jm-final-cta">
+        <div class="jm-container jm-final-card">
+            <div>
+                <span>Ready to simplify your business?</span>
+                <h2>Start managing your business with JMingle.</h2>
+                <p>
+                    Bring your sales, stock, customers, invoices, users and reports into one connected system.
+                </p>
+            </div>
+
+            <div class="jm-final-actions">
+                <a href="/register-business" class="jm-btn jm-btn-dark">
+                    Register Business
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+
+                <a href="/login" class="jm-btn jm-btn-light">
+                    Login
+                </a>
+            </div>
+        </div>
+    </section>
+</section>
 
 <style>
-    .landing-wrapper {
-        min-height: calc(100vh - 154px);
-        background: #f8fafc;
-    }
-
-    .hero-section {
-        background: linear-gradient(135deg, #0f172a, #1d4ed8);
-        color: #fff;
-        padding: 80px 24px;
-        text-align: center;
-    }
-
-    .hero-content {
-        max-width: 900px;
-        margin: 0 auto;
-    }
-
-    .hero-badge {
-        display: inline-block;
-        background: rgba(255,255,255,0.15);
-        color: #fff;
-        padding: 8px 18px;
-        border-radius: 999px;
-        font-weight: 600;
-        margin-bottom: 20px;
-    }
-
-    .hero-content h1 {
-        font-size: 2.7rem;
-        font-weight: 800;
-        margin-bottom: 18px;
-    }
-
-    .hero-content p {
-        font-size: 1.05rem;
-        color: rgba(255,255,255,0.88);
-        max-width: 760px;
-        margin: 0 auto 30px auto;
-    }
-
-    .hero-actions {
-        display: flex;
-        justify-content: center;
-        gap: 14px;
-        flex-wrap: wrap;
-    }
-
-    .info-section {
-        padding: 50px 24px 70px;
-        max-width: 1200px;
-        margin: 0 auto;
-    }
-
-    .info-card {
-        background: #fff;
-        border-radius: 20px;
-        padding: 28px;
-        height: 100%;
-        border: 1px solid #e5e7eb;
-    }
-
-    .info-icon {
-        font-size: 2rem;
-        margin-bottom: 14px;
-    }
-
-    .info-card h4 {
-        font-weight: 700;
-        margin-bottom: 10px;
+    .jm-page {
+        background: radial-gradient(circle at 8% 0%, rgba(143, 166, 161, .18), transparent 26%), linear-gradient(180deg, #ffffff 0%, #f6f7f9 42%, #ffffff 100%);
         color: #111827;
     }
 
-    .info-card p {
-        color: #6b7280;
-        margin-bottom: 0;
+    .jm-container {
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+    }
+
+    .jm-hero {
+        padding: 72px 0 44px;
+    }
+
+    .jm-hero-grid {
+        display: grid;
+        grid-template-columns: 1fr .9fr;
+        gap: 34px;
+        align-items: center;
+    }
+
+    .jm-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 32px;
+        padding: 0 12px;
+        border-radius: 999px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        font-size: .74rem;
+        font-weight: 800;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        margin-bottom: 14px;
+    }
+
+    .jm-hero h1 {
+        margin: 0;
+        max-width: 760px;
+        color: #111827;
+        font-size: clamp(2.25rem, 5vw, 4.6rem);
+        line-height: .98;
+        font-weight: 850;
+        letter-spacing: -.07em;
+    }
+
+    .jm-hero p {
+        margin: 20px 0 0;
+        max-width: 660px;
+        color: #667085;
+        font-size: 1.02rem;
+        line-height: 1.75;
+    }
+
+    .jm-hero-actions,
+    .jm-final-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 11px;
+        margin-top: 26px;
+    }
+
+    .jm-btn {
+        min-height: 46px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        padding: 0 18px;
+        border-radius: 999px;
+        font-size: .88rem;
+        font-weight: 780;
+        text-decoration: none;
+        transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+    }
+
+        .jm-btn:hover {
+            transform: translateY(-1px);
+        }
+
+    .jm-btn-dark {
+        background: #252525;
+        color: #ffffff;
+        box-shadow: 0 16px 34px rgba(17, 24, 39, .16);
+    }
+
+    .jm-btn-light {
+        background: #ffffff;
+        color: #252525;
+        border: 1px solid #e5e7eb;
+    }
+
+    .jm-hero-points {
+        margin-top: 22px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+        .jm-hero-points span {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            color: #475569;
+            font-size: .84rem;
+            font-weight: 700;
+        }
+
+        .jm-hero-points i {
+            color: #8FA6A1;
+        }
+
+    .jm-dashboard-preview {
+        padding: 18px;
+        border-radius: 30px;
+        background: rgba(255, 255, 255, .86);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 30px 90px rgba(17, 24, 39, .12);
+        backdrop-filter: blur(20px);
+    }
+
+    .jm-preview-top,
+    .jm-chart-header,
+    .jm-report-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 14px;
+    }
+
+        .jm-preview-top span,
+        .jm-preview-top strong,
+        .jm-chart-header span,
+        .jm-chart-header strong,
+        .jm-report-top span,
+        .jm-report-top strong {
+            display: block;
+        }
+
+        .jm-preview-top span,
+        .jm-chart-header span,
+        .jm-report-top span {
+            color: #98a2b3;
+            font-size: .74rem;
+            font-weight: 750;
+        }
+
+        .jm-preview-top strong,
+        .jm-chart-header strong,
+        .jm-report-top strong {
+            margin-top: 3px;
+            color: #111827;
+            font-size: .95rem;
+            font-weight: 820;
+        }
+
+    .jm-live-pill {
+        min-height: 28px;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: #ecfdf5;
+        color: #15803d;
+        font-size: .72rem;
+        font-weight: 800;
+    }
+
+        .jm-live-pill span {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #16a34a;
+        }
+
+    .jm-preview-cards {
+        margin-top: 16px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+        .jm-preview-cards div,
+        .jm-chart-card,
+        .jm-preview-list div {
+            border-radius: 18px;
+            background: #fafafa;
+            border: 1px solid #e8eaef;
+        }
+
+        .jm-preview-cards div {
+            padding: 13px;
+        }
+
+        .jm-preview-cards span,
+        .jm-preview-cards strong,
+        .jm-preview-cards small {
+            display: block;
+        }
+
+        .jm-preview-cards span {
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 740;
+        }
+
+        .jm-preview-cards strong {
+            margin-top: 5px;
+            color: #111827;
+            font-size: 1rem;
+            font-weight: 850;
+        }
+
+        .jm-preview-cards small {
+            margin-top: 3px;
+            color: #98a2b3;
+            font-size: .7rem;
+        }
+
+    .jm-chart-card {
+        margin-top: 12px;
+        padding: 16px;
+    }
+
+    .jm-bars {
+        height: 180px;
+        margin-top: 18px;
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 10px;
+        align-items: end;
+        padding: 14px;
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px solid #edf0f3;
+    }
+
+        .jm-bars div {
+            border-radius: 999px 999px 8px 8px;
+            background: linear-gradient(180deg, #252525, #8FA6A1);
+        }
+
+    .jm-preview-list {
+        margin-top: 12px;
+        display: grid;
+        gap: 9px;
+    }
+
+        .jm-preview-list div {
+            min-height: 48px;
+            padding: 10px 12px;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .jm-preview-list i {
+            width: 30px;
+            height: 30px;
+            border-radius: 11px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #f2f6f5;
+            color: #8FA6A1;
+        }
+
+        .jm-preview-list span {
+            color: #475569;
+            font-size: .78rem;
+            font-weight: 700;
+        }
+
+        .jm-preview-list strong {
+            color: #111827;
+            font-size: .78rem;
+            font-weight: 820;
+        }
+
+    .jm-strip {
+        padding: 18px 0;
+    }
+
+    .jm-strip-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+        .jm-strip-grid div {
+            padding: 18px;
+            border-radius: 22px;
+            background: #252525;
+            color: #ffffff;
+            box-shadow: 0 18px 42px rgba(17, 24, 39, .12);
+        }
+
+        .jm-strip-grid strong,
+        .jm-strip-grid span {
+            display: block;
+        }
+
+        .jm-strip-grid strong {
+            font-size: .94rem;
+            font-weight: 820;
+        }
+
+        .jm-strip-grid span {
+            margin-top: 6px;
+            color: rgba(255,255,255,.72);
+            font-size: .82rem;
+            line-height: 1.5;
+        }
+
+    .jm-section {
+        padding: 76px 0;
+    }
+
+    .jm-soft-section {
+        background: #f6f7f9;
+    }
+
+    .jm-section-heading {
+        max-width: 760px;
+        margin: 0 auto 30px;
+        text-align: center;
+    }
+
+        .jm-section-heading.left {
+            text-align: left;
+            margin-left: 0;
+        }
+
+        .jm-section-heading span,
+        .jm-industries-copy span,
+        .jm-final-card span {
+            display: inline-flex;
+            color: #8FA6A1;
+            font-size: .74rem;
+            font-weight: 820;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .jm-section-heading h2,
+        .jm-industries-copy h2,
+        .jm-final-card h2 {
+            margin: 10px 0 0;
+            color: #111827;
+            font-size: clamp(1.7rem, 3vw, 2.7rem);
+            line-height: 1.08;
+            font-weight: 850;
+            letter-spacing: -.055em;
+        }
+
+        .jm-section-heading p,
+        .jm-industries-copy p,
+        .jm-final-card p {
+            margin: 14px 0 0;
+            color: #667085;
+            font-size: .96rem;
+            line-height: 1.7;
+        }
+
+    .jm-compare-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+    }
+
+    .jm-compare-card,
+    .jm-feature-card,
+    .jm-module-panel,
+    .jm-report-card,
+    .jm-faq-grid div,
+    .jm-final-card {
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 18px 42px rgba(17, 24, 39, .045);
+    }
+
+    .jm-compare-card {
+        padding: 24px;
+        border-radius: 26px;
+    }
+
+        .jm-compare-card.new {
+            background: radial-gradient(circle at top right, rgba(143,166,161,.18), transparent 36%), #ffffff;
+            border-color: #dce7e4;
+        }
+
+        .jm-compare-card h3 {
+            margin: 0 0 16px;
+            color: #111827;
+            font-size: 1.12rem;
+            font-weight: 850;
+        }
+
+        .jm-compare-card div {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            padding: 11px 0;
+            border-top: 1px solid #f1f2f5;
+        }
+
+        .jm-compare-card i {
+            margin-top: 2px;
+        }
+
+        .jm-compare-card.old i {
+            color: #d92d20;
+        }
+
+        .jm-compare-card.new i {
+            color: #8FA6A1;
+        }
+
+        .jm-compare-card span {
+            color: #475569;
+            font-size: .9rem;
+            line-height: 1.5;
+            font-weight: 650;
+        }
+
+    .jm-feature-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .jm-feature-card {
+        padding: 20px;
+        border-radius: 24px;
+    }
+
+    .jm-feature-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 15px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        margin-bottom: 14px;
+    }
+
+    .jm-feature-card h3 {
+        margin: 0;
+        color: #111827;
+        font-size: .98rem;
+        font-weight: 820;
+    }
+
+    .jm-feature-card p {
+        margin: 8px 0 0;
+        color: #667085;
+        font-size: .82rem;
+        line-height: 1.6;
+    }
+
+    .jm-industries-grid,
+    .jm-modules-grid {
+        display: grid;
+        grid-template-columns: .85fr 1.15fr;
+        gap: 26px;
+        align-items: center;
+    }
+
+    .jm-industry-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+        .jm-industry-list div {
+            min-height: 86px;
+            padding: 16px;
+            border-radius: 22px;
+            background: #ffffff;
+            border: 1px solid #e8eaef;
+            box-shadow: 0 14px 32px rgba(17,24,39,.045);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .jm-industry-list i {
+            width: 38px;
+            height: 38px;
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #f2f6f5;
+            color: #8FA6A1;
+        }
+
+        .jm-industry-list span {
+            color: #111827;
+            font-size: .9rem;
+            font-weight: 800;
+        }
+
+    .jm-steps {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+        .jm-steps div {
+            padding: 20px;
+            border-radius: 24px;
+            background: #ffffff;
+            border: 1px solid #e8eaef;
+            box-shadow: 0 14px 32px rgba(17,24,39,.045);
+        }
+
+        .jm-steps strong {
+            width: 34px;
+            height: 34px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 13px;
+            background: #252525;
+            color: #ffffff;
+            font-size: .76rem;
+            margin-bottom: 14px;
+        }
+
+        .jm-steps h3 {
+            margin: 0;
+            color: #111827;
+            font-size: .96rem;
+            font-weight: 820;
+        }
+
+        .jm-steps p {
+            margin: 8px 0 0;
+            color: #667085;
+            font-size: .8rem;
+            line-height: 1.55;
+        }
+
+    .jm-module-panel,
+    .jm-report-card {
+        border-radius: 28px;
+        padding: 24px;
+    }
+
+    .jm-module-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 9px;
+        margin-top: 22px;
+    }
+
+        .jm-module-tags span {
+            min-height: 32px;
+            display: inline-flex;
+            align-items: center;
+            padding: 0 12px;
+            border-radius: 999px;
+            background: #f2f6f5;
+            color: #475569;
+            font-size: .76rem;
+            font-weight: 760;
+        }
+
+    .jm-report-card {
+        background: #252525;
+        color: #ffffff;
+    }
+
+    .jm-report-top span,
+    .jm-report-top strong {
+        color: #ffffff;
+    }
+
+    .jm-report-top span {
+        opacity: .65;
+    }
+
+    .jm-report-row {
+        margin-top: 12px;
+        padding: 13px;
+        border-radius: 16px;
+        background: rgba(255,255,255,.08);
+        border: 1px solid rgba(255,255,255,.10);
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+        .jm-report-row span {
+            color: rgba(255,255,255,.66);
+            font-size: .8rem;
+            font-weight: 700;
+        }
+
+        .jm-report-row strong {
+            color: #ffffff;
+            font-size: .86rem;
+            font-weight: 820;
+        }
+
+    .jm-mini-donut {
+        margin-top: 16px;
+        padding: 16px;
+        border-radius: 20px;
+        background: rgba(255,255,255,.08);
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+        .jm-mini-donut div {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: conic-gradient(#8FA6A1 0 48%, #ffffff 48% 76%, #b7791f 76% 100%);
+            box-shadow: inset 0 0 0 18px #252525;
+        }
+
+        .jm-mini-donut span {
+            color: rgba(255,255,255,.78);
+            font-size: .84rem;
+            font-weight: 800;
+        }
+
+    .jm-faq-section {
+        padding-top: 40px;
+    }
+
+    .jm-faq-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+        .jm-faq-grid div {
+            padding: 20px;
+            border-radius: 24px;
+        }
+
+        .jm-faq-grid h3 {
+            margin: 0;
+            color: #111827;
+            font-size: .96rem;
+            font-weight: 820;
+        }
+
+        .jm-faq-grid p {
+            margin: 9px 0 0;
+            color: #667085;
+            font-size: .82rem;
+            line-height: 1.6;
+        }
+
+    .jm-final-cta {
+        padding: 30px 0 76px;
+    }
+
+    .jm-final-card {
+        padding: 34px;
+        border-radius: 30px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 24px;
+        background: radial-gradient(circle at top right, rgba(143,166,161,.24), transparent 34%), #ffffff;
+    }
+
+    .jm-final-actions {
+        margin-top: 0;
+        justify-content: flex-end;
+        flex: 0 0 auto;
+    }
+
+    @@media (max-width: 1100px) {
+        .jm-hero-grid,
+        .jm-industries-grid,
+        .jm-modules-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .jm-feature-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .jm-steps {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .jm-faq-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
     }
 
     @@media (max-width: 768px) {
-        .hero-content h1 {
-            font-size: 1.9rem;
+        .jm-hero {
+            padding-top: 44px;
         }
 
-        .hero-section {
-            padding: 60px 18px;
+        .jm-preview-cards,
+        .jm-strip-grid,
+        .jm-compare-grid,
+        .jm-feature-grid,
+        .jm-industry-list,
+        .jm-steps,
+        .jm-faq-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .jm-final-card {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .jm-final-actions,
+        .jm-final-actions .jm-btn,
+        .jm-hero-actions .jm-btn {
+            width: 100%;
+        }
+
+        .jm-bars {
+            height: 130px;
+        }
+    }
+
+    @@media (max-width: 520px) {
+        .jm-container {
+            width: min(100% - 24px, 1180px);
+        }
+
+        .jm-dashboard-preview,
+        .jm-module-panel,
+        .jm-report-card,
+        .jm-final-card {
+            border-radius: 24px;
+        }
+
+        .jm-section {
+            padding: 52px 0;
         }
     }
 </style>
