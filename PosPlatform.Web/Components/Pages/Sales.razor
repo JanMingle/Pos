@@ -680,6 +680,36 @@ disabled="@(_returnPage >= ReturnTotalPages ? "disabled" : null)"
     </div>
 }
 
+@if (_showRemoveItemConfirmModal)
+{
+    <div class="sales-modal-backdrop">
+        <div class="sales-confirm-card">
+            <div class="sales-confirm-icon danger">
+                <i class="bi bi-trash"></i>
+            </div>
+
+            <h3>Remove Item?</h3>
+
+            <p>
+                Are you sure you want to remove
+                <strong>@(_pendingRemoveItemName ?? "this item")</strong>
+                from the cart?
+            </p>
+
+            <div class="sales-modal-actions">
+                <button type="button" class="sales-ghost-btn" @onclick="CloseRemoveItemConfirmModal">
+                    Cancel
+                </button>
+
+                <button type="button" class="sales-danger-btn" @onclick="ConfirmRemoveCartItem">
+                    <i class="bi bi-trash"></i>
+                    Yes, Remove
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @if (_showSaleConfirmModal)
 {
     <div class="sales-modal-backdrop">
@@ -2283,6 +2313,33 @@ disabled="@(_savingRefund ? "disabled" : null)"
             font-weight: 780;
         }
 
+    .sales-confirm-icon.danger {
+        background: #fef2f2;
+        color: #dc2626;
+    }
+
+    .sales-danger-btn {
+        min-height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        border-radius: 12px;
+        font-size: .8rem;
+        font-weight: 680;
+        border: 0;
+        background: #dc2626;
+        color: #ffffff;
+        transition: all .18s ease;
+        white-space: nowrap;
+    }
+
+        .sales-danger-btn:hover {
+            transform: translateY(-1px);
+            background: #b91c1c;
+        }
+
     @@keyframes salesIn {
         from {
             opacity: 0;
@@ -2423,7 +2480,12 @@ disabled="@(_savingRefund ? "disabled" : null)"
     private bool _loadingMySales;
     private bool _showAgeConfirmModal;
     private bool _showSaleConfirmModal;
+    private bool _showRemoveItemConfirmModal;
     private bool _ageRestrictionConfirmed;
+
+    private int? _pendingRemoveProductId;
+    private int? _pendingRemoveProductVariantId;
+    private string? _pendingRemoveItemName;
 
     private string? _searchTerm;
     private string? _barcodeValue;
@@ -2887,15 +2949,46 @@ disabled="@(_savingRefund ? "disabled" : null)"
     {
         var item = FindCartItem(productId, productVariantId);
 
+        if (item == null)
+        {
+            return;
+        }
+
+        _pendingRemoveProductId = productId;
+        _pendingRemoveProductVariantId = productVariantId;
+        _pendingRemoveItemName = GetCartItemName(item);
+        _showRemoveItemConfirmModal = true;
+    }
+
+    private void ConfirmRemoveCartItem()
+    {
+        if (!_pendingRemoveProductId.HasValue)
+        {
+            CloseRemoveItemConfirmModal();
+            return;
+        }
+
+        var item = FindCartItem(_pendingRemoveProductId.Value, _pendingRemoveProductVariantId);
+
         if (item != null)
         {
             _cart.Remove(item);
         }
 
+        CloseRemoveItemConfirmModal();
+
         if (!CartHasAgeRestrictedItems)
         {
             _ageRestrictionConfirmed = false;
         }
+    }
+
+    private void CloseRemoveItemConfirmModal()
+    {
+        _showRemoveItemConfirmModal = false;
+        _pendingRemoveProductId = null;
+        _pendingRemoveProductVariantId = null;
+        _pendingRemoveItemName = null;
     }
 
     private SaleCartLineViewModel? FindCartItem(int productId, int? productVariantId)
@@ -3157,6 +3250,10 @@ private string GetCompleteSaleButtonText()
         _ageRestrictionConfirmed = false;
         _showSaleConfirmModal = false;
         _showAgeConfirmModal = false;
+        _showRemoveItemConfirmModal = false;
+        _pendingRemoveProductId = null;
+        _pendingRemoveProductVariantId = null;
+        _pendingRemoveItemName = null;
     }
 
     private void SetExactPayment()
