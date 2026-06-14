@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @layout MainLayout
 @attribute [Authorize]
+@using System.Globalization
 @using PosPlatform.Web.Components.Layout
 @using PosPlatform.Web.Models.Reports
 @using PosPlatform.Web.Models.Settings
@@ -15,47 +16,61 @@
 <PageTitle>Reports</PageTitle>
 
 <section class="reports-page">
-    <div class="reports-header">
+    <div class="reports-top">
         <div>
             <div class="reports-kicker">
                 <i class="bi bi-bar-chart"></i>
                 Business intelligence
             </div>
+
             <h1>Reports Dashboard</h1>
-            <p>View sales, payment methods, cashiers, stock, customers and till differences.</p>
-        </div>
-        <div class="reports-branch-badge">
-            <i class="bi bi-shop"></i>
-            Showing: @_dashboard.SelectedBranchName
+            <p>View sales, profit, expenses, payment methods, stock, customers, suppliers and till differences.</p>
+
+            <div class="reports-branch-badge">
+                <i class="bi bi-shop"></i>
+                Showing: @_dashboard.SelectedBranchName
+            </div>
         </div>
 
-        <div class="reports-date-filters">
-            <input type="date" @bind="_fromDate" />
-            <input type="date" @bind="_toDate" />
-            <select class="reports-filter-input" @bind="_branchFilter">
-                <option value="">All branches</option>
-                @foreach (var branch in _dashboard.Branches)
-                {
-                    <option value="@branch.Id">
-                        @branch.Name
-                        @if (branch.IsMainBranch)
-                        {
-                            @(" · Main")
-                        }
-                    </option>
-                }
-            </select>
+        <div class="reports-actions">
+            <div class="reports-quick-range">
+                <button type="button" @onclick="SetTodayAsync">Today</button>
+                <button type="button" @onclick="SetLast7DaysAsync">7 Days</button>
+                <button type="button" @onclick="SetLast30DaysAsync">30 Days</button>
+                <button type="button" @onclick="SetThisMonthAsync">This Month</button>
+            </div>
 
+            <div class="reports-date-filters">
+                <input type="date" @bind="_fromDate" />
+                <input type="date" @bind="_toDate" />
 
-            <button type="button" class="reports-primary-btn" @onclick="LoadReportsAsync">
-                <i class="bi bi-filter"></i>
-                Apply
-            </button>
+                <select class="reports-filter-input"
+                        value="@(_branchFilter?.ToString() ?? "")"
+                        @onchange="BranchFilterChanged">
+                    <option value="">All branches</option>
+                    @foreach (var branch in _dashboard.Branches)
+                    {
+                        <option value="@branch.Id">
+                            @branch.Name
+                            @if (branch.IsMainBranch)
+                            {
+                                @(" · Main")
+                            }
+                        </option>
+                    }
+                </select>
+
+                <button type="button" class="reports-primary-btn" @onclick="LoadReportsAsync">
+                    <i class="bi bi-filter"></i>
+                    Apply
+                </button>
+
+                <button type="button" class="reports-secondary-btn" @onclick="DownloadExcelReport">
+                    <i class="bi bi-file-earmark-excel"></i>
+                    Export Excel
+                </button>
+            </div>
         </div>
-        <button type="button" class="reports-secondary-btn" @onclick="DownloadExcelReport">
-            <i class="bi bi-file-earmark-excel"></i>
-            Export Excel
-        </button>
     </div>
 
     <div class="reports-settings-strip">
@@ -83,6 +98,9 @@
     @if (_loading)
     {
         <div class="reports-empty">
+            <div class="reports-empty-icon">
+                <i class="bi bi-hourglass-split"></i>
+            </div>
             <strong>Loading reports...</strong>
             <span>Please wait while we prepare your business dashboard.</span>
         </div>
@@ -90,109 +108,326 @@
     else
     {
         <div class="reports-summary-grid">
-            <div class="reports-summary-card dark">
+            <div class="reports-summary-card hero">
+                <div class="reports-summary-icon">
+                    <i class="bi bi-cash-stack"></i>
+                </div>
                 <span>Net Sales</span>
                 <strong>@Money(_dashboard.NetSales)</strong>
+                <small>Gross sales less refunds</small>
             </div>
 
-            <div class="reports-summary-card dark">
+            <div class="reports-summary-card hero">
+                <div class="reports-summary-icon">
+                    <i class="bi bi-graph-up-arrow"></i>
+                </div>
                 <span>Net Profit</span>
                 <strong>@Money(_dashboard.NetProfit)</strong>
+                <small>@_dashboard.NetProfitMargin.ToString("0.##")% net margin</small>
             </div>
 
-            <div class="reports-summary-card teal">
-                <span>Net Profit Margin</span>
-                <strong>@_dashboard.NetProfitMargin.ToString("0.##")%</strong>
-            </div>
-
-            <div class="reports-summary-card red">
-                <span>Total Expenses</span>
-                <strong>@Money(_dashboard.TotalExpenses)</strong>
-            </div>
-
-            <div class="reports-summary-card amber">
-                <span>Expense Count</span>
-                <strong>@_dashboard.ExpenseCount</strong>
-            </div>
-
-            <div class="reports-summary-card green">
+            <div class="reports-summary-card">
+                <div class="reports-summary-icon green">
+                    <i class="bi bi-piggy-bank"></i>
+                </div>
                 <span>Gross Profit</span>
                 <strong>@Money(_dashboard.GrossProfit)</strong>
+                <small>@_dashboard.GrossProfitMargin.ToString("0.##")% gross margin</small>
             </div>
 
-            <div class="reports-summary-card teal">
-                <span>Profit Margin</span>
-                <strong>@_dashboard.GrossProfitMargin.ToString("0.##")%</strong>
+            <div class="reports-summary-card">
+                <div class="reports-summary-icon red">
+                    <i class="bi bi-wallet2"></i>
+                </div>
+                <span>Total Expenses</span>
+                <strong>@Money(_dashboard.TotalExpenses)</strong>
+                <small>@_dashboard.ExpenseCount expense(s)</small>
             </div>
 
-            <div class="reports-summary-card amber">
+            <div class="reports-summary-card">
+                <div class="reports-summary-icon amber">
+                    <i class="bi bi-box-seam"></i>
+                </div>
                 <span>Cost of Goods</span>
                 <strong>@Money(_dashboard.NetCostOfGoodsSold)</strong>
+                <small>After returned costs</small>
             </div>
 
             <div class="reports-summary-card">
-                <span>Gross Sales</span>
-                <strong>@Money(_dashboard.GrossSales)</strong>
-            </div>
-
-            <div class="reports-summary-card violet">
-                <span>Purchases</span>
-                <strong>@Money(_dashboard.PurchaseTotal)</strong>
-            </div>
-
-            <div class="reports-summary-card">
-                <span>Purchase Count</span>
-                <strong>@_dashboard.PurchaseCount</strong>
-            </div>
-
-            <div class="reports-summary-card red">
-                <span>Refunds / Returns</span>
-                <strong>@Money(_dashboard.TotalRefunds)</strong>
-            </div>
-
-            <div class="reports-summary-card">
+                <div class="reports-summary-icon blue">
+                    <i class="bi bi-cart-check"></i>
+                </div>
                 <span>Transactions</span>
                 <strong>@_dashboard.TotalTransactions</strong>
+                <small>Average sale: @Money(_dashboard.AverageSale)</small>
             </div>
 
             <div class="reports-summary-card">
-                <span>Average Sale</span>
-                <strong>@Money(_dashboard.AverageSale)</strong>
+                <div class="reports-summary-icon violet">
+                    <i class="bi bi-arrow-repeat"></i>
+                </div>
+                <span>Refunds / Returns</span>
+                <strong>@Money(_dashboard.TotalRefunds)</strong>
+                <small>@_dashboard.RefundCount refund(s)</small>
             </div>
 
-            <div class="reports-summary-card amber">
-                <span>Refund Count</span>
-                <strong>@_dashboard.RefundCount</strong>
-            </div>
-
-            <div class="reports-summary-card red">
-                <span>Voids</span>
-                <strong>@_dashboard.VoidCount</strong>
-            </div>
-
-            <div class="reports-summary-card green">
-                <span>Cash Sales</span>
-                <strong>@Money(_dashboard.CashSales)</strong>
-            </div>
-
-            <div class="reports-summary-card blue">
-                <span>Card Sales</span>
-                <strong>@Money(_dashboard.CardSales)</strong>
-            </div>
-
-            <div class="reports-summary-card violet">
-                <span>EFT Sales</span>
-                <strong>@Money(_dashboard.EftSales)</strong>
-            </div>
-
-            <div class="reports-summary-card">
-                <span>Stock Value</span>
-                <strong>@Money(_dashboard.StockValue)</strong>
-            </div>
-
-            <div class="reports-summary-card @(GetDifferenceClass(_dashboard.TotalCashDifference))">
+            <div class="reports-summary-card @GetDifferenceClass(_dashboard.TotalCashDifference)">
+                <div class="reports-summary-icon">
+                    <i class="bi bi-cash-coin"></i>
+                </div>
                 <span>Cash Difference</span>
                 <strong>@Money(_dashboard.TotalCashDifference)</strong>
+                <small>Cashier shift over/short</small>
+            </div>
+        </div>
+
+        <div class="reports-insight-grid">
+            <div class="reports-insight-card">
+                <span>Top Payment Method</span>
+                <strong>@TopPaymentMethod</strong>
+                <small>Based on net amount</small>
+            </div>
+
+            <div class="reports-insight-card">
+                <span>Top Expense Category</span>
+                <strong>@TopExpenseCategory</strong>
+                <small>Largest spend category</small>
+            </div>
+
+            <div class="reports-insight-card">
+                <span>Top Selling Item</span>
+                <strong>@TopSellingItem</strong>
+                <small>Highest sales value</small>
+            </div>
+
+            <div class="reports-insight-card">
+                <span>Stock Value</span>
+                <strong>@Money(_dashboard.StockValue)</strong>
+                <small>Current stock value</small>
+            </div>
+        </div>
+
+        <div class="reports-chart-grid">
+            <div class="reports-chart-card">
+                <div class="reports-chart-header">
+                    <div>
+                        <h2>Profit Snapshot</h2>
+                        <p>Sales, cost, expenses and profit compared visually.</p>
+                    </div>
+                </div>
+
+                <div class="reports-bar-chart">
+                    <div class="reports-bar-row">
+                        <div class="reports-bar-label">
+                            <span>Net Sales</span>
+                            <strong>@Money(_dashboard.NetSales)</strong>
+                        </div>
+                        <div class="reports-bar-track">
+                            <div class="reports-bar-fill sales" style="@GetBarStyle(_dashboard.NetSales, ProfitChartMax)"></div>
+                        </div>
+                    </div>
+
+                    <div class="reports-bar-row">
+                        <div class="reports-bar-label">
+                            <span>Cost of Goods</span>
+                            <strong>@Money(_dashboard.NetCostOfGoodsSold)</strong>
+                        </div>
+                        <div class="reports-bar-track">
+                            <div class="reports-bar-fill amber" style="@GetBarStyle(_dashboard.NetCostOfGoodsSold, ProfitChartMax)"></div>
+                        </div>
+                    </div>
+
+                    <div class="reports-bar-row">
+                        <div class="reports-bar-label">
+                            <span>Expenses</span>
+                            <strong>@Money(_dashboard.TotalExpenses)</strong>
+                        </div>
+                        <div class="reports-bar-track">
+                            <div class="reports-bar-fill red" style="@GetBarStyle(_dashboard.TotalExpenses, ProfitChartMax)"></div>
+                        </div>
+                    </div>
+
+                    <div class="reports-bar-row">
+                        <div class="reports-bar-label">
+                            <span>Net Profit</span>
+                            <strong class="@GetProfitTextClass(_dashboard.NetProfit)">@Money(_dashboard.NetProfit)</strong>
+                        </div>
+                        <div class="reports-bar-track">
+                            <div class="reports-bar-fill @( _dashboard.NetProfit >= 0 ? "green" : "red" )" style="@GetBarStyle(_dashboard.NetProfit, ProfitChartMax)"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="reports-chart-card">
+                <div class="reports-chart-header">
+                    <div>
+                        <h2>Payment Mix</h2>
+                        <p>Share of net sales by payment type.</p>
+                    </div>
+                </div>
+
+                <div class="reports-donut-layout">
+                    <div class="reports-donut" style="@GetPaymentDonutStyle()">
+                        <div>
+                            <strong>@Money(PaymentMixTotal)</strong>
+                            <span>Net payments</span>
+                        </div>
+                    </div>
+
+                    <div class="reports-donut-legend">
+                        <div>
+                            <span class="legend-dot cash"></span>
+                            <strong>Cash</strong>
+                            <em>@PercentageText(CashPaymentTotal, PaymentMixTotal)</em>
+                        </div>
+
+                        <div>
+                            <span class="legend-dot card"></span>
+                            <strong>Card</strong>
+                            <em>@PercentageText(CardPaymentTotal, PaymentMixTotal)</em>
+                        </div>
+
+                        <div>
+                            <span class="legend-dot eft"></span>
+                            <strong>EFT</strong>
+                            <em>@PercentageText(EftPaymentTotal, PaymentMixTotal)</em>
+                        </div>
+
+                        <div>
+                            <span class="legend-dot other"></span>
+                            <strong>Other</strong>
+                            <em>@PercentageText(OtherPaymentTotal, PaymentMixTotal)</em>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="reports-chart-card">
+                <div class="reports-chart-header">
+                    <div>
+                        <h2>Top Selling Items</h2>
+                        <p>Best performers by total sales value.</p>
+                    </div>
+                </div>
+
+                @if (_dashboard.TopItems.Count == 0)
+                {
+                    <ReportsEmpty Text="No item sales found." />
+                }
+                else
+                {
+                    <div class="reports-bar-chart">
+                        @foreach (var item in _dashboard.TopItems.Take(6))
+                        {
+                            <div class="reports-bar-row">
+                                <div class="reports-bar-label">
+                                    <span>@item.ProductName</span>
+                                    <strong>@Money(item.TotalAmount)</strong>
+                                </div>
+                                <div class="reports-bar-track">
+                                    <div class="reports-bar-fill blue" style="@GetBarStyle(item.TotalAmount, TopItemsMax)"></div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="reports-chart-card">
+                <div class="reports-chart-header">
+                    <div>
+                        <h2>Expenses by Category</h2>
+                        <p>Highest expense categories in the selected period.</p>
+                    </div>
+                </div>
+
+                @if (_dashboard.ExpensesByCategory.Count == 0)
+                {
+                    <ReportsEmpty Text="No expenses found." />
+                }
+                else
+                {
+                    <div class="reports-bar-chart">
+                        @foreach (var item in _dashboard.ExpensesByCategory.Take(6))
+                        {
+                            <div class="reports-bar-row">
+                                <div class="reports-bar-label">
+                                    <span>@item.CategoryName</span>
+                                    <strong>@Money(item.TotalAmount)</strong>
+                                </div>
+                                <div class="reports-bar-track">
+                                    <div class="reports-bar-fill red" style="@GetBarStyle(item.TotalAmount, ExpensesCategoryMax)"></div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="reports-chart-card">
+                <div class="reports-chart-header">
+                    <div>
+                        <h2>Sales by Cashier</h2>
+                        <p>Cashier performance by sales total.</p>
+                    </div>
+                </div>
+
+                @if (_dashboard.Cashiers.Count == 0)
+                {
+                    <ReportsEmpty Text="No cashier sales found." />
+                }
+                else
+                {
+                    <div class="reports-bar-chart">
+                        @foreach (var item in _dashboard.Cashiers.Take(6))
+                        {
+                            <div class="reports-bar-row">
+                                <div class="reports-bar-label">
+                                    <span>@item.CashierName</span>
+                                    <strong>@Money(item.TotalSales)</strong>
+                                </div>
+                                <div class="reports-bar-track">
+                                    <div class="reports-bar-fill green" style="@GetBarStyle(item.TotalSales, CashiersMax)"></div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="reports-chart-card">
+                <div class="reports-chart-header">
+                    <div>
+                        <h2>Payment Methods</h2>
+                        <p>Gross, refunds and net payment performance.</p>
+                    </div>
+                </div>
+
+                @if (_dashboard.PaymentMethods.Count == 0)
+                {
+                    <ReportsEmpty Text="No payment data found." />
+                }
+                else
+                {
+                    <div class="reports-list compact-list">
+                        @foreach (var item in _dashboard.PaymentMethods)
+                        {
+                            <div class="reports-list-row reports-payment-row">
+                                <div>
+                                    <strong>@item.PaymentMethod</strong>
+                                    <span>@item.Transactions sale@(item.Transactions == 1 ? "" : "s") · @item.Refunds refund@(item.Refunds == 1 ? "" : "s")</span>
+                                </div>
+
+                                <div class="reports-mini-metrics">
+                                    <span>Gross: <strong>@Money(item.TotalAmount)</strong></span>
+                                    <span>Refunds: <strong>@Money(item.RefundAmount)</strong></span>
+                                    <span>Net: <strong>@Money(item.NetAmount)</strong></span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
             </div>
         </div>
 
@@ -200,7 +435,7 @@
             <div class="reports-panel-header">
                 <div>
                     <h2>Profit Breakdown</h2>
-                    <p>Sales minus refunds and item costs.</p>
+                    <p>Sales minus refunds, item costs and expenses.</p>
                 </div>
             </div>
 
@@ -242,7 +477,7 @@
                         <strong>Gross Profit</strong>
                         <span>Net sales minus net cost.</span>
                     </div>
-                    <strong class="@( _dashboard.GrossProfit >= 0 ? "difference-good" : "difference-bad" )">
+                    <strong class="@GetProfitTextClass(_dashboard.GrossProfit)">
                         @Money(_dashboard.GrossProfit)
                     </strong>
                 </div>
@@ -275,7 +510,7 @@
 
                 <div class="reports-list-row">
                     <div>
-                        <strong>Profit Margin</strong>
+                        <strong>Gross Profit Margin</strong>
                         <span>Gross profit as a percentage of net sales.</span>
                     </div>
                     <strong>@_dashboard.GrossProfitMargin.ToString("0.##")%</strong>
@@ -285,70 +520,6 @@
 
         <div class="reports-grid">
             <div class="reports-panel">
-                <div class="reports-panel-header">
-                    <div>
-                        <h2>Sales by Payment Method</h2>
-                        <p>Cash, card and EFT performance.</p>
-                    </div>
-                </div>
-
-                @if (_dashboard.PaymentMethods.Count == 0)
-                {
-                    <ReportsEmpty Text="No payment data found." />
-                }
-                else
-                {
-                    <div class="reports-list">
-                        @foreach (var item in _dashboard.PaymentMethods)
-                        {
-                            <div class="reports-list-row reports-payment-row">
-                                <div>
-                                    <strong>@item.PaymentMethod</strong>
-                                    <span>@item.Transactions sale@(item.Transactions == 1 ? "" : "s") · @item.Refunds refund@(item.Refunds == 1 ? "" : "s")</span>
-                                </div>
-
-                                <div class="reports-mini-metrics">
-                                    <span>Gross: <strong>@Money(item.TotalAmount)</strong></span>
-                                    <span>Refunds: <strong>@Money(item.RefundAmount)</strong></span>
-                                    <span>Net: <strong>@Money(item.NetAmount)</strong></span>
-                                </div>
-                            </div>
-                        }
-                    </div>
-                }
-            </div>
-
-            <div class="reports-panel">
-                <div class="reports-panel-header">
-                    <div>
-                        <h2>Expenses by Category</h2>
-                        <p>Where money was spent in the selected period.</p>
-                    </div>
-                </div>
-
-                @if (_dashboard.ExpensesByCategory.Count == 0)
-                {
-                    <ReportsEmpty Text="No expenses found." />
-                }
-                else
-                {
-                    <div class="reports-list">
-                        @foreach (var item in _dashboard.ExpensesByCategory)
-                        {
-                            <div class="reports-list-row">
-                                <div>
-                                    <strong>@item.CategoryName</strong>
-                                    <span>@item.ExpenseCount expense@(item.ExpenseCount == 1 ? "" : "s")</span>
-                                </div>
-
-                                <strong class="reports-negative">@Money(item.TotalAmount)</strong>
-                            </div>
-                        }
-                    </div>
-                }
-            </div>
-
-            <div class="reports-panel reports-panel-wide">
                 <div class="reports-panel-header">
                     <div>
                         <h2>Recent Expenses</h2>
@@ -423,36 +594,6 @@
                                 </div>
 
                                 <strong>@Money(supplier.TotalSpent)</strong>
-                            </div>
-                        }
-                    </div>
-                }
-            </div>
-
-            <div class="reports-panel">
-                <div class="reports-panel-header">
-                    <div>
-                        <h2>Sales by Cashier</h2>
-                        <p>Performance by logged-in cashier.</p>
-                    </div>
-                </div>
-
-                @if (_dashboard.Cashiers.Count == 0)
-                {
-                    <ReportsEmpty Text="No cashier sales found." />
-                }
-                else
-                {
-                    <div class="reports-list">
-                        @foreach (var item in _dashboard.Cashiers)
-                        {
-                            <div class="reports-list-row">
-                                <div>
-                                    <strong>@item.CashierName</strong>
-                                    <span>@item.Transactions sale@(item.Transactions == 1 ? "" : "s")</span>
-                                </div>
-
-                                <strong>@Money(item.TotalSales)</strong>
                             </div>
                         }
                     </div>
@@ -780,7 +921,7 @@
                                         </td>
                                         <td>@shift.CashierName</td>
                                         <td>@shift.OpenedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
-                                        <td>@(shift.ClosedAt.HasValue ? shift.ClosedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "-")</td>
+                                        <td>@(shift.ClosedAt.HasValue? shift.ClosedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "-")</td>
                                         <td>@Money(shift.OpeningCash)</td>
                                         <td>@Money(shift.CashSales)</td>
                                         <td>@Money(shift.ExpectedCash)</td>
@@ -804,218 +945,494 @@
         animation: reportsIn .22s ease both;
     }
 
-    .reports-header {
+    .reports-top {
         display: flex;
         justify-content: space-between;
-        align-items: flex-end;
+        align-items: flex-start;
         gap: 18px;
-        margin-bottom: 18px;
+        margin-bottom: 16px;
     }
 
     .reports-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
 
-    .reports-header h1 {
+    .reports-top h1 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.45rem;
-        font-weight: 680;
-        letter-spacing: -.03em;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
-    .reports-header p {
+    .reports-top p {
         margin: 6px 0 0;
-        color: #64748b;
+        color: #667085;
         font-size: .88rem;
     }
 
-    .reports-date-filters {
+    .reports-actions {
+        display: grid;
+        justify-items: end;
+        gap: 10px;
+    }
+
+    .reports-date-filters,
+    .reports-quick-range {
         display: flex;
         gap: 8px;
         align-items: center;
         flex-wrap: wrap;
+        justify-content: flex-end;
     }
 
-    .reports-date-filters input {
-        min-height: 38px;
-        border-radius: 10px;
-        border: 1px solid #e5e7eb;
-        padding: 0 10px;
-        font-size: .82rem;
-    }
+        .reports-quick-range button {
+            min-height: 32px;
+            border-radius: 999px;
+            border: 1px solid #e5e7eb;
+            background: #ffffff;
+            color: #475569;
+            padding: 0 11px;
+            font-size: .74rem;
+            font-weight: 700;
+        }
 
-    .reports-primary-btn {
-        min-height: 38px;
-        border-radius: 11px;
+        .reports-date-filters input,
+        .reports-filter-input {
+            min-height: 40px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            padding: 0 12px;
+            color: #111827;
+            background: #ffffff;
+            font-size: 16px;
+            outline: none;
+        }
+
+    .reports-primary-btn,
+    .reports-secondary-btn {
+        min-height: 40px;
+        border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
         padding: 0 14px;
         font-size: .8rem;
-        font-weight: 650;
+        font-weight: 680;
         border: 0;
-        color: #ffffff;
-        background: #111827;
         white-space: nowrap;
+        transition: transform .18s ease;
     }
 
-    .reports-settings-strip {
+    .reports-primary-btn {
+        color: #ffffff;
+        background: #252525;
+        box-shadow: 0 12px 24px rgba(17,24,39,.12);
+    }
+
+    .reports-secondary-btn {
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
+    }
+
+        .reports-primary-btn:hover,
+        .reports-secondary-btn:hover,
+        .reports-quick-range button:hover {
+            transform: translateY(-1px);
+        }
+
+    .reports-branch-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        min-height: 30px;
+        padding: 0 11px;
+        margin-top: 10px;
+        border-radius: 999px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        font-size: .74rem;
+        font-weight: 760;
+    }
+
+    .reports-settings-strip,
+    .reports-summary-grid,
+    .reports-insight-grid,
+    .reports-chart-grid,
+    .reports-grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 10px;
-        margin-bottom: 16px;
-    }
-
-    .reports-settings-strip div,
-    .reports-summary-card,
-    .reports-panel {
-        background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.04);
-    }
-
-    .reports-settings-strip div {
-        padding: 13px;
-        border-radius: 16px;
-    }
-
-    .reports-settings-strip span,
-    .reports-settings-strip strong {
-        display: block;
-    }
-
-    .reports-settings-strip span {
-        color: #64748b;
-        font-size: .72rem;
-        font-weight: 650;
-    }
-
-    .reports-settings-strip strong {
-        margin-top: 4px;
-        color: #0f172a;
-        font-size: .84rem;
-        font-weight: 720;
-    }
-
-    .reports-summary-grid {
-        display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr));
         gap: 12px;
         margin-bottom: 16px;
     }
 
-    .reports-summary-card {
-        padding: 16px;
-        border-radius: 18px;
+    .reports-settings-strip {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
-    .reports-summary-card span,
-    .reports-summary-card strong {
-        display: block;
+    .reports-summary-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
-    .reports-summary-card span {
-        color: #64748b;
-        font-size: .72rem;
-        font-weight: 650;
+    .reports-insight-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
-    .reports-summary-card strong {
-        margin-top: 6px;
-        color: #0f172a;
-        font-size: 1rem;
-        font-weight: 750;
-    }
-
-    .reports-summary-card.dark {
-        background: #111827;
-        border-color: #111827;
-    }
-
-    .reports-summary-card.dark span,
-    .reports-summary-card.dark strong {
-        color: #ffffff;
-    }
-
-    .reports-summary-card.green strong {
-        color: #16a34a;
-    }
-
-    .reports-summary-card.blue strong {
-        color: #2563eb;
-    }
-
-    .reports-summary-card.violet strong {
-        color: #7c3aed;
-    }
-
-    .reports-summary-card.amber strong {
-        color: #d97706;
-    }
-
-    .reports-summary-card.teal strong {
-        color: #0f766e;
-    }
-
-    .reports-summary-card.red strong {
-        color: #dc2626;
-    }
-
-    .reports-summary-card.good strong {
-        color: #15803d;
-    }
-
-    .reports-summary-card.bad strong {
-        color: #dc2626;
+    .reports-chart-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .reports-grid {
-        display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 16px;
     }
 
+    .reports-settings-strip div,
+    .reports-summary-card,
+    .reports-insight-card,
+    .reports-chart-card,
     .reports-panel {
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17,24,39,.045);
+    }
+
+    .reports-settings-strip div,
+    .reports-insight-card {
+        padding: 15px;
         border-radius: 20px;
+    }
+
+        .reports-settings-strip span,
+        .reports-settings-strip strong,
+        .reports-insight-card span,
+        .reports-insight-card strong,
+        .reports-insight-card small {
+            display: block;
+        }
+
+        .reports-settings-strip span,
+        .reports-insight-card span {
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .reports-settings-strip strong,
+        .reports-insight-card strong {
+            margin-top: 5px;
+            color: #111827;
+            font-size: .9rem;
+            font-weight: 750;
+        }
+
+        .reports-insight-card small {
+            margin-top: 4px;
+            color: #98a2b3;
+            font-size: .72rem;
+        }
+
+    .reports-summary-card {
+        padding: 15px;
+        border-radius: 20px;
+    }
+
+        .reports-summary-card span,
+        .reports-summary-card strong,
+        .reports-summary-card small {
+            display: block;
+        }
+
+        .reports-summary-card span {
+            margin-top: 11px;
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .reports-summary-card strong {
+            margin-top: 6px;
+            color: #111827;
+            font-size: 1.05rem;
+            font-weight: 760;
+            letter-spacing: -.02em;
+        }
+
+        .reports-summary-card small {
+            margin-top: 4px;
+            color: #98a2b3;
+            font-size: .72rem;
+            line-height: 1.35;
+        }
+
+        .reports-summary-card.hero {
+            background: #252525;
+            border-color: #252525;
+        }
+
+            .reports-summary-card.hero span,
+            .reports-summary-card.hero strong,
+            .reports-summary-card.hero small {
+                color: #ffffff;
+            }
+
+        .reports-summary-card.good strong {
+            color: #15803d;
+        }
+
+        .reports-summary-card.bad strong {
+            color: #d92d20;
+        }
+
+    .reports-summary-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #252525;
+        box-shadow: 0 10px 22px rgba(17, 24, 39, .08);
+    }
+
+        .reports-summary-icon.green {
+            color: #8FA6A1;
+            background: #f2f6f5;
+        }
+
+        .reports-summary-icon.blue {
+            color: #2563eb;
+            background: #eff6ff;
+        }
+
+        .reports-summary-icon.amber {
+            color: #b7791f;
+            background: #fffbeb;
+        }
+
+        .reports-summary-icon.red {
+            color: #d92d20;
+            background: #fef3f2;
+        }
+
+        .reports-summary-icon.violet {
+            color: #7c3aed;
+            background: #f5f3ff;
+        }
+
+    .reports-chart-card,
+    .reports-panel {
+        border-radius: 22px;
         overflow: hidden;
+    }
+
+    .reports-chart-header,
+    .reports-panel-header {
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
+    }
+
+        .reports-chart-header h2,
+        .reports-panel-header h2 {
+            margin: 0;
+            color: #111827;
+            font-size: .94rem;
+            font-weight: 720;
+        }
+
+        .reports-chart-header p,
+        .reports-panel-header p {
+            margin: 4px 0 0;
+            color: #98a2b3;
+            font-size: .75rem;
+        }
+
+    .reports-bar-chart {
+        padding: 16px 18px;
+        display: grid;
+        gap: 13px;
+    }
+
+    .reports-bar-row {
+        display: grid;
+        gap: 7px;
+    }
+
+    .reports-bar-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+        .reports-bar-label span {
+            color: #667085;
+            font-size: .78rem;
+            font-weight: 700;
+        }
+
+        .reports-bar-label strong {
+            color: #111827;
+            font-size: .78rem;
+            font-weight: 760;
+            text-align: right;
+        }
+
+    .reports-bar-track {
+        height: 10px;
+        border-radius: 999px;
+        background: #f3f4f6;
+        overflow: hidden;
+    }
+
+    .reports-bar-fill {
+        height: 100%;
+        min-width: 4px;
+        border-radius: 999px;
+        background: #252525;
+    }
+
+        .reports-bar-fill.sales {
+            background: #252525;
+        }
+
+        .reports-bar-fill.green {
+            background: #8FA6A1;
+        }
+
+        .reports-bar-fill.blue {
+            background: #2563eb;
+        }
+
+        .reports-bar-fill.amber {
+            background: #b7791f;
+        }
+
+        .reports-bar-fill.red {
+            background: #d92d20;
+        }
+
+    .reports-donut-layout {
+        padding: 16px 18px;
+        display: grid;
+        grid-template-columns: 190px minmax(0, 1fr);
+        gap: 16px;
+        align-items: center;
+    }
+
+    .reports-donut {
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        position: relative;
+        box-shadow: inset 0 0 0 1px rgba(17,24,39,.06);
+    }
+
+        .reports-donut::after {
+            content: "";
+            position: absolute;
+            width: 112px;
+            height: 112px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 10px 24px rgba(17,24,39,.08);
+        }
+
+        .reports-donut div {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            padding: 10px;
+        }
+
+        .reports-donut strong {
+            display: block;
+            color: #111827;
+            font-size: .92rem;
+            font-weight: 780;
+        }
+
+        .reports-donut span {
+            display: block;
+            margin-top: 3px;
+            color: #667085;
+            font-size: .68rem;
+            font-weight: 700;
+        }
+
+    .reports-donut-legend {
+        display: grid;
+        gap: 9px;
+    }
+
+        .reports-donut-legend div {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 8px;
+            align-items: center;
+            padding: 9px 10px;
+            border-radius: 13px;
+            background: #fafafa;
+            border: 1px solid #e8eaef;
+        }
+
+    .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+    }
+
+        .legend-dot.cash {
+            background: #252525;
+        }
+
+        .legend-dot.card {
+            background: #8FA6A1;
+        }
+
+        .legend-dot.eft {
+            background: #b7791f;
+        }
+
+        .legend-dot.other {
+            background: #2563eb;
+        }
+
+    .reports-donut-legend strong {
+        color: #111827;
+        font-size: .78rem;
+    }
+
+    .reports-donut-legend em {
+        color: #667085;
+        font-style: normal;
+        font-size: .76rem;
+        font-weight: 700;
     }
 
     .reports-panel-wide {
         grid-column: 1 / -1;
     }
 
-    .reports-panel-header {
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
-    }
-
-    .reports-panel-header h2 {
-        margin: 0;
-        color: #0f172a;
-        font-size: .92rem;
-        font-weight: 720;
-    }
-
-    .reports-panel-header p {
-        margin: 4px 0 0;
-        color: #94a3b8;
-        font-size: .76rem;
-    }
-
     .reports-list {
         padding: 14px 18px;
         display: grid;
         gap: 10px;
+    }
+
+    .compact-list {
+        padding-top: 16px;
     }
 
     .reports-list-row {
@@ -1025,26 +1442,50 @@
         align-items: center;
         padding: 13px;
         border-radius: 16px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
     }
 
-    .reports-list-row strong,
-    .reports-list-row span {
-        display: block;
+        .reports-list-row strong,
+        .reports-list-row span {
+            display: block;
+        }
+
+        .reports-list-row strong {
+            color: #111827;
+            font-size: .86rem;
+            font-weight: 720;
+        }
+
+        .reports-list-row span {
+            margin-top: 3px;
+            color: #667085;
+            font-size: .74rem;
+        }
+
+    .reports-payment-row {
+        align-items: flex-start;
     }
 
-    .reports-list-row strong {
-        color: #0f172a;
-        font-size: .86rem;
-        font-weight: 720;
+    .reports-mini-metrics {
+        display: grid;
+        gap: 3px;
+        text-align: right;
     }
 
-    .reports-list-row span {
-        margin-top: 3px;
-        color: #64748b;
-        font-size: .74rem;
-    }
+        .reports-mini-metrics span {
+            display: block;
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .reports-mini-metrics strong {
+            display: inline;
+            color: #111827;
+            font-size: .76rem;
+            font-weight: 750;
+        }
 
     .reports-table-wrap {
         overflow-x: auto;
@@ -1056,25 +1497,25 @@
         border-collapse: collapse;
     }
 
-    .reports-table th {
-        padding: 12px 16px;
-        background: #f8fafc;
-        color: #64748b;
-        font-size: .7rem;
-        font-weight: 750;
-        text-transform: uppercase;
-        letter-spacing: .05em;
-        border-bottom: 1px solid #e7edf5;
-        white-space: nowrap;
-    }
+        .reports-table th {
+            padding: 12px 16px;
+            background: #fafafa;
+            color: #667085;
+            font-size: .7rem;
+            font-weight: 750;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            border-bottom: 1px solid #e8eaef;
+            white-space: nowrap;
+        }
 
-    .reports-table td {
-        padding: 14px 16px;
-        color: #334155;
-        font-size: .82rem;
-        border-bottom: 1px solid #f1f5f9;
-        vertical-align: middle;
-    }
+        .reports-table td {
+            padding: 14px 16px;
+            color: #334155;
+            font-size: .82rem;
+            border-bottom: 1px solid #f1f2f5;
+            vertical-align: middle;
+        }
 
     .reports-status-pill {
         display: inline-flex;
@@ -1086,23 +1527,24 @@
         font-weight: 750;
     }
 
-    .reports-status-pill.open {
-        color: #15803d;
-        background: #ecfdf5;
-    }
+        .reports-status-pill.open {
+            color: #15803d;
+            background: #ecfdf5;
+        }
 
-    .reports-status-pill.closed {
-        color: #64748b;
-        background: #f1f5f9;
-    }
+        .reports-status-pill.closed {
+            color: #667085;
+            background: #f3f4f6;
+        }
 
     .difference-good {
         color: #15803d !important;
         font-weight: 750;
     }
 
-    .difference-bad {
-        color: #dc2626 !important;
+    .difference-bad,
+    .reports-negative {
+        color: #d92d20 !important;
         font-weight: 750;
     }
 
@@ -1112,12 +1554,24 @@
     }
 
     .reports-empty {
-        margin: 18px;
+        margin: 18px 0;
         padding: 34px 20px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px dashed #dbe3ef;
+        border-radius: 18px;
+        background: #fafafa;
+        border: 1px dashed #d0d5dd;
         text-align: center;
+    }
+
+    .reports-empty-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 10px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .reports-empty strong,
@@ -1126,13 +1580,14 @@
     }
 
     .reports-empty strong {
-        color: #0f172a;
+        color: #111827;
         font-size: .9rem;
+        font-weight: 720;
     }
 
     .reports-empty span {
         margin-top: 4px;
-        color: #64748b;
+        color: #667085;
         font-size: .78rem;
     }
 
@@ -1149,95 +1604,59 @@
     }
 
     @@media (max-width: 1199px) {
-        .reports-summary-grid {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-        }
-
+        .reports-summary-grid,
+        .reports-insight-grid,
         .reports-settings-strip {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .reports-chart-grid,
+        .reports-grid {
+            grid-template-columns: 1fr;
         }
     }
 
     @@media (max-width: 991px) {
-        .reports-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .reports-header {
+        .reports-top {
             flex-direction: column;
             align-items: flex-start;
         }
 
+        .reports-actions,
         .reports-date-filters,
         .reports-date-filters input,
-        .reports-date-filters button {
+        .reports-filter-input,
+        .reports-date-filters button,
+        .reports-quick-range,
+        .reports-quick-range button {
             width: 100%;
+            justify-content: flex-start;
+        }
+
+        .reports-donut-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .reports-donut {
+            margin: 0 auto;
+        }
+
+        .reports-mini-metrics {
+            text-align: left;
         }
     }
 
     @@media (max-width: 640px) {
         .reports-summary-grid,
+        .reports-insight-grid,
         .reports-settings-strip {
             grid-template-columns: 1fr;
-
-            .reports-mini-metrics {
-                text-align: left;
-            }
-        }
-    }
-
-    .reports-mini-metrics {
-        display: grid;
-        gap: 3px;
-        text-align: right;
-    }
-
-        .reports-mini-metrics span {
-            display: block;
-            color: #64748b;
-            font-size: .72rem;
-            font-weight: 650;
         }
 
-        .reports-mini-metrics strong {
-            display: inline;
-            color: #0f172a;
-            font-size: .76rem;
-            font-weight: 750;
+        .reports-list-row {
+            flex-direction: column;
+            align-items: flex-start;
         }
-
-    .reports-negative {
-        color: #dc2626 !important;
-        font-weight: 750;
-    }
-
-    .reports-payment-row {
-        align-items: flex-start;
-    }
-
-    .reports-branch-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        min-height: 30px;
-        padding: 0 11px;
-        margin-top: 8px;
-        border-radius: 999px;
-        background: #eef5ff;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 700;
-    }
-
-    .reports-filter-input {
-        min-height: 38px;
-        border-radius: 10px;
-        border: 1px solid #e5e7eb;
-        padding: 0 10px;
-        color: #0f172a;
-        background: #ffffff;
-        font-size: .82rem;
-        outline: none;
     }
 </style>
 
@@ -1248,9 +1667,45 @@
     private bool _loading = true;
     private int? _branchFilter;
 
-
     private DateTime? _fromDate = DateTime.Today;
     private DateTime? _toDate = DateTime.Today;
+
+    private decimal CashPaymentTotal => Math.Max(0, _dashboard.CashSales);
+    private decimal CardPaymentTotal => Math.Max(0, _dashboard.CardSales);
+    private decimal EftPaymentTotal => Math.Max(0, _dashboard.EftSales);
+
+    private decimal OtherPaymentTotal =>
+        Math.Max(0, _dashboard.NetSales - CashPaymentTotal - CardPaymentTotal - EftPaymentTotal);
+
+    private decimal PaymentMixTotal =>
+        CashPaymentTotal + CardPaymentTotal + EftPaymentTotal + OtherPaymentTotal;
+
+    private decimal ProfitChartMax =>
+        MaxOf(_dashboard.NetSales, _dashboard.NetCostOfGoodsSold, _dashboard.TotalExpenses, Math.Abs(_dashboard.NetProfit));
+
+    private decimal TopItemsMax =>
+        _dashboard.TopItems.Count == 0 ? 0 : _dashboard.TopItems.Max(x => x.TotalAmount);
+
+    private decimal ExpensesCategoryMax =>
+        _dashboard.ExpensesByCategory.Count == 0 ? 0 : _dashboard.ExpensesByCategory.Max(x => x.TotalAmount);
+
+    private decimal CashiersMax =>
+        _dashboard.Cashiers.Count == 0 ? 0 : _dashboard.Cashiers.Max(x => x.TotalSales);
+
+    private string TopPaymentMethod =>
+        _dashboard.PaymentMethods
+            .OrderByDescending(x => x.NetAmount)
+            .FirstOrDefault()?.PaymentMethod ?? "No data";
+
+    private string TopExpenseCategory =>
+        _dashboard.ExpensesByCategory
+            .OrderByDescending(x => x.TotalAmount)
+            .FirstOrDefault()?.CategoryName ?? "No data";
+
+    private string TopSellingItem =>
+        _dashboard.TopItems
+            .OrderByDescending(x => x.TotalAmount)
+            .FirstOrDefault()?.ProductName ?? "No data";
 
     protected override async Task OnInitializedAsync()
     {
@@ -1269,6 +1724,43 @@
         _loading = true;
         _dashboard = await ReportsService.GetDashboardAsync(_fromDate, _toDate, _branchFilter);
         _loading = false;
+    }
+
+    private async Task SetTodayAsync()
+    {
+        _fromDate = DateTime.Today;
+        _toDate = DateTime.Today;
+        await LoadReportsAsync();
+    }
+
+    private async Task SetLast7DaysAsync()
+    {
+        _fromDate = DateTime.Today.AddDays(-6);
+        _toDate = DateTime.Today;
+        await LoadReportsAsync();
+    }
+
+    private async Task SetLast30DaysAsync()
+    {
+        _fromDate = DateTime.Today.AddDays(-29);
+        _toDate = DateTime.Today;
+        await LoadReportsAsync();
+    }
+
+    private async Task SetThisMonthAsync()
+    {
+        _fromDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        _toDate = DateTime.Today;
+        await LoadReportsAsync();
+    }
+
+    private void BranchFilterChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+
+        _branchFilter = int.TryParse(value, out var branchId)
+            ? branchId
+            : null;
     }
 
     private string Money(decimal value)
@@ -1309,9 +1801,62 @@
 
         return "difference-neutral";
     }
+
     private string GetProfitTextClass(decimal value)
     {
         return value >= 0 ? "difference-good" : "difference-bad";
+    }
+
+    private decimal MaxOf(params decimal[] values)
+    {
+        var max = values
+            .Select(Math.Abs)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        return max <= 0 ? 1 : max;
+    }
+
+    private string GetBarStyle(decimal value, decimal max)
+    {
+        if (max <= 0)
+        {
+            return "width:0%;";
+        }
+
+        var width = Math.Min(100, Math.Abs(value) / max * 100);
+
+        return $"width:{width.ToString("0.##", CultureInfo.InvariantCulture)}%;";
+    }
+
+    private string PercentageText(decimal value, decimal total)
+    {
+        if (total <= 0)
+        {
+            return "0%";
+        }
+
+        var percentage = value / total * 100;
+
+        return $"{percentage.ToString("0.##", CultureInfo.InvariantCulture)}%";
+    }
+
+    private string GetPaymentDonutStyle()
+    {
+        if (PaymentMixTotal <= 0)
+        {
+            return "background:#f3f4f6;";
+        }
+
+        var cashEnd = CashPaymentTotal / PaymentMixTotal * 100;
+        var cardEnd = cashEnd + (CardPaymentTotal / PaymentMixTotal * 100);
+        var eftEnd = cardEnd + (EftPaymentTotal / PaymentMixTotal * 100);
+
+        var cash = cashEnd.ToString("0.##", CultureInfo.InvariantCulture);
+        var card = cardEnd.ToString("0.##", CultureInfo.InvariantCulture);
+        var eft = eftEnd.ToString("0.##", CultureInfo.InvariantCulture);
+
+        return $"background:conic-gradient(#252525 0 {cash}%, #8FA6A1 {cash}% {card}%, #b7791f {card}% {eft}%, #2563eb {eft}% 100%);";
     }
 
     private void DownloadExcelReport()
@@ -1342,5 +1887,4 @@
 
         NavigationManager.NavigateTo(url, forceLoad: true);
     }
-
 }

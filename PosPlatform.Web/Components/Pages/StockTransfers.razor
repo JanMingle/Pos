@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @layout MainLayout
 @attribute [Authorize]
+@using Microsoft.AspNetCore.Components.Web
 @using PosPlatform.Web.Components.Layout
 @using PosPlatform.Web.Models.Branches
 @using PosPlatform.Web.Models.Settings
@@ -17,20 +18,24 @@
 <PageTitle>Stock Transfers</PageTitle>
 
 <section class="transfer-page">
-    <div class="transfer-header">
+    <div class="transfer-top">
         <div>
             <div class="transfer-kicker">
                 <i class="bi bi-arrow-left-right"></i>
                 Branch inventory
             </div>
+
             <h1>Stock Transfers</h1>
-            <p>Move stock between branches and keep stock movement history accurate.</p>
+            <p>Move stock between branches, transfer variants, and keep branch inventory movement history accurate.</p>
         </div>
 
-        <button type="button" class="transfer-primary-btn" @onclick="OpenTransferPanel">
-            <i class="bi bi-plus-lg"></i>
-            New Transfer
-        </button>
+        @if (_settings.StockTrackingEnabled)
+        {
+            <button type="button" class="transfer-primary-btn" @onclick="OpenTransferPanel">
+                <i class="bi bi-plus-lg"></i>
+                New Transfer
+            </button>
+        }
     </div>
 
     @if (!string.IsNullOrWhiteSpace(_message))
@@ -66,7 +71,61 @@
         </div>
     </div>
 
-    @if (_showTransferPanel)
+    @if (!_settings.StockTrackingEnabled)
+    {
+        <div class="transfer-warning">
+            <div>
+                <strong>Stock tracking is disabled</strong>
+                <span>Enable stock tracking in Business Settings before transferring stock between branches.</span>
+            </div>
+
+            <a href="/settings" class="transfer-warning-link">
+                Open Settings
+            </a>
+        </div>
+    }
+    else
+    {
+        <div class="transfer-summary-grid">
+            <div class="transfer-summary-card hero">
+                <div class="transfer-summary-icon">
+                    <i class="bi bi-arrow-left-right"></i>
+                </div>
+                <span>Total Transfers</span>
+                <strong>@TotalTransfers</strong>
+                <small>For the selected period</small>
+            </div>
+
+            <div class="transfer-summary-card">
+                <div class="transfer-summary-icon green">
+                    <i class="bi bi-boxes"></i>
+                </div>
+                <span>Total Quantity</span>
+                <strong>@FilteredTransferQuantity.ToString("0.##")</strong>
+                <small>Units moved between branches</small>
+            </div>
+
+            <div class="transfer-summary-card">
+                <div class="transfer-summary-icon blue">
+                    <i class="bi bi-shop"></i>
+                </div>
+                <span>Active Branches</span>
+                <strong>@_branches.Count</strong>
+                <small>Available for transfers</small>
+            </div>
+
+            <div class="transfer-summary-card">
+                <div class="transfer-summary-icon amber">
+                    <i class="bi bi-list-check"></i>
+                </div>
+                <span>Transfer Lines</span>
+                <strong>@FilteredTransferItems</strong>
+                <small>Total item rows moved</small>
+            </div>
+        </div>
+    }
+
+    @if (_showTransferPanel && _settings.StockTrackingEnabled)
     {
         <div class="transfer-panel">
             <div class="transfer-panel-header">
@@ -76,6 +135,7 @@
                 </div>
 
                 <button type="button" class="transfer-ghost-btn" @onclick="CloseTransferPanel">
+                    <i class="bi bi-x-lg"></i>
                     Close
                 </button>
             </div>
@@ -127,6 +187,20 @@
                     </div>
                 </div>
 
+                <div class="transfer-route-card">
+                    <div>
+                        <span>From</span>
+                        <strong>@GetBranchName(_transfer.SourceBranchId)</strong>
+                    </div>
+
+                    <i class="bi bi-arrow-right"></i>
+
+                    <div>
+                        <span>To</span>
+                        <strong>@GetBranchName(_transfer.DestinationBranchId)</strong>
+                    </div>
+                </div>
+
                 <div class="transfer-items-card">
                     <div class="transfer-items-header">
                         <div>
@@ -143,6 +217,9 @@
                     @if (_transfer.SourceBranchId <= 0)
                     {
                         <div class="transfer-empty small">
+                            <div class="transfer-empty-icon">
+                                <i class="bi bi-shop"></i>
+                            </div>
                             <strong>Select source branch first</strong>
                             <span>Products and variants will load after selecting a source branch.</span>
                         </div>
@@ -150,6 +227,9 @@
                     else if (_sourceProducts.Count == 0)
                     {
                         <div class="transfer-empty small">
+                            <div class="transfer-empty-icon">
+                                <i class="bi bi-box"></i>
+                            </div>
                             <strong>No stock available</strong>
                             <span>No stock-tracked items with available quantity were found for this branch.</span>
                         </div>
@@ -157,6 +237,9 @@
                     else if (_transfer.Items.Count == 0)
                     {
                         <div class="transfer-empty small">
+                            <div class="transfer-empty-icon">
+                                <i class="bi bi-plus-circle"></i>
+                            </div>
                             <strong>No items added</strong>
                             <span>Add at least one item to transfer.</span>
                         </div>
@@ -222,10 +305,11 @@
 
                 <div class="transfer-actions">
                     <button type="button" class="transfer-ghost-btn" @onclick="ResetTransferForm">
+                        <i class="bi bi-arrow-counterclockwise"></i>
                         Reset
                     </button>
 
-                    <button type="submit" class="transfer-primary-btn" disabled="@_savingTransfer">
+                    <button type="submit" class="transfer-primary-btn">
                         <i class="bi bi-check2-circle"></i>
                         @(_savingTransfer ? "Transferring..." : "Complete Transfer")
                     </button>
@@ -235,10 +319,10 @@
     }
 
     <div class="transfer-history-panel">
-        <div class="transfer-panel-header">
+        <div class="transfer-panel-header transfer-history-header">
             <div>
                 <h2>Transfer History</h2>
-                <p>Completed stock transfers between branches.</p>
+                <p>Showing @TransferPageStart - @TransferPageEnd of @TotalTransfers transfer@(TransferPlural).</p>
             </div>
 
             <div class="transfer-filters">
@@ -263,10 +347,12 @@
                     <i class="bi bi-search"></i>
                     <input @bind="_searchTerm"
                            @bind:event="oninput"
+                           @onkeydown="HandleTransferSearchKeyDown"
                            placeholder="Search transfer or branch" />
                 </div>
 
-                <button type="button" class="transfer-secondary-btn" @onclick="LoadTransfersAsync">
+                <button type="button" class="transfer-secondary-btn" @onclick="ApplyTransferFiltersAsync">
+                    <i class="bi bi-filter"></i>
                     Filter
                 </button>
             </div>
@@ -275,6 +361,9 @@
         @if (_loadingTransfers)
         {
             <div class="transfer-empty">
+                <div class="transfer-empty-icon">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
                 <strong>Loading transfers...</strong>
                 <span>Please wait while we fetch stock transfers.</span>
             </div>
@@ -282,6 +371,9 @@
         else if (_transfers.Count == 0)
         {
             <div class="transfer-empty">
+                <div class="transfer-empty-icon">
+                    <i class="bi bi-arrow-left-right"></i>
+                </div>
                 <strong>No transfers found</strong>
                 <span>Transfer stock between branches to see records here.</span>
             </div>
@@ -305,10 +397,12 @@
                     </thead>
 
                     <tbody>
-                        @foreach (var transfer in _transfers)
+                        @foreach (var transfer in PaginatedTransfers)
                         {
                             <tr>
-                                <td>@transfer.TransferNumber</td>
+                                <td>
+                                    <strong>@transfer.TransferNumber</strong>
+                                </td>
                                 <td>@transfer.TransferDate.ToLocalTime().ToString("yyyy-MM-dd")</td>
                                 <td>@transfer.SourceBranchName</td>
                                 <td>@transfer.DestinationBranchName</td>
@@ -324,6 +418,37 @@
                     </tbody>
                 </table>
             </div>
+
+            <div class="transfer-pagination">
+                <div class="transfer-page-info">
+                    Showing
+                    <strong>@TransferPageStart</strong>
+                    -
+                    <strong>@TransferPageEnd</strong>
+                    of
+                    <strong>@TotalTransfers</strong>
+                </div>
+
+                <div class="transfer-page-controls">
+                    <button type="button"
+                            class="@PreviousTransferPageClass"
+                            @onclick="PreviousTransferPage">
+                        <i class="bi bi-chevron-left"></i>
+                        Previous
+                    </button>
+
+                    <span class="transfer-page-count">
+                        Page @_transferPage of @TransferTotalPages
+                    </span>
+
+                    <button type="button"
+                            class="@NextTransferPageClass"
+                            @onclick="NextTransferPage">
+                        Next
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
         }
     </div>
 </section>
@@ -333,72 +458,96 @@
         animation: transferIn .22s ease both;
     }
 
-    .transfer-header {
+    .transfer-top {
         display: flex;
         justify-content: space-between;
         align-items: flex-end;
         gap: 18px;
-        margin-bottom: 18px;
+        margin-bottom: 16px;
     }
 
     .transfer-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
 
-    .transfer-header h1 {
+    .transfer-top h1 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.45rem;
-        font-weight: 680;
-        letter-spacing: -.03em;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
-    .transfer-header p {
+    .transfer-top p {
         margin: 6px 0 0;
-        color: #64748b;
+        color: #667085;
         font-size: .88rem;
     }
 
     .transfer-primary-btn,
     .transfer-secondary-btn,
-    .transfer-ghost-btn {
+    .transfer-ghost-btn,
+    .transfer-warning-link,
+    .transfer-page-btn {
         min-height: 38px;
-        border-radius: 11px;
+        border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
         padding: 0 14px;
         font-size: .8rem;
-        font-weight: 650;
+        font-weight: 680;
         border: 0;
         white-space: nowrap;
         text-decoration: none;
+        transition: transform .18s ease;
     }
 
     .transfer-primary-btn {
         color: #ffffff;
-        background: #111827;
-        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+        background: #252525;
+        box-shadow: 0 12px 24px rgba(17, 24, 39, .12);
     }
 
     .transfer-secondary-btn {
-        color: #2563eb;
-        background: #eef5ff;
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
     }
 
-    .transfer-ghost-btn {
+    .transfer-ghost-btn,
+    .transfer-page-btn {
         color: #475569;
         background: #ffffff;
         border: 1px solid #e5e7eb;
+    }
+
+    .transfer-warning-link {
+        color: #ffffff;
+        background: #252525;
+    }
+
+        .transfer-primary-btn:hover,
+        .transfer-secondary-btn:hover,
+        .transfer-ghost-btn:hover,
+        .transfer-warning-link:hover,
+        .transfer-page-btn:hover {
+            transform: translateY(-1px);
+        }
+
+    .transfer-page-btn.is-disabled {
+        opacity: .45;
+        cursor: not-allowed;
+        transform: none;
     }
 
     .transfer-alert {
@@ -446,8 +595,8 @@
             padding: 13px;
             border-radius: 16px;
             background: #ffffff;
-            border: 1px solid #e7edf5;
-            box-shadow: 0 12px 28px rgba(15,23,42,.04);
+            border: 1px solid #e8eaef;
+            box-shadow: 0 10px 24px rgba(17, 24, 39, .035);
         }
 
         .transfer-settings-strip span,
@@ -456,33 +605,145 @@
         }
 
         .transfer-settings-strip span {
-            color: #64748b;
-            font-size: .72rem;
-            font-weight: 650;
+            color: #98a2b3;
+            font-size: .7rem;
+            font-weight: 700;
+            letter-spacing: .03em;
+            text-transform: uppercase;
         }
 
         .transfer-settings-strip strong {
             margin-top: 4px;
-            color: #0f172a;
+            color: #111827;
             font-size: .84rem;
             font-weight: 720;
+        }
+
+    .transfer-warning {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: center;
+        margin-bottom: 16px;
+        padding: 16px;
+        border-radius: 18px;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+    }
+
+        .transfer-warning strong,
+        .transfer-warning span {
+            display: block;
+        }
+
+        .transfer-warning strong {
+            color: #9a3412;
+            font-size: .9rem;
+            font-weight: 750;
+        }
+
+        .transfer-warning span {
+            margin-top: 3px;
+            color: #c2410c;
+            font-size: .78rem;
+        }
+
+    .transfer-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .transfer-summary-card {
+        padding: 15px;
+        border-radius: 20px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
+    }
+
+        .transfer-summary-card.hero {
+            background: #252525;
+            border-color: #252525;
+        }
+
+        .transfer-summary-card span,
+        .transfer-summary-card strong,
+        .transfer-summary-card small {
+            display: block;
+        }
+
+        .transfer-summary-card span {
+            margin-top: 11px;
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .transfer-summary-card strong {
+            margin-top: 6px;
+            color: #111827;
+            font-size: 1.05rem;
+            font-weight: 760;
+            letter-spacing: -.02em;
+        }
+
+        .transfer-summary-card small {
+            margin-top: 4px;
+            color: #98a2b3;
+            font-size: .72rem;
+            line-height: 1.35;
+        }
+
+        .transfer-summary-card.hero span,
+        .transfer-summary-card.hero strong,
+        .transfer-summary-card.hero small {
+            color: #ffffff;
+        }
+
+    .transfer-summary-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #252525;
+        box-shadow: 0 10px 22px rgba(17, 24, 39, .08);
+    }
+
+        .transfer-summary-icon.green {
+            color: #8FA6A1;
+            background: #f2f6f5;
+        }
+
+        .transfer-summary-icon.blue {
+            color: #2563eb;
+            background: #eff6ff;
+        }
+
+        .transfer-summary-icon.amber {
+            color: #b7791f;
+            background: #fffbeb;
         }
 
     .transfer-panel,
     .transfer-history-panel,
     .transfer-items-card {
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        border-radius: 20px;
-        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        border: 1px solid #e8eaef;
+        border-radius: 22px;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
         overflow: hidden;
         margin-bottom: 16px;
     }
 
     .transfer-panel-header,
     .transfer-items-header {
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -492,16 +753,16 @@
         .transfer-panel-header h2,
         .transfer-items-header h3 {
             margin: 0;
-            color: #0f172a;
-            font-size: .92rem;
+            color: #111827;
+            font-size: .94rem;
             font-weight: 720;
         }
 
         .transfer-panel-header p,
         .transfer-items-header p {
             margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .76rem;
+            color: #98a2b3;
+            font-size: .75rem;
         }
 
     .transfer-form-grid {
@@ -529,11 +790,53 @@
         border-radius: 12px;
         border: 1px solid #e5e7eb;
         background: #ffffff;
-        color: #0f172a;
+        color: #111827;
         padding: 0 12px;
-        font-size: .84rem;
+        font-size: 16px;
         outline: none;
     }
+
+    .transfer-route-card {
+        margin: 0 18px 14px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        gap: 12px;
+        align-items: center;
+        padding: 14px;
+        border-radius: 18px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+    }
+
+        .transfer-route-card div {
+            padding: 12px;
+            border-radius: 15px;
+            background: #ffffff;
+            border: 1px solid #e8eaef;
+        }
+
+        .transfer-route-card span,
+        .transfer-route-card strong {
+            display: block;
+        }
+
+        .transfer-route-card span {
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .transfer-route-card strong {
+            margin-top: 4px;
+            color: #111827;
+            font-size: .86rem;
+            font-weight: 720;
+        }
+
+        .transfer-route-card > i {
+            color: #8FA6A1;
+            font-size: 1.2rem;
+        }
 
     .transfer-items-card {
         margin: 0 18px 14px;
@@ -553,8 +856,8 @@
         align-items: end;
         padding: 13px;
         border-radius: 16px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
     }
 
     .transfer-line-total {
@@ -565,7 +868,7 @@
         display: flex;
         align-items: center;
         padding: 0 12px;
-        color: #0f172a;
+        color: #111827;
         font-size: .84rem;
         font-weight: 750;
     }
@@ -575,8 +878,8 @@
         height: 40px;
         border-radius: 12px;
         border: 1px solid #fecaca;
-        background: #fef2f2;
-        color: #dc2626;
+        background: #fef3f2;
+        color: #d92d20;
     }
 
     .transfer-notes {
@@ -600,12 +903,12 @@
         .transfer-total-box div {
             display: flex;
             justify-content: space-between;
-            color: #64748b;
+            color: #667085;
             font-size: .84rem;
         }
 
         .transfer-total-box strong {
-            color: #0f172a;
+            color: #111827;
         }
 
     .transfer-actions {
@@ -624,11 +927,16 @@
         font-size: .82rem;
     }
 
+    .transfer-history-header {
+        align-items: center;
+    }
+
     .transfer-filters {
         display: flex;
         gap: 8px;
         align-items: center;
         flex-wrap: wrap;
+        justify-content: flex-end;
     }
 
     .transfer-search {
@@ -638,17 +946,18 @@
         gap: 10px;
         padding: 0 12px;
         border-radius: 12px;
-        background: #f8fafc;
+        background: #fafafa;
         border: 1px solid #e5e7eb;
-        color: #94a3b8;
+        color: #98a2b3;
     }
 
         .transfer-search input {
             border: 0;
             outline: none;
             background: transparent;
-            color: #0f172a;
-            font-size: .84rem;
+            color: #111827;
+            font-size: 16px;
+            width: 100%;
         }
 
     .small-search {
@@ -667,20 +976,20 @@
 
         .transfer-table th {
             padding: 12px 16px;
-            background: #f8fafc;
-            color: #64748b;
+            background: #fafafa;
+            color: #667085;
             font-size: .7rem;
             font-weight: 750;
             text-transform: uppercase;
             letter-spacing: .05em;
-            border-bottom: 1px solid #e7edf5;
+            border-bottom: 1px solid #e8eaef;
         }
 
         .transfer-table td {
             padding: 14px 16px;
             color: #334155;
             font-size: .82rem;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f2f5;
             vertical-align: middle;
         }
 
@@ -699,9 +1008,9 @@
     .transfer-empty {
         margin: 18px;
         padding: 34px 20px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px dashed #dbe3ef;
+        border-radius: 18px;
+        background: #fafafa;
+        border: 1px dashed #d0d5dd;
         text-align: center;
     }
 
@@ -710,21 +1019,74 @@
             padding: 24px 16px;
         }
 
-        .transfer-empty strong,
-        .transfer-empty span {
-            display: block;
+    .transfer-empty-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 10px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .transfer-empty strong,
+    .transfer-empty span {
+        display: block;
+    }
+
+    .transfer-empty strong {
+        color: #111827;
+        font-size: .9rem;
+        font-weight: 720;
+    }
+
+    .transfer-empty span {
+        margin-top: 4px;
+        color: #667085;
+        font-size: .78rem;
+    }
+
+    .transfer-pagination {
+        padding: 14px 18px;
+        border-top: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        background: #ffffff;
+    }
+
+    .transfer-page-info {
+        color: #667085;
+        font-size: .78rem;
+        font-weight: 600;
+    }
+
+        .transfer-page-info strong {
+            color: #111827;
         }
 
-        .transfer-empty strong {
-            color: #0f172a;
-            font-size: .9rem;
-        }
+    .transfer-page-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
 
-        .transfer-empty span {
-            margin-top: 4px;
-            color: #64748b;
-            font-size: .78rem;
-        }
+    .transfer-page-count {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 11px;
+        border-radius: 11px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+        color: #667085;
+        font-size: .76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
 
     @@keyframes transferIn {
         from {
@@ -740,7 +1102,8 @@
 
     @@media (max-width: 1199px) {
         .transfer-settings-strip,
-        .transfer-form-grid {
+        .transfer-form-grid,
+        .transfer-summary-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
@@ -750,23 +1113,32 @@
     }
 
     @@media (max-width: 768px) {
-        .transfer-header,
+        .transfer-top,
         .transfer-panel-header,
-        .transfer-items-header {
+        .transfer-items-header,
+        .transfer-history-header {
             flex-direction: column;
             align-items: flex-start;
         }
 
-            .transfer-header .transfer-primary-btn,
-            .transfer-actions button {
+            .transfer-top .transfer-primary-btn,
+            .transfer-actions button,
+            .transfer-warning-link {
                 width: 100%;
             }
 
         .transfer-settings-strip,
         .transfer-form-grid,
-        .transfer-line {
+        .transfer-line,
+        .transfer-summary-grid,
+        .transfer-route-card {
             grid-template-columns: 1fr;
         }
+
+            .transfer-route-card > i {
+                transform: rotate(90deg);
+                justify-self: center;
+            }
 
         .transfer-actions {
             flex-direction: column-reverse;
@@ -780,7 +1152,23 @@
             width: 100%;
         }
 
-        .transfer-search input {
+        .transfer-pagination {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .transfer-page-controls,
+        .transfer-page-btn {
+            width: 100%;
+        }
+
+        .transfer-page-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .transfer-page-count {
+            justify-content: center;
             width: 100%;
         }
     }
@@ -806,7 +1194,53 @@
     private string? _message;
     private bool _isSuccess;
 
+    private int _transferPage = 1;
+    private int _transferPageSize = 10;
+
     private decimal TransferTotalQuantity => _transfer.Items.Sum(x => x.Quantity);
+
+    private List<StockTransferHistoryRowViewModel> OrderedTransfers =>
+        _transfers
+            .OrderByDescending(x => x.TransferDate)
+            .ToList();
+
+    private int TotalTransfers => OrderedTransfers.Count;
+
+    private string TransferPlural => TotalTransfers == 1 ? "" : "s";
+
+    private decimal FilteredTransferQuantity => _transfers.Sum(x => x.TotalQuantity);
+
+    private int FilteredTransferItems => _transfers.Sum(x => x.ItemCount);
+
+    private int TransferTotalPages =>
+        TotalTransfers == 0
+            ? 1
+            : (int)Math.Ceiling(TotalTransfers / (double)_transferPageSize);
+
+    private int SafeTransferPage =>
+        Math.Min(Math.Max(_transferPage, 1), TransferTotalPages);
+
+    private int TransferPageStart =>
+        TotalTransfers == 0
+            ? 0
+            : ((SafeTransferPage - 1) * _transferPageSize) + 1;
+
+    private int TransferPageEnd =>
+        TotalTransfers == 0
+            ? 0
+            : Math.Min(SafeTransferPage * _transferPageSize, TotalTransfers);
+
+    private List<StockTransferHistoryRowViewModel> PaginatedTransfers =>
+        OrderedTransfers
+            .Skip((SafeTransferPage - 1) * _transferPageSize)
+            .Take(_transferPageSize)
+            .ToList();
+
+    private string PreviousTransferPageClass =>
+        _transferPage <= 1 ? "transfer-page-btn is-disabled" : "transfer-page-btn";
+
+    private string NextTransferPageClass =>
+        _transferPage >= TransferTotalPages ? "transfer-page-btn is-disabled" : "transfer-page-btn";
 
     protected override async Task OnInitializedAsync()
     {
@@ -826,8 +1260,45 @@
     private async Task LoadTransfersAsync()
     {
         _loadingTransfers = true;
+
         _transfers = await StockTransferService.GetTransfersAsync(_fromDate, _toDate, _branchFilter, _searchTerm);
+
+        if (_transferPage > TransferTotalPages)
+        {
+            _transferPage = TransferTotalPages;
+        }
+
         _loadingTransfers = false;
+    }
+
+    private async Task ApplyTransferFiltersAsync()
+    {
+        _transferPage = 1;
+        await LoadTransfersAsync();
+    }
+
+    private async Task HandleTransferSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyTransferFiltersAsync();
+        }
+    }
+
+    private void NextTransferPage()
+    {
+        if (_transferPage < TransferTotalPages)
+        {
+            _transferPage++;
+        }
+    }
+
+    private void PreviousTransferPage()
+    {
+        if (_transferPage > 1)
+        {
+            _transferPage--;
+        }
     }
 
     private void OpenTransferPanel()
@@ -919,6 +1390,11 @@
 
     private async Task SaveTransferAsync()
     {
+        if (_savingTransfer)
+        {
+            return;
+        }
+
         _savingTransfer = true;
 
         _transfer.Items = _transfer.Items
@@ -934,6 +1410,7 @@
         {
             ResetTransferForm();
             _showTransferPanel = false;
+            _transferPage = 1;
             await LoadTransfersAsync();
         }
     }
@@ -969,6 +1446,17 @@
 
         var unit = string.IsNullOrWhiteSpace(product.UnitOfMeasure) ? "" : $" {product.UnitOfMeasure}";
         return $"{product.CurrentStock:0.##}{unit}";
+    }
+
+    private string GetBranchName(int branchId)
+    {
+        if (branchId <= 0)
+        {
+            return "Not selected";
+        }
+
+        var branch = _branches.FirstOrDefault(x => x.Id == branchId);
+        return branch?.Name ?? "Unknown branch";
     }
 
     private void ShowMessage(string message, bool success)

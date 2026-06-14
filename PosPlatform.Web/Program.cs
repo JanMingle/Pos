@@ -55,6 +55,7 @@ builder.Services.AddScoped<OverdueInvoiceService>();
 builder.Services.AddScoped<QuoteInvoiceDashboardService>();
 builder.Services.AddScoped<InvoiceFollowUpService>();
 builder.Services.AddScoped<ProductVariantService>();
+builder.Services.AddScoped<SalesCartDraftService>();
 
 var app = builder.Build();
 

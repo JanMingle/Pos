@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @layout MainLayout
 @attribute [Authorize]
+@using Microsoft.AspNetCore.Components.Web
 @using PosPlatform.Web.Components.Layout
 @using PosPlatform.Web.Models.Settings
 @using PosPlatform.Web.Models.Suppliers
@@ -19,14 +20,15 @@
 <PageTitle>Stock Purchases</PageTitle>
 
 <section class="purchase-page">
-    <div class="purchase-header">
+    <div class="purchase-top">
         <div>
             <div class="purchase-kicker">
                 <i class="bi bi-box-arrow-in-down"></i>
                 Stock receiving
             </div>
+
             <h1>Stock Purchases</h1>
-            <p>Record supplier purchases, receive stock, update cost prices and create stock movements.</p>
+            <p>Receive supplier stock, update quantities, track costs and review purchase history.</p>
         </div>
 
         <button type="button" class="purchase-primary-btn" @onclick="OpenReceivePanel">
@@ -81,6 +83,46 @@
             </a>
         </div>
     }
+    else
+    {
+        <div class="purchase-summary-grid">
+            <div class="purchase-summary-card hero">
+                <div class="purchase-summary-icon">
+                    <i class="bi bi-receipt"></i>
+                </div>
+                <span>Total Purchases</span>
+                <strong>@Money(FilteredPurchaseTotal)</strong>
+                <small>For the selected period</small>
+            </div>
+
+            <div class="purchase-summary-card">
+                <div class="purchase-summary-icon green">
+                    <i class="bi bi-list-check"></i>
+                </div>
+                <span>Purchase Count</span>
+                <strong>@_purchases.Count</strong>
+                <small>Purchase records found</small>
+            </div>
+
+            <div class="purchase-summary-card">
+                <div class="purchase-summary-icon amber">
+                    <i class="bi bi-percent"></i>
+                </div>
+                <span>Total Tax</span>
+                <strong>@Money(FilteredPurchaseTax)</strong>
+                <small>Tax captured</small>
+            </div>
+
+            <div class="purchase-summary-card">
+                <div class="purchase-summary-icon blue">
+                    <i class="bi bi-boxes"></i>
+                </div>
+                <span>Quantity Received</span>
+                <strong>@FilteredPurchaseQuantity.ToString("0.##")</strong>
+                <small>Units received</small>
+            </div>
+        </div>
+    }
 
     @if (_showReceivePanel && _settings.StockTrackingEnabled)
     {
@@ -88,10 +130,11 @@
             <div class="purchase-panel-header">
                 <div>
                     <h2>Receive Stock</h2>
-                    <p>Select a supplier, add stock-tracked products, then receive into inventory.</p>
+                    <p>Select a supplier, add stock-tracked products or variants, then receive into inventory.</p>
                 </div>
 
                 <button type="button" class="purchase-ghost-btn" @onclick="CloseReceivePanel">
+                    <i class="bi bi-x-lg"></i>
                     Close
                 </button>
             </div>
@@ -142,7 +185,7 @@
                     <div class="purchase-items-header">
                         <div>
                             <h3>Purchase Items</h3>
-                            <p>Only stock-tracked products are listed here.</p>
+                            <p>Only stock-tracked products and variants are listed here.</p>
                         </div>
 
                         <button type="button" class="purchase-secondary-btn" @onclick="AddLine">
@@ -165,7 +208,7 @@
                             {
                                 <div class="purchase-line">
                                     <div>
-                                        <label>Product</label>
+                                        <label>Product / Variant</label>
                                         <select class="purchase-input"
                                                 value="@GetLineOptionKey(line)"
                                                 @onchange="(e) => ProductChanged(line, e.Value?.ToString())">
@@ -203,7 +246,7 @@
                     }
                 </div>
 
-                <div>
+                <div class="purchase-notes-box">
                     <label>Notes</label>
                     <InputTextArea class="purchase-input purchase-textarea" @bind-Value="_purchase.Notes" />
                 </div>
@@ -227,10 +270,11 @@
 
                 <div class="purchase-actions">
                     <button type="button" class="purchase-ghost-btn" @onclick="ResetPurchaseForm">
+                        <i class="bi bi-arrow-counterclockwise"></i>
                         Reset
                     </button>
 
-                    <button type="submit" class="purchase-primary-btn" disabled="@_savingPurchase">
+                    <button type="submit" class="purchase-primary-btn">
                         <i class="bi bi-check2-circle"></i>
                         @(_savingPurchase ? "Receiving..." : "Receive Stock")
                     </button>
@@ -240,10 +284,10 @@
     }
 
     <div class="purchase-history-panel">
-        <div class="purchase-panel-header">
+        <div class="purchase-panel-header purchase-history-header">
             <div>
                 <h2>Purchase History</h2>
-                <p>Supplier purchases and stock receiving records.</p>
+                <p>Showing @PurchasePageStart - @PurchasePageEnd of @TotalPurchases purchase@(PurchasePlural).</p>
             </div>
 
             <div class="purchase-date-filters">
@@ -268,40 +312,23 @@
                     <i class="bi bi-search"></i>
                     <input @bind="_searchTerm"
                            @bind:event="oninput"
+                           @onkeydown="HandlePurchaseSearchKeyDown"
                            placeholder="Search PO, invoice or supplier" />
                 </div>
 
-                <button type="button" class="purchase-secondary-btn" @onclick="LoadPurchasesAsync">
+                <button type="button" class="purchase-secondary-btn" @onclick="ApplyPurchaseFiltersAsync">
+                    <i class="bi bi-filter"></i>
                     Filter
                 </button>
-            </div>
-        </div>
-
-        <div class="purchase-summary-grid">
-            <div class="purchase-summary-card dark">
-                <span>Total Purchases</span>
-                <strong>@Money(FilteredPurchaseTotal)</strong>
-            </div>
-
-            <div class="purchase-summary-card">
-                <span>Purchase Count</span>
-                <strong>@_purchases.Count</strong>
-            </div>
-
-            <div class="purchase-summary-card amber">
-                <span>Total Tax</span>
-                <strong>@Money(FilteredPurchaseTax)</strong>
-            </div>
-
-            <div class="purchase-summary-card blue">
-                <span>Quantity Received</span>
-                <strong>@FilteredPurchaseQuantity.ToString("0.##")</strong>
             </div>
         </div>
 
         @if (_loadingPurchases)
         {
             <div class="purchase-empty">
+                <div class="purchase-empty-icon">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
                 <strong>Loading purchases...</strong>
                 <span>Please wait while we fetch purchase records.</span>
             </div>
@@ -309,6 +336,9 @@
         else if (_purchases.Count == 0)
         {
             <div class="purchase-empty">
+                <div class="purchase-empty-icon">
+                    <i class="bi bi-box-arrow-in-down"></i>
+                </div>
                 <strong>No purchases found</strong>
                 <span>Receive stock from suppliers to see purchase records here.</span>
             </div>
@@ -334,10 +364,12 @@
                     </thead>
 
                     <tbody>
-                        @foreach (var item in _purchases)
+                        @foreach (var item in PaginatedPurchases)
                         {
                             <tr>
-                                <td>@item.PurchaseNumber</td>
+                                <td>
+                                    <strong>@item.PurchaseNumber</strong>
+                                </td>
                                 <td>@item.SupplierName</td>
                                 <td>@(string.IsNullOrWhiteSpace(item.SupplierInvoiceNumber) ? "-" : item.SupplierInvoiceNumber)</td>
                                 <td>@item.PurchaseDate.ToLocalTime().ToString("yyyy-MM-dd")</td>
@@ -355,6 +387,37 @@
                     </tbody>
                 </table>
             </div>
+
+            <div class="purchase-pagination">
+                <div class="purchase-page-info">
+                    Showing
+                    <strong>@PurchasePageStart</strong>
+                    -
+                    <strong>@PurchasePageEnd</strong>
+                    of
+                    <strong>@TotalPurchases</strong>
+                </div>
+
+                <div class="purchase-page-controls">
+                    <button type="button"
+                            class="@PreviousPurchasePageClass"
+                            @onclick="PreviousPurchasePage">
+                        <i class="bi bi-chevron-left"></i>
+                        Previous
+                    </button>
+
+                    <span class="purchase-page-count">
+                        Page @_purchasePage of @PurchaseTotalPages
+                    </span>
+
+                    <button type="button"
+                            class="@NextPurchasePageClass"
+                            @onclick="NextPurchasePage">
+                        Next
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
         }
     </div>
 </section>
@@ -364,73 +427,96 @@
         animation: purchaseIn .22s ease both;
     }
 
-    .purchase-header {
+    .purchase-top {
         display: flex;
         justify-content: space-between;
         align-items: flex-end;
         gap: 18px;
-        margin-bottom: 18px;
+        margin-bottom: 16px;
     }
 
     .purchase-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
 
-    .purchase-header h1 {
+    .purchase-top h1 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.45rem;
-        font-weight: 680;
-        letter-spacing: -.03em;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
-    .purchase-header p {
+    .purchase-top p {
         margin: 6px 0 0;
-        color: #64748b;
+        color: #667085;
         font-size: .88rem;
     }
 
     .purchase-primary-btn,
     .purchase-secondary-btn,
     .purchase-ghost-btn,
-    .purchase-warning-link {
+    .purchase-warning-link,
+    .purchase-page-btn {
         min-height: 38px;
-        border-radius: 11px;
+        border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
         padding: 0 14px;
         font-size: .8rem;
-        font-weight: 650;
+        font-weight: 680;
         border: 0;
         white-space: nowrap;
         text-decoration: none;
+        transition: transform .18s ease;
     }
 
     .purchase-primary-btn {
         color: #ffffff;
-        background: #111827;
-        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+        background: #252525;
+        box-shadow: 0 12px 24px rgba(17, 24, 39, .12);
     }
 
     .purchase-secondary-btn {
-        color: #2563eb;
-        background: #eef5ff;
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
     }
 
-    .purchase-ghost-btn {
+    .purchase-ghost-btn,
+    .purchase-page-btn {
         color: #475569;
         background: #ffffff;
         border: 1px solid #e5e7eb;
+    }
+
+    .purchase-warning-link {
+        color: #ffffff;
+        background: #252525;
+    }
+
+        .purchase-primary-btn:hover,
+        .purchase-secondary-btn:hover,
+        .purchase-ghost-btn:hover,
+        .purchase-warning-link:hover,
+        .purchase-page-btn:hover {
+            transform: translateY(-1px);
+        }
+
+    .purchase-page-btn.is-disabled {
+        opacity: .45;
+        cursor: not-allowed;
+        transform: none;
     }
 
     .purchase-alert {
@@ -478,8 +564,8 @@
             padding: 13px;
             border-radius: 16px;
             background: #ffffff;
-            border: 1px solid #e7edf5;
-            box-shadow: 0 12px 28px rgba(15,23,42,.04);
+            border: 1px solid #e8eaef;
+            box-shadow: 0 10px 24px rgba(17, 24, 39, .035);
         }
 
         .purchase-settings-strip span,
@@ -488,14 +574,16 @@
         }
 
         .purchase-settings-strip span {
-            color: #64748b;
-            font-size: .72rem;
-            font-weight: 650;
+            color: #98a2b3;
+            font-size: .7rem;
+            font-weight: 700;
+            letter-spacing: .03em;
+            text-transform: uppercase;
         }
 
         .purchase-settings-strip strong {
             margin-top: 4px;
-            color: #0f172a;
+            color: #111827;
             font-size: .84rem;
             font-weight: 720;
         }
@@ -529,26 +617,102 @@
             font-size: .78rem;
         }
 
-    .purchase-warning-link {
-        color: #ffffff;
-        background: #111827;
+    .purchase-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
     }
+
+    .purchase-summary-card {
+        padding: 15px;
+        border-radius: 20px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
+    }
+
+        .purchase-summary-card.hero {
+            background: #252525;
+            border-color: #252525;
+        }
+
+        .purchase-summary-card span,
+        .purchase-summary-card strong,
+        .purchase-summary-card small {
+            display: block;
+        }
+
+        .purchase-summary-card span {
+            margin-top: 11px;
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .purchase-summary-card strong {
+            margin-top: 6px;
+            color: #111827;
+            font-size: 1.05rem;
+            font-weight: 760;
+            letter-spacing: -.02em;
+        }
+
+        .purchase-summary-card small {
+            margin-top: 4px;
+            color: #98a2b3;
+            font-size: .72rem;
+            line-height: 1.35;
+        }
+
+        .purchase-summary-card.hero span,
+        .purchase-summary-card.hero strong,
+        .purchase-summary-card.hero small {
+            color: #ffffff;
+        }
+
+    .purchase-summary-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #252525;
+        box-shadow: 0 10px 22px rgba(17, 24, 39, .08);
+    }
+
+        .purchase-summary-icon.green {
+            color: #8FA6A1;
+            background: #f2f6f5;
+        }
+
+        .purchase-summary-icon.amber {
+            color: #b7791f;
+            background: #fffbeb;
+        }
+
+        .purchase-summary-icon.blue {
+            color: #2563eb;
+            background: #eff6ff;
+        }
 
     .purchase-receive-panel,
     .purchase-history-panel,
     .purchase-items-card {
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        border-radius: 20px;
-        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        border: 1px solid #e8eaef;
+        border-radius: 22px;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
         overflow: hidden;
         margin-bottom: 16px;
     }
 
     .purchase-panel-header,
     .purchase-items-header {
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -558,16 +722,16 @@
         .purchase-panel-header h2,
         .purchase-items-header h3 {
             margin: 0;
-            color: #0f172a;
-            font-size: .92rem;
+            color: #111827;
+            font-size: .94rem;
             font-weight: 720;
         }
 
         .purchase-panel-header p,
         .purchase-items-header p {
             margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .76rem;
+            color: #98a2b3;
+            font-size: .75rem;
         }
 
     .purchase-form-grid {
@@ -579,7 +743,7 @@
 
         .purchase-form-grid label,
         .purchase-lines label,
-        .purchase-receive-panel > form > div > label {
+        .purchase-notes-box label {
             display: block;
             margin-bottom: 6px;
             color: #475569;
@@ -587,15 +751,17 @@
             font-weight: 700;
         }
 
-    .purchase-input {
+    .purchase-input,
+    .purchase-date-filters input[type="date"],
+    .purchase-filter-select {
         width: 100%;
         min-height: 40px;
         border-radius: 12px;
         border: 1px solid #e5e7eb;
         background: #ffffff;
-        color: #0f172a;
+        color: #111827;
         padding: 0 12px;
-        font-size: .84rem;
+        font-size: 16px;
         outline: none;
     }
 
@@ -603,8 +769,10 @@
         min-height: 86px;
         padding-top: 10px;
         resize: vertical;
-        margin: 0 18px 14px;
-        width: calc(100% - 36px);
+    }
+
+    .purchase-notes-box {
+        padding: 0 18px 14px;
     }
 
     .purchase-check-row {
@@ -616,8 +784,8 @@
             gap: 10px;
             padding: 12px;
             border-radius: 14px;
-            background: #f8fafc;
-            border: 1px solid #e7edf5;
+            background: #fafafa;
+            border: 1px solid #e8eaef;
         }
 
         .purchase-check-row input {
@@ -630,13 +798,13 @@
         }
 
         .purchase-check-row strong {
-            color: #0f172a;
+            color: #111827;
             font-size: .84rem;
         }
 
         .purchase-check-row small {
             margin-top: 2px;
-            color: #64748b;
+            color: #667085;
             font-size: .74rem;
         }
 
@@ -658,8 +826,8 @@
         align-items: end;
         padding: 13px;
         border-radius: 16px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
     }
 
     .purchase-line-total {
@@ -670,7 +838,7 @@
         display: flex;
         align-items: center;
         padding: 0 12px;
-        color: #0f172a;
+        color: #111827;
         font-size: .84rem;
         font-weight: 750;
     }
@@ -680,8 +848,8 @@
         height: 40px;
         border-radius: 12px;
         border: 1px solid #fecaca;
-        background: #fef2f2;
-        color: #dc2626;
+        background: #fef3f2;
+        color: #d92d20;
     }
 
     .purchase-total-box {
@@ -695,18 +863,18 @@
         .purchase-total-box div {
             display: flex;
             justify-content: space-between;
-            color: #64748b;
+            color: #667085;
             font-size: .84rem;
         }
 
         .purchase-total-box strong {
-            color: #0f172a;
+            color: #111827;
         }
 
         .purchase-total-box .final {
             padding-top: 8px;
             border-top: 1px solid #edf2f7;
-            color: #0f172a;
+            color: #111827;
             font-size: .95rem;
             font-weight: 750;
         }
@@ -727,99 +895,42 @@
         font-size: .82rem;
     }
 
+    .purchase-history-header {
+        align-items: center;
+    }
+
     .purchase-date-filters {
         display: flex;
         gap: 8px;
         align-items: center;
         flex-wrap: wrap;
+        justify-content: flex-end;
     }
 
-        .purchase-date-filters input[type="date"],
-        .purchase-filter-select {
-            min-height: 38px;
-            border-radius: 10px;
-            border: 1px solid #e5e7eb;
-            padding: 0 10px;
-            font-size: .82rem;
-            background: #ffffff;
-            color: #0f172a;
-            outline: none;
-        }
-
     .purchase-search {
-        min-height: 38px;
+        min-height: 40px;
         display: flex;
         align-items: center;
         gap: 10px;
         padding: 0 12px;
-        border-radius: 10px;
-        background: #f8fafc;
+        border-radius: 12px;
+        background: #fafafa;
         border: 1px solid #e5e7eb;
-        color: #94a3b8;
+        color: #98a2b3;
     }
 
         .purchase-search input {
             border: 0;
             outline: none;
             background: transparent;
-            color: #0f172a;
-            font-size: .84rem;
+            color: #111827;
+            font-size: 16px;
+            width: 100%;
         }
 
     .small-search {
         width: 260px;
     }
-
-    .purchase-summary-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 10px;
-        padding: 14px 18px;
-        border-bottom: 1px solid #edf2f7;
-    }
-
-    .purchase-summary-card {
-        padding: 13px;
-        border-radius: 15px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
-    }
-
-        .purchase-summary-card span,
-        .purchase-summary-card strong {
-            display: block;
-        }
-
-        .purchase-summary-card span {
-            color: #64748b;
-            font-size: .72rem;
-            font-weight: 650;
-        }
-
-        .purchase-summary-card strong {
-            margin-top: 4px;
-            color: #0f172a;
-            font-size: .95rem;
-            font-weight: 720;
-        }
-
-        .purchase-summary-card.dark {
-            background: #111827;
-            border-color: #111827;
-        }
-
-            .purchase-summary-card.dark span,
-            .purchase-summary-card.dark strong {
-                color: #ffffff;
-            }
-
-        .purchase-summary-card.amber strong {
-            color: #d97706;
-        }
-
-        .purchase-summary-card.blue strong {
-            color: #2563eb;
-        }
 
     .purchase-table-wrap {
         overflow-x: auto;
@@ -833,13 +944,13 @@
 
         .purchase-table th {
             padding: 12px 16px;
-            background: #f8fafc;
-            color: #64748b;
+            background: #fafafa;
+            color: #667085;
             font-size: .7rem;
             font-weight: 750;
             text-transform: uppercase;
             letter-spacing: .05em;
-            border-bottom: 1px solid #e7edf5;
+            border-bottom: 1px solid #e8eaef;
             white-space: nowrap;
         }
 
@@ -847,12 +958,12 @@
             padding: 14px 16px;
             color: #334155;
             font-size: .82rem;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f2f5;
             vertical-align: middle;
         }
 
     .purchase-strong {
-        color: #0f172a !important;
+        color: #111827 !important;
         font-weight: 750;
     }
 
@@ -871,9 +982,9 @@
     .purchase-empty {
         margin: 18px;
         padding: 34px 20px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px dashed #dbe3ef;
+        border-radius: 18px;
+        background: #fafafa;
+        border: 1px dashed #d0d5dd;
         text-align: center;
     }
 
@@ -882,21 +993,80 @@
             padding: 24px 16px;
         }
 
-        .purchase-empty strong,
-        .purchase-empty span {
-            display: block;
+    .purchase-empty-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 10px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .purchase-empty strong,
+    .purchase-empty span {
+        display: block;
+    }
+
+    .purchase-empty strong {
+        color: #111827;
+        font-size: .9rem;
+        font-weight: 720;
+    }
+
+    .purchase-empty span {
+        margin-top: 4px;
+        color: #667085;
+        font-size: .78rem;
+    }
+
+    .purchase-pagination {
+        padding: 14px 18px;
+        border-top: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        background: #ffffff;
+    }
+
+    .purchase-page-info {
+        color: #667085;
+        font-size: .78rem;
+        font-weight: 600;
+    }
+
+        .purchase-page-info strong {
+            color: #111827;
         }
 
-        .purchase-empty strong {
-            color: #0f172a;
-            font-size: .9rem;
-        }
+    .purchase-page-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
 
-        .purchase-empty span {
-            margin-top: 4px;
-            color: #64748b;
-            font-size: .78rem;
-        }
+    .purchase-page-count {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 11px;
+        border-radius: 11px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+        color: #667085;
+        font-size: .76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .purchase-page-btn.is-disabled {
+        opacity: .45;
+        cursor: not-allowed;
+        transform: none;
+    }
 
     @@keyframes purchaseIn {
         from {
@@ -912,7 +1082,8 @@
 
     @@media (max-width: 1199px) {
         .purchase-settings-strip,
-        .purchase-form-grid {
+        .purchase-form-grid,
+        .purchase-summary-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
@@ -922,14 +1093,15 @@
     }
 
     @@media (max-width: 768px) {
-        .purchase-header,
+        .purchase-top,
         .purchase-panel-header,
-        .purchase-items-header {
+        .purchase-items-header,
+        .purchase-history-header {
             flex-direction: column;
             align-items: flex-start;
         }
 
-            .purchase-header .purchase-primary-btn,
+            .purchase-top .purchase-primary-btn,
             .purchase-actions button,
             .purchase-warning-link {
                 width: 100%;
@@ -959,7 +1131,23 @@
             width: 100%;
         }
 
-        .purchase-search input {
+        .purchase-pagination {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .purchase-page-controls,
+        .purchase-page-btn {
+            width: 100%;
+        }
+
+        .purchase-page-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .purchase-page-count {
+            justify-content: center;
             width: 100%;
         }
     }
@@ -987,6 +1175,9 @@
     private string? _message;
     private bool _isSuccess;
 
+    private int _purchasePage = 1;
+    private int _purchasePageSize = 10;
+
     private string CurrencyLabel =>
         string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
             ? "R"
@@ -1002,6 +1193,45 @@
     private decimal FilteredPurchaseTax => _purchases.Sum(x => x.TaxAmount);
     private decimal FilteredPurchaseTotal => _purchases.Sum(x => x.TotalAmount);
     private decimal FilteredPurchaseQuantity => _purchases.Sum(x => x.TotalQuantity);
+
+    private List<StockPurchaseListItemViewModel> OrderedPurchases =>
+        _purchases
+            .OrderByDescending(x => x.PurchaseDate)
+            .ToList();
+
+    private int TotalPurchases => OrderedPurchases.Count;
+
+    private string PurchasePlural => TotalPurchases == 1 ? "" : "s";
+
+    private int PurchaseTotalPages =>
+        TotalPurchases == 0
+            ? 1
+            : (int)Math.Ceiling(TotalPurchases / (double)_purchasePageSize);
+
+    private int SafePurchasePage =>
+        Math.Min(Math.Max(_purchasePage, 1), PurchaseTotalPages);
+
+    private int PurchasePageStart =>
+        TotalPurchases == 0
+            ? 0
+            : ((SafePurchasePage - 1) * _purchasePageSize) + 1;
+
+    private int PurchasePageEnd =>
+        TotalPurchases == 0
+            ? 0
+            : Math.Min(SafePurchasePage * _purchasePageSize, TotalPurchases);
+
+    private List<StockPurchaseListItemViewModel> PaginatedPurchases =>
+        OrderedPurchases
+            .Skip((SafePurchasePage - 1) * _purchasePageSize)
+            .Take(_purchasePageSize)
+            .ToList();
+
+    private string PreviousPurchasePageClass =>
+        _purchasePage <= 1 ? "purchase-page-btn is-disabled" : "purchase-page-btn";
+
+    private string NextPurchasePageClass =>
+        _purchasePage >= PurchaseTotalPages ? "purchase-page-btn is-disabled" : "purchase-page-btn";
 
     protected override async Task OnInitializedAsync()
     {
@@ -1024,8 +1254,45 @@
     private async Task LoadPurchasesAsync()
     {
         _loadingPurchases = true;
+
         _purchases = await StockPurchaseService.GetPurchasesAsync(_fromDate, _toDate, _searchTerm, _branchFilter);
+
+        if (_purchasePage > PurchaseTotalPages)
+        {
+            _purchasePage = PurchaseTotalPages;
+        }
+
         _loadingPurchases = false;
+    }
+
+    private async Task ApplyPurchaseFiltersAsync()
+    {
+        _purchasePage = 1;
+        await LoadPurchasesAsync();
+    }
+
+    private async Task HandlePurchaseSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyPurchaseFiltersAsync();
+        }
+    }
+
+    private void NextPurchasePage()
+    {
+        if (_purchasePage < PurchaseTotalPages)
+        {
+            _purchasePage++;
+        }
+    }
+
+    private void PreviousPurchasePage()
+    {
+        if (_purchasePage > 1)
+        {
+            _purchasePage--;
+        }
     }
 
     private void OpenReceivePanel()
@@ -1100,6 +1367,11 @@
 
     private async Task SavePurchaseAsync()
     {
+        if (_savingPurchase)
+        {
+            return;
+        }
+
         _savingPurchase = true;
 
         _purchase.Items = _purchase.Items
@@ -1119,6 +1391,7 @@
 
             ResetPurchaseForm();
             _showReceivePanel = false;
+            _purchasePage = 1;
 
             await LoadPurchasesAsync();
         }

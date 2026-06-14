@@ -4,6 +4,8 @@
 @layout MainLayout
 @attribute [Authorize]
 @using System.Globalization
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
 @using PosPlatform.Web.Components.Layout
 @using PosPlatform.Web.Models.Dashboard
 @using PosPlatform.Web.Models.Settings
@@ -12,7 +14,7 @@
 @inject DashboardService DashboardService
 @inject BusinessSettingsService BusinessSettingsService
 @inject NavigationManager Nav
-
+@inject AuthenticationStateProvider AuthStateProvider
 <PageTitle>Dashboard</PageTitle>
 
 <section class="dash-page">
@@ -23,9 +25,11 @@
                 Business dashboard
             </div>
 
-            <h1>@Greeting, @_settings.BusinessName</h1>
-            <p>Track today’s sales, profit, stock alerts, cashier shift and recent business activity.</p>
-
+            <h1>@Greeting, @_userDisplayName</h1>
+            <p>
+                Welcome to @_settings.BusinessName. Track today’s sales, profit, stock alerts,
+                cashier shift and recent business activity.
+            </p>
             <div class="dash-hero-badges">
                 <span>
                     <i class="bi bi-shop"></i>
@@ -1596,7 +1600,335 @@
         .dash-activity-bars strong {
             text-align: left;
         }
+
+        
     }
+    /* ===============================
+       JMingle Dashboard Theme
+       Navy + Gold Business Card Style
+       Add at the bottom of Dashboard 
+       =============================== */
+
+    .dash-page {
+        --jm-navy: #1e395c;
+        --jm-navy-dark: #142c49;
+        --jm-navy-soft: #29476c;
+        --jm-gold: #c3a340;
+        --jm-gold-dark: #9b7a1b;
+        --jm-light: #f7f8fb;
+        --jm-soft-blue: #e8eef6;
+        --jm-white: #ffffff;
+        --jm-text: #263445;
+        --jm-muted: #66717f;
+        --jm-border: #e2e6ec;
+    }
+
+    /* Hero */
+
+    .dash-hero {
+        position: relative;
+        overflow: hidden;
+        background: radial-gradient(circle at top right, rgba(195, 163, 64, .22), transparent 34%), linear-gradient(135deg, var(--jm-navy-dark), var(--jm-navy));
+        border: 1px solid rgba(195, 163, 64, .26);
+        border-bottom: 4px solid var(--jm-gold);
+        box-shadow: 0 18px 42px rgba(30, 57, 92, .18);
+    }
+
+        .dash-hero::after {
+            content: "";
+            position: absolute;
+            left: -8%;
+            right: -8%;
+            bottom: -70px;
+            height: 140px;
+            background: rgba(255, 255, 255, .09);
+            border-top: 3px solid rgba(195, 163, 64, .65);
+            border-radius: 50% 50% 0 0;
+            pointer-events: none;
+        }
+
+    .dash-hero-content,
+    .dash-hero-actions {
+        position: relative;
+        z-index: 1;
+    }
+
+    .dash-kicker {
+        color: var(--jm-gold);
+    }
+
+    .dash-hero h1 {
+        color: #ffffff;
+    }
+
+    .dash-hero p {
+        color: rgba(255,255,255,.76);
+    }
+
+    .dash-hero-badges span {
+        background: rgba(255,255,255,.11);
+        border: 1px solid rgba(255,255,255,.16);
+        color: rgba(255,255,255,.88);
+    }
+
+    .dash-hero-badges i {
+        color: var(--jm-gold);
+    }
+
+    /* Hero controls */
+
+    .dash-select {
+        border-color: rgba(255,255,255,.22);
+        background: rgba(255,255,255,.95);
+        color: var(--jm-navy);
+    }
+
+        .dash-select:focus {
+            border-color: var(--jm-gold);
+            box-shadow: 0 0 0 4px rgba(195, 163, 64, .16);
+        }
+
+    .dash-btn-dark {
+        color: #ffffff;
+        background: linear-gradient(135deg, var(--jm-gold-dark), var(--jm-gold));
+        box-shadow: 0 14px 28px rgba(0,0,0,.18);
+    }
+
+    .dash-btn-light {
+        color: var(--jm-navy);
+        background: rgba(255,255,255,.95);
+        border: 1px solid rgba(255,255,255,.24);
+    }
+
+        .dash-btn-light:hover {
+            color: var(--jm-gold-dark);
+        }
+
+    /* Cards */
+
+    .dash-summary-card,
+    .dash-insight-card,
+    .dash-chart-card,
+    .dash-panel {
+        border: 1px solid var(--jm-border);
+        box-shadow: 0 14px 32px rgba(30, 57, 92, .06);
+    }
+
+        .dash-summary-card.hero {
+            background: radial-gradient(circle at top right, rgba(195, 163, 64, .24), transparent 34%), linear-gradient(135deg, var(--jm-navy-dark), var(--jm-navy));
+            border-color: rgba(195, 163, 64, .28);
+            border-bottom: 4px solid var(--jm-gold);
+        }
+
+        .dash-summary-card span,
+        .dash-insight-card span,
+        .dash-bar-label span,
+        .dash-donut span,
+        .dash-stock-stats span,
+        .dash-activity-bars span,
+        .dash-list-row span,
+        .dash-shift-metrics span {
+            color: var(--jm-muted);
+        }
+
+        .dash-summary-card strong,
+        .dash-insight-card strong,
+        .dash-panel-header h2,
+        .dash-bar-label strong,
+        .dash-donut strong,
+        .dash-donut-legend strong,
+        .dash-stock-stats strong,
+        .dash-activity-bars strong,
+        .dash-list-row strong,
+        .dash-shift-metrics strong {
+            color: var(--jm-navy);
+        }
+
+        .dash-summary-card small,
+        .dash-insight-card small,
+        .dash-panel-header p {
+            color: #8f959f;
+        }
+
+    /* Icons */
+
+    .dash-card-icon {
+        background: #ffffff;
+        color: var(--jm-navy);
+        box-shadow: 0 10px 22px rgba(30, 57, 92, .10);
+    }
+
+        .dash-card-icon.soft,
+        .dash-card-icon.blue {
+            color: var(--jm-navy);
+            background: rgba(30, 57, 92, .08);
+        }
+
+        .dash-card-icon.green {
+            color: var(--jm-gold-dark);
+            background: rgba(195, 163, 64, .14);
+        }
+
+        .dash-card-icon.red {
+            color: #d92d20;
+            background: #fef3f2;
+        }
+
+        .dash-card-icon.amber {
+            color: var(--jm-gold-dark);
+            background: rgba(195, 163, 64, .14);
+        }
+
+    /* Panel headers and links */
+
+    .dash-panel-header {
+        border-bottom: 1px solid #eef1f5;
+    }
+
+    .dash-panel-link {
+        background: #ffffff;
+        color: var(--jm-navy);
+        border: 1px solid var(--jm-border);
+    }
+
+        .dash-panel-link:hover {
+            color: var(--jm-gold-dark);
+            border-color: rgba(195, 163, 64, .45);
+        }
+
+    /* Bar charts */
+
+    .dash-bar-track,
+    .dash-stock-meter,
+    .dash-activity-bars div div {
+        background: #eef1f5;
+    }
+
+    .dash-bar-fill.dark {
+        background: linear-gradient(90deg, var(--jm-navy-dark), var(--jm-navy));
+    }
+
+    .dash-bar-fill.green {
+        background: linear-gradient(90deg, var(--jm-gold-dark), var(--jm-gold));
+    }
+
+    .dash-bar-fill.red {
+        background: #d92d20;
+    }
+
+    .dash-bar-fill.amber {
+        background: var(--jm-gold);
+    }
+
+    .dash-stock-meter div {
+        background: linear-gradient(90deg, var(--jm-gold), #d92d20);
+    }
+
+    .dash-activity-bars em {
+        background: var(--jm-gold);
+    }
+
+        .dash-activity-bars em.amber {
+            background: var(--jm-gold);
+        }
+
+    /* Payment donut */
+
+    .legend-dot.cash {
+        background: var(--jm-navy);
+    }
+
+    .legend-dot.card {
+        background: var(--jm-gold);
+    }
+
+    .legend-dot.eft {
+        background: var(--jm-navy-soft);
+    }
+
+    .dash-donut-legend div,
+    .dash-stock-stats div,
+    .dash-shift-metrics div,
+    .dash-list-row,
+    .dash-quick-actions a {
+        background: #fbfcfe;
+        border: 1px solid var(--jm-border);
+    }
+
+    /* Cashier shift */
+
+    .dash-shift-status {
+        background: rgba(30, 57, 92, .06);
+        border: 1px solid rgba(30, 57, 92, .10);
+    }
+
+        .dash-shift-status span {
+            color: var(--jm-gold-dark);
+        }
+
+        .dash-shift-status strong {
+            color: var(--jm-navy);
+        }
+
+    .dash-shift-empty {
+        background: rgba(195, 163, 64, .12);
+        border: 1px solid rgba(195, 163, 64, .32);
+    }
+
+    .dash-shift-empty-icon {
+        color: var(--jm-gold-dark);
+    }
+
+    .dash-shift-empty a {
+        background: linear-gradient(135deg, var(--jm-navy-dark), var(--jm-navy));
+        color: #ffffff;
+        border-bottom: 3px solid var(--jm-gold);
+    }
+
+    /* Quick actions */
+
+    .dash-quick-actions a {
+        color: var(--jm-navy);
+    }
+
+        .dash-quick-actions a:hover {
+            border-color: rgba(195, 163, 64, .42);
+            box-shadow: 0 12px 26px rgba(30, 57, 92, .08);
+        }
+
+    .dash-quick-actions i,
+    .dash-list-avatar,
+    .dash-empty-icon {
+        background: rgba(195, 163, 64, .13);
+        color: var(--jm-gold-dark);
+    }
+
+        .dash-list-avatar.warning {
+            background: rgba(195, 163, 64, .13);
+            color: var(--jm-gold-dark);
+        }
+
+    /* Empty state */
+
+    .dash-empty {
+        border: 1px dashed rgba(30, 57, 92, .22);
+        background: #ffffff;
+    }
+
+    /* Status colours */
+
+    .difference-good {
+        color: #15803d !important;
+    }
+
+    .difference-bad {
+        color: #d92d20 !important;
+    }
+
+    .difference-neutral {
+        color: var(--jm-navy) !important;
+    }
+
 </style>
 
 @code {
@@ -1605,6 +1937,7 @@
 
     private bool _loading = true;
     private int? _branchFilter;
+    private string _userDisplayName = "there";
 
     private string Greeting
     {
@@ -1685,15 +2018,74 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadCurrentUserAsync();
+
         _settings = await BusinessSettingsService.GetSettingsAsync();
 
         if (!_settings.SetupCompleted)
         {
-            Nav.NavigateTo("/setup-business", true); return;
+            Nav.NavigateTo("/setup-business", true);
+            return;
         }
 
         await LoadDashboardAsync();
     }
+
+    private async Task LoadCurrentUserAsync()
+{
+    var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+    var user = authState.User;
+
+    if (user.Identity?.IsAuthenticated != true)
+    {
+        _userDisplayName = "there";
+        return;
+    }
+
+    var fullName =
+        user.FindFirst("FullName")?.Value
+        ?? user.FindFirst("fullName")?.Value
+        ?? user.FindFirst("full_name")?.Value
+        ?? user.FindFirst(ClaimTypes.GivenName)?.Value
+        ?? user.FindFirst(ClaimTypes.Name)?.Value
+        ?? user.Identity?.Name;
+
+    var email =
+        user.FindFirst(ClaimTypes.Email)?.Value
+        ?? user.FindFirst("email")?.Value
+        ?? user.Identity?.Name;
+
+    _userDisplayName = CleanDisplayName(fullName, email);
+}
+
+private string CleanDisplayName(string? fullName, string? email)
+{
+    var name = (fullName ?? "").Trim();
+
+    if (string.IsNullOrWhiteSpace(name) || name.Contains("@"))
+    {
+        name = (email ?? "").Trim();
+
+        if (name.Contains("@"))
+        {
+            name = name[..name.IndexOf("@")];
+        }
+
+        name = name
+            .Replace(".", " ")
+            .Replace("_", " ")
+            .Replace("-", " ");
+    }
+
+    if (string.IsNullOrWhiteSpace(name))
+    {
+        return "there";
+    }
+
+    return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(name.ToLowerInvariant());
+}
+
+
     private async Task LoadDashboardAsync()
     {
         _loading = true;

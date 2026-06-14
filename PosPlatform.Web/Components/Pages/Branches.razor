@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @layout MainLayout
 @attribute [Authorize]
+@using Microsoft.AspNetCore.Components.Web
 @using PosPlatform.Web.Components.Layout
 @using PosPlatform.Web.Models.Branches
 @using PosPlatform.Web.Models.Settings
@@ -15,12 +16,13 @@
 <PageTitle>Branches</PageTitle>
 
 <section class="branches-page">
-    <div class="branches-header">
+    <div class="branches-top">
         <div>
             <div class="branches-kicker">
                 <i class="bi bi-shop"></i>
                 Branch management
             </div>
+
             <h1>Branches</h1>
             <p>Manage business locations, outlets, salons, warehouses and branch-level activity.</p>
         </div>
@@ -65,24 +67,40 @@
     </div>
 
     <div class="branches-summary-grid">
-        <div class="branches-summary-card dark">
+        <div class="branches-summary-card hero">
+            <div class="branches-summary-icon">
+                <i class="bi bi-cash-stack"></i>
+            </div>
             <span>Total Sales</span>
             <strong>@Money(_branches.Sum(x => x.SalesTotal))</strong>
+            <small>Across filtered branches</small>
         </div>
 
-        <div class="branches-summary-card blue">
+        <div class="branches-summary-card">
+            <div class="branches-summary-icon blue">
+                <i class="bi bi-cart-check"></i>
+            </div>
             <span>Sales Count</span>
             <strong>@_branches.Sum(x => x.SalesCount)</strong>
+            <small>Transactions recorded</small>
         </div>
 
-        <div class="branches-summary-card amber">
+        <div class="branches-summary-card">
+            <div class="branches-summary-icon amber">
+                <i class="bi bi-box-arrow-in-down"></i>
+            </div>
             <span>Purchases</span>
             <strong>@Money(_branches.Sum(x => x.PurchaseTotal))</strong>
+            <small>Stock received</small>
         </div>
 
-        <div class="branches-summary-card red">
+        <div class="branches-summary-card">
+            <div class="branches-summary-icon red">
+                <i class="bi bi-wallet2"></i>
+            </div>
             <span>Expenses</span>
             <strong>@Money(_branches.Sum(x => x.ExpenseTotal))</strong>
+            <small>Branch costs</small>
         </div>
     </div>
 
@@ -91,17 +109,18 @@
             <i class="bi bi-search"></i>
             <input @bind="_searchTerm"
                    @bind:event="oninput"
+                   @onkeydown="HandleSearchKeyDown"
                    placeholder="Search branch name, code, phone, email or address" />
         </div>
 
-        <select class="branches-filter" @bind="_statusFilter">
+        <select class="branches-filter" value="@_statusFilter" @onchange="StatusFilterChanged">
             <option value="all">All branches</option>
             <option value="active">Active only</option>
             <option value="inactive">Inactive only</option>
             <option value="main">Main branch</option>
         </select>
 
-        <button type="button" class="branches-secondary-btn" @onclick="LoadBranchesAsync">
+        <button type="button" class="branches-secondary-btn" @onclick="ApplyFiltersAsync">
             <i class="bi bi-filter"></i>
             Apply
         </button>
@@ -116,13 +135,26 @@
         <div class="branches-panel-header">
             <div>
                 <h2>Branch List</h2>
-                <p>@_branches.Count branch@(_branches.Count == 1 ? "" : "es") showing.</p>
+                <p>Showing @PageStart - @PageEnd of @TotalBranchRows branch@(TotalBranchRows == 1 ? "" : "es").</p>
+            </div>
+
+            <div class="branches-rows-tool">
+                <label>Rows</label>
+                <select value="@_rowsMode" @onchange="RowsChanged">
+                    <option value="10">10 rows</option>
+                    <option value="25">25 rows</option>
+                    <option value="50">50 rows</option>
+                    <option value="all">Show all</option>
+                </select>
             </div>
         </div>
 
         @if (_loading)
         {
             <div class="branches-empty">
+                <div class="branches-empty-icon">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
                 <strong>Loading branches...</strong>
                 <span>Please wait while we fetch branch records.</span>
             </div>
@@ -130,6 +162,9 @@
         else if (_branches.Count == 0)
         {
             <div class="branches-empty">
+                <div class="branches-empty-icon">
+                    <i class="bi bi-shop"></i>
+                </div>
                 <strong>No branches found</strong>
                 <span>Add your first branch to start tracking business locations.</span>
             </div>
@@ -146,17 +181,18 @@
                             <th>Purchases</th>
                             <th>Expenses</th>
                             <th>Status</th>
-                            <th class="text-end">Actions</th>
+                            <th class="branches-actions-col">Actions</th>
                         </tr>
                     </thead>
 
                     <tbody>
-                        @foreach (var branch in _branches)
+                        @foreach (var branch in PaginatedBranches)
                         {
                             <tr>
                                 <td>
                                     <div class="branches-cell">
                                         <div class="branches-avatar">@GetInitials(branch.Name)</div>
+
                                         <div>
                                             <strong>
                                                 @branch.Name
@@ -199,27 +235,67 @@
                                     </span>
                                 </td>
 
-                                <td class="text-end">
-                                    <div class="branches-actions">
-                                        <button type="button" class="branches-mini-btn edit" @onclick="() => OpenEditModal(branch.Id)">
-                                            <i class="bi bi-pencil"></i>
-                                            Edit
+                                <td class="branches-actions-cell">
+                                    <div class="branches-action-menu">
+                                        <button type="button"
+                                                class="branches-action-toggle"
+                                                @onclick="() => ToggleActionMenu(branch.Id)">
+                                            <span>Actions</span>
+                                            <i class="bi bi-chevron-down"></i>
                                         </button>
 
-                                        <button type="button" class="branches-mini-btn status" @onclick="() => ToggleStatusAsync(branch.Id)">
-                                            <i class="bi @(branch.IsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
-                                            @(branch.IsActive ? "Pause" : "Activate")
-                                        </button>
+                                        @if (_openActionBranchId == branch.Id)
+                                        {
+                                            <div class="branches-action-dropdown">
+                                                <button type="button" @onclick="() => OpenEditModal(branch.Id)">
+                                                    <i class="bi bi-pencil"></i>
+                                                    <span>Edit branch</span>
+                                                </button>
 
-                                        <button type="button" class="branches-mini-btn delete" @onclick="() => ConfirmDelete(branch.Id, branch.Name)">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
+                                                <button type="button" @onclick="() => ToggleStatusAsync(branch.Id)">
+                                                    <i class="bi @(branch.IsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
+                                                    <span>@(branch.IsActive ? "Pause branch" : "Activate branch")</span>
+                                                </button>
+
+                                                <button type="button" class="danger" @onclick="() => ConfirmDelete(branch.Id, branch.Name)">
+                                                    <i class="bi bi-trash"></i>
+                                                    <span>Delete branch</span>
+                                                </button>
+                                            </div>
+                                        }
                                     </div>
                                 </td>
                             </tr>
                         }
                     </tbody>
                 </table>
+            </div>
+
+            <div class="branches-pagination">
+                <div class="branches-page-info">
+                    Showing
+                    <strong>@PageStart</strong>
+                    -
+                    <strong>@PageEnd</strong>
+                    of
+                    <strong>@TotalBranchRows</strong>
+                </div>
+
+                <div class="branches-page-controls">
+                    <button type="button" class="@PreviousPageClass" @onclick="PreviousPage">
+                        <i class="bi bi-chevron-left"></i>
+                        Previous
+                    </button>
+
+                    <span class="branches-page-count">
+                        @(ShowAllRows ? "Showing all" : $"Page {_currentPage} of {TotalPages}")
+                    </span>
+
+                    <button type="button" class="@NextPageClass" @onclick="NextPage">
+                        Next
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
             </div>
         }
     </div>
@@ -299,7 +375,8 @@
 
                 <div class="branches-modal-actions">
                     <button type="button" class="branches-ghost-btn" @onclick="CloseModal">Cancel</button>
-                    <button type="submit" class="branches-primary-btn" disabled="@_saving">
+
+                    <button type="submit" class="@SaveButtonClass">
                         <i class="bi bi-check2-circle"></i>
                         @(_saving ? "Saving..." : "Save Branch")
                     </button>
@@ -333,79 +410,102 @@
         </div>
     </div>
 }
+
 <style>
     .branches-page {
         animation: branchesIn .22s ease both;
     }
 
-    .branches-header {
+    .branches-top {
         display: flex;
         justify-content: space-between;
         align-items: flex-end;
         gap: 18px;
-        margin-bottom: 18px;
+        margin-bottom: 16px;
     }
 
     .branches-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
 
-    .branches-header h1 {
+    .branches-top h1 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.45rem;
-        font-weight: 680;
-        letter-spacing: -.03em;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
-    .branches-header p {
+    .branches-top p {
         margin: 6px 0 0;
-        color: #64748b;
+        color: #667085;
         font-size: .88rem;
     }
 
-    .branches-primary-btn, .branches-secondary-btn, .branches-ghost-btn, .branches-danger-btn, .branches-mini-btn {
+    .branches-primary-btn,
+    .branches-secondary-btn,
+    .branches-ghost-btn,
+    .branches-danger-btn,
+    .branches-page-btn {
         min-height: 38px;
-        border-radius: 11px;
+        border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
         padding: 0 14px;
         font-size: .8rem;
-        font-weight: 650;
+        font-weight: 680;
         border: 0;
         white-space: nowrap;
+        transition: transform .18s ease;
     }
 
     .branches-primary-btn {
-        color: #fff;
-        background: #111827;
-        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+        color: #ffffff;
+        background: #252525;
+        box-shadow: 0 12px 24px rgba(17,24,39,.12);
     }
 
     .branches-secondary-btn {
-        color: #2563eb;
-        background: #eef5ff;
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
     }
 
-    .branches-ghost-btn {
+    .branches-ghost-btn,
+    .branches-page-btn {
         color: #475569;
-        background: #fff;
+        background: #ffffff;
         border: 1px solid #e5e7eb;
     }
 
     .branches-danger-btn {
-        color: #fff;
-        background: #dc2626;
+        color: #ffffff;
+        background: #d92d20;
+    }
+
+        .branches-primary-btn:hover,
+        .branches-secondary-btn:hover,
+        .branches-ghost-btn:hover,
+        .branches-danger-btn:hover,
+        .branches-page-btn:hover {
+            transform: translateY(-1px);
+        }
+
+    .branches-primary-btn.is-disabled,
+    .branches-page-btn.is-disabled {
+        opacity: .45;
+        cursor: not-allowed;
+        transform: none;
     }
 
     .branches-alert {
@@ -442,107 +542,132 @@
             color: inherit;
         }
 
-    .branches-settings-strip, .branches-summary-grid {
+    .branches-settings-strip,
+    .branches-summary-grid {
         display: grid;
-        gap: 10px;
+        gap: 12px;
         margin-bottom: 16px;
     }
 
-    .branches-settings-strip {
-        grid-template-columns: repeat(4,minmax(0,1fr));
-    }
-
+    .branches-settings-strip,
     .branches-summary-grid {
-        grid-template-columns: repeat(4,minmax(0,1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
-    .branches-settings-strip div, .branches-summary-card {
-        padding: 13px;
-        border-radius: 16px;
-        background: #fff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.04);
-    }
-
-    .branches-summary-card {
-        padding: 16px;
-    }
-
-        .branches-settings-strip span, .branches-settings-strip strong, .branches-summary-card span, .branches-summary-card strong {
-            display: block;
+        .branches-settings-strip div,
+        .branches-summary-card {
+            padding: 15px;
+            border-radius: 20px;
+            background: #ffffff;
+            border: 1px solid #e8eaef;
+            box-shadow: 0 14px 32px rgba(17,24,39,.045);
         }
 
-        .branches-settings-strip span, .branches-summary-card span {
-            color: #64748b;
-            font-size: .72rem;
-            font-weight: 650;
-        }
-
-        .branches-settings-strip strong, .branches-summary-card strong {
-            margin-top: 4px;
-            color: #0f172a;
-            font-size: .88rem;
-            font-weight: 720;
-        }
-
-        .branches-summary-card strong {
-            font-size: 1.08rem;
-        }
-
-        .branches-summary-card.dark {
-            background: #111827;
-            border-color: #111827;
-        }
-
-            .branches-summary-card.dark span, .branches-summary-card.dark strong {
-                color: #fff;
+            .branches-settings-strip span,
+            .branches-settings-strip strong,
+            .branches-summary-card span,
+            .branches-summary-card strong,
+            .branches-summary-card small {
+                display: block;
             }
 
-        .branches-summary-card.blue strong {
+            .branches-settings-strip span,
+            .branches-summary-card span {
+                color: #667085;
+                font-size: .72rem;
+                font-weight: 700;
+            }
+
+            .branches-settings-strip strong,
+            .branches-summary-card strong {
+                margin-top: 6px;
+                color: #111827;
+                font-size: 1.05rem;
+                font-weight: 760;
+                letter-spacing: -.02em;
+            }
+
+            .branches-summary-card small {
+                margin-top: 4px;
+                color: #98a2b3;
+                font-size: .72rem;
+                line-height: 1.35;
+            }
+
+            .branches-summary-card.hero {
+                background: #252525;
+                border-color: #252525;
+            }
+
+                .branches-summary-card.hero span,
+                .branches-summary-card.hero strong,
+                .branches-summary-card.hero small {
+                    color: #ffffff;
+                }
+
+    .branches-summary-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #252525;
+        box-shadow: 0 10px 22px rgba(17, 24, 39, .08);
+    }
+
+        .branches-summary-icon.blue {
             color: #2563eb;
+            background: #eff6ff;
         }
 
-        .branches-summary-card.amber strong {
-            color: #d97706;
+        .branches-summary-icon.amber {
+            color: #b7791f;
+            background: #fffbeb;
         }
 
-        .branches-summary-card.red strong {
-            color: #dc2626;
+        .branches-summary-icon.red {
+            color: #d92d20;
+            background: #fef3f2;
         }
 
     .branches-control-panel {
         display: grid;
-        grid-template-columns: minmax(260px,1fr) 180px auto auto;
+        grid-template-columns: minmax(260px, 1fr) 180px auto auto;
         gap: 10px;
         padding: 14px;
         margin-bottom: 16px;
         border-radius: 18px;
-        background: #fff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 10px 24px rgba(17,24,39,.035);
     }
 
     .branches-search {
-        min-height: 40px;
+        min-height: 42px;
         display: flex;
         align-items: center;
         gap: 10px;
         padding: 0 13px;
-        border-radius: 12px;
-        background: #f8fafc;
+        border-radius: 14px;
+        background: #fafafa;
         border: 1px solid #e5e7eb;
-        color: #94a3b8;
+        color: #98a2b3;
     }
 
-        .branches-search input, .branches-filter, .branches-input {
+        .branches-search input,
+        .branches-filter,
+        .branches-input,
+        .branches-rows-tool select {
             width: 100%;
             min-height: 40px;
             border-radius: 12px;
             border: 1px solid #e5e7eb;
-            background: #fff;
-            color: #0f172a;
+            background: #ffffff;
+            color: #111827;
             padding: 0 12px;
-            font-size: .84rem;
+            font-size: 16px;
             outline: none;
         }
 
@@ -553,33 +678,52 @@
         }
 
     .branches-panel {
-        background: #fff;
-        border: 1px solid #e7edf5;
-        border-radius: 20px;
-        box-shadow: 0 16px 34px rgba(15,23,42,.055);
-        overflow: hidden;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        border-radius: 22px;
+        box-shadow: 0 14px 32px rgba(17,24,39,.045);
+        overflow: visible;
     }
 
     .branches-panel-header {
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
     }
 
         .branches-panel-header h2 {
             margin: 0;
-            color: #0f172a;
-            font-size: .92rem;
+            color: #111827;
+            font-size: .94rem;
             font-weight: 720;
         }
 
         .branches-panel-header p {
             margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .76rem;
+            color: #98a2b3;
+            font-size: .75rem;
+        }
+
+    .branches-rows-tool {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 170px;
+    }
+
+        .branches-rows-tool label {
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+            text-transform: uppercase;
         }
 
     .branches-table-wrap {
         overflow-x: auto;
+        padding-bottom: 100px;
     }
 
     .branches-table {
@@ -590,13 +734,13 @@
 
         .branches-table th {
             padding: 12px 16px;
-            background: #f8fafc;
-            color: #64748b;
+            background: #fafafa;
+            color: #667085;
             font-size: .7rem;
             font-weight: 750;
             text-transform: uppercase;
             letter-spacing: .05em;
-            border-bottom: 1px solid #e7edf5;
+            border-bottom: 1px solid #e8eaef;
             white-space: nowrap;
         }
 
@@ -604,7 +748,7 @@
             padding: 14px 16px;
             color: #334155;
             font-size: .82rem;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f2f5;
             vertical-align: middle;
         }
 
@@ -618,8 +762,8 @@
         width: 38px;
         height: 38px;
         border-radius: 14px;
-        background: #eef5ff;
-        color: #2563eb;
+        background: #f2f6f5;
+        color: #8FA6A1;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -627,24 +771,27 @@
         font-weight: 750;
     }
 
-    .branches-cell strong, .branches-contact strong {
+    .branches-cell strong,
+    .branches-contact strong {
         display: block;
-        color: #0f172a;
+        color: #111827;
         font-size: .85rem;
         font-weight: 720;
     }
 
-    .branches-cell span, .branches-contact span, .branches-muted {
+    .branches-cell span,
+    .branches-contact span,
+    .branches-muted {
         display: block;
         margin-top: 2px;
-        color: #94a3b8;
+        color: #98a2b3;
         font-size: .72rem;
     }
 
     .branches-cell small {
         display: block;
         margin-top: 2px;
-        color: #64748b;
+        color: #667085;
         font-size: .72rem;
     }
 
@@ -677,65 +824,167 @@
         }
 
         .branches-status-pill.inactive {
-            color: #64748b;
-            background: #f1f5f9;
+            color: #667085;
+            background: #f3f4f6;
         }
 
-    .branches-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: 6px;
-        flex-wrap: wrap;
+    .branches-actions-col,
+    .branches-actions-cell {
+        text-align: right;
     }
 
-    .branches-mini-btn {
-        min-height: 30px;
-        padding: 0 10px;
-        border: 1px solid;
+    .branches-actions-cell {
+        position: relative;
+        min-width: 150px;
+    }
+
+    .branches-action-menu {
+        position: relative;
+        display: inline-block;
+    }
+
+    .branches-action-toggle {
+        min-height: 34px;
+        border-radius: 11px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        color: #252525;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 11px;
         font-size: .74rem;
+        font-weight: 750;
+        cursor: pointer;
+        box-shadow: 0 8px 18px rgba(17, 24, 39, .04);
     }
 
-        .branches-mini-btn.edit {
-            color: #2563eb;
-            background: #eff6ff;
-            border-color: #bfdbfe;
+    .branches-action-dropdown {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        width: 195px;
+        padding: 7px;
+        border-radius: 15px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 18px 38px rgba(17, 24, 39, .14);
+        z-index: 100;
+        display: grid;
+        gap: 4px;
+        text-align: left;
+    }
+
+        .branches-action-dropdown button {
+            width: 100%;
+            min-height: 36px;
+            border: 0;
+            border-radius: 11px;
+            background: transparent;
+            color: #344054;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 10px;
+            font-size: .78rem;
+            font-weight: 650;
+            text-align: left;
         }
 
-        .branches-mini-btn.status {
-            color: #b45309;
-            background: #fffbeb;
-            border-color: #fde68a;
-        }
+            .branches-action-dropdown button:hover {
+                background: #fafafa;
+                color: #252525;
+            }
 
-        .branches-mini-btn.delete {
-            color: #dc2626;
-            background: #fef2f2;
-            border-color: #fecaca;
-        }
+            .branches-action-dropdown button i {
+                width: 18px;
+                color: #8FA6A1;
+            }
+
+            .branches-action-dropdown button.danger,
+            .branches-action-dropdown button.danger i {
+                color: #d92d20;
+            }
 
     .branches-empty {
         margin: 18px;
         padding: 34px 20px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px dashed #dbe3ef;
+        border-radius: 18px;
+        background: #fafafa;
+        border: 1px dashed #d0d5dd;
         text-align: center;
     }
 
-        .branches-empty strong, .branches-empty span {
-            display: block;
+    .branches-empty-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 10px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .branches-empty strong,
+    .branches-empty span {
+        display: block;
+    }
+
+    .branches-empty strong {
+        color: #111827;
+        font-size: .9rem;
+        font-weight: 720;
+    }
+
+    .branches-empty span {
+        margin-top: 4px;
+        color: #667085;
+        font-size: .78rem;
+    }
+
+    .branches-pagination {
+        padding: 14px 18px;
+        border-top: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        background: #ffffff;
+        border-radius: 0 0 22px 22px;
+    }
+
+    .branches-page-info {
+        color: #667085;
+        font-size: .78rem;
+        font-weight: 600;
+    }
+
+        .branches-page-info strong {
+            color: #111827;
         }
 
-        .branches-empty strong {
-            color: #0f172a;
-            font-size: .9rem;
-        }
+    .branches-page-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
 
-        .branches-empty span {
-            margin-top: 4px;
-            color: #64748b;
-            font-size: .78rem;
-        }
+    .branches-page-count {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 11px;
+        border-radius: 11px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+        color: #667085;
+        font-size: .76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
 
     .branches-modal-backdrop {
         position: fixed;
@@ -744,16 +993,19 @@
         padding: 20px;
         background: rgba(15,23,42,.45);
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: center;
+        overflow-y: auto;
     }
 
     .branches-modal {
         width: 100%;
         max-width: 760px;
-        max-height: calc(100vh - 40px);
-        overflow-y: auto;
-        background: #fff;
+        max-height: none;
+        margin-top: 10px;
+        margin-bottom: 20px;
+        overflow-y: visible;
+        background: #ffffff;
         border-radius: 22px;
         padding: 22px;
         box-shadow: 0 24px 60px rgba(15,23,42,.24);
@@ -774,23 +1026,25 @@
     }
 
         .branches-modal-header span {
-            color: #2563eb;
+            color: #8FA6A1;
             font-size: .72rem;
             font-weight: 750;
             letter-spacing: .06em;
             text-transform: uppercase;
         }
 
-        .branches-modal-header h4, .branches-delete-modal h4 {
+        .branches-modal-header h4,
+        .branches-delete-modal h4 {
             margin: 3px 0 0;
-            color: #0f172a;
+            color: #111827;
             font-size: 1.08rem;
             font-weight: 720;
         }
 
-        .branches-modal-header p, .branches-delete-modal p {
+        .branches-modal-header p,
+        .branches-delete-modal p {
             margin: 5px 0 0;
-            color: #64748b;
+            color: #667085;
             font-size: .84rem;
             line-height: 1.5;
         }
@@ -800,8 +1054,8 @@
         height: 34px;
         border-radius: 10px;
         border: 1px solid #e5e7eb;
-        background: #fff;
-        color: #64748b;
+        background: #ffffff;
+        color: #667085;
     }
 
     .branches-label {
@@ -824,26 +1078,27 @@
         gap: 10px;
         padding: 12px;
         border-radius: 14px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
     }
 
         .branches-check input {
             margin-top: 4px;
         }
 
-        .branches-check strong, .branches-check small {
+        .branches-check strong,
+        .branches-check small {
             display: block;
         }
 
         .branches-check strong {
-            color: #0f172a;
+            color: #111827;
             font-size: .85rem;
         }
 
         .branches-check small {
             margin-top: 2px;
-            color: #64748b;
+            color: #667085;
             font-size: .76rem;
         }
 
@@ -870,8 +1125,8 @@
         height: 52px;
         margin: 0 auto 14px;
         border-radius: 18px;
-        color: #dc2626;
-        background: #fef2f2;
+        color: #d92d20;
+        background: #fef3f2;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -891,7 +1146,8 @@
     }
 
     @@media (max-width:1199px) {
-        .branches-settings-strip, .branches-summary-grid {
+        .branches-settings-strip,
+        .branches-summary-grid {
             grid-template-columns: repeat(2,minmax(0,1fr));
         }
 
@@ -901,17 +1157,46 @@
     }
 
     @@media (max-width:768px) {
-        .branches-header {
+        .branches-top,
+        .branches-panel-header,
+        .branches-modal-header {
             flex-direction: column;
             align-items: flex-start;
         }
 
-            .branches-header .branches-primary-btn {
+            .branches-top .branches-primary-btn,
+            .branches-settings-strip,
+            .branches-summary-grid,
+            .branches-control-panel,
+            .branches-rows-tool,
+            .branches-rows-tool select {
                 width: 100%;
             }
 
-        .branches-settings-strip, .branches-summary-grid, .branches-control-panel {
+        .branches-settings-strip,
+        .branches-summary-grid,
+        .branches-control-panel {
             grid-template-columns: 1fr;
+        }
+
+        .branches-pagination {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .branches-page-controls,
+        .branches-page-btn {
+            width: 100%;
+        }
+
+        .branches-page-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .branches-page-count {
+            justify-content: center;
+            width: 100%;
         }
 
         .branches-modal-actions {
@@ -944,6 +1229,68 @@
     private string? _message;
     private bool _isSuccess;
 
+    private int _currentPage = 1;
+    private string _rowsMode = "10";
+    private int? _openActionBranchId;
+
+    private bool ShowAllRows =>
+        _rowsMode.Equals("all", StringComparison.OrdinalIgnoreCase);
+
+    private int PageSize => ParseRows(_rowsMode);
+
+    private List<BranchListItemViewModel> OrderedBranches =>
+        _branches
+            .OrderByDescending(x => x.IsMainBranch)
+            .ThenBy(x => x.Name)
+            .ToList();
+
+    private int TotalBranchRows => OrderedBranches.Count;
+
+    private int TotalPages =>
+        TotalBranchRows == 0 || ShowAllRows
+            ? 1
+            : (int)Math.Ceiling(TotalBranchRows / (double)PageSize);
+
+    private int SafeCurrentPage =>
+        Math.Min(Math.Max(_currentPage, 1), TotalPages);
+
+    private int PageStart =>
+        TotalBranchRows == 0
+            ? 0
+            : ShowAllRows
+                ? 1
+                : ((SafeCurrentPage - 1) * PageSize) + 1;
+
+    private int PageEnd =>
+        TotalBranchRows == 0
+            ? 0
+            : ShowAllRows
+                ? TotalBranchRows
+                : Math.Min(SafeCurrentPage * PageSize, TotalBranchRows);
+
+    private List<BranchListItemViewModel> PaginatedBranches =>
+        ShowAllRows
+            ? OrderedBranches
+            : OrderedBranches
+                .Skip((SafeCurrentPage - 1) * PageSize)
+                .Take(PageSize)
+                .ToList();
+
+    private string PreviousPageClass =>
+        _currentPage <= 1 || ShowAllRows
+            ? "branches-page-btn is-disabled"
+            : "branches-page-btn";
+
+    private string NextPageClass =>
+        _currentPage >= TotalPages || ShowAllRows
+            ? "branches-page-btn is-disabled"
+            : "branches-page-btn";
+
+    private string SaveButtonClass =>
+        _saving
+            ? "branches-primary-btn is-disabled"
+            : "branches-primary-btn";
+
     protected override async Task OnInitializedAsync()
     {
         if (!await UserAccessService.CanAccessAsync("branches"))
@@ -961,19 +1308,79 @@
     private async Task LoadBranchesAsync()
     {
         _loading = true;
+        _openActionBranchId = null;
+
         _branches = await BranchService.GetBranchesAsync(_searchTerm, _statusFilter);
+
+        if (_currentPage > TotalPages)
+        {
+            _currentPage = TotalPages;
+        }
+
         _loading = false;
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _currentPage = 1;
+        await LoadBranchesAsync();
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyFiltersAsync();
+        }
+    }
+
+    private void StatusFilterChanged(ChangeEventArgs e)
+    {
+        _statusFilter = e.Value?.ToString() ?? "all";
+        _currentPage = 1;
+    }
+
+    private void RowsChanged(ChangeEventArgs e)
+    {
+        _rowsMode = e.Value?.ToString() ?? "10";
+        _currentPage = 1;
+    }
+
+    private void NextPage()
+    {
+        if (!ShowAllRows && _currentPage < TotalPages)
+        {
+            _currentPage++;
+            _openActionBranchId = null;
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (!ShowAllRows && _currentPage > 1)
+        {
+            _currentPage--;
+            _openActionBranchId = null;
+        }
+    }
+
+    private void ToggleActionMenu(int branchId)
+    {
+        _openActionBranchId = _openActionBranchId == branchId ? null : branchId;
     }
 
     private async Task ResetFiltersAsync()
     {
         _searchTerm = null;
         _statusFilter = "all";
+        _currentPage = 1;
         await LoadBranchesAsync();
     }
 
     private void OpenAddModal()
     {
+        _openActionBranchId = null;
+
         _form = new BranchFormModel
         {
             IsActive = true
@@ -989,6 +1396,8 @@
 
     private async Task OpenEditModal(int id)
     {
+        _openActionBranchId = null;
+
         var model = await BranchService.GetByIdAsync(id);
 
         if (model == null)
@@ -1009,6 +1418,11 @@
 
     private async Task SaveBranchAsync()
     {
+        if (_saving)
+        {
+            return;
+        }
+
         _saving = true;
 
         var result = await BranchService.SaveAsync(_form);
@@ -1020,12 +1434,15 @@
         {
             _showModal = false;
             _form = new BranchFormModel();
+            _currentPage = 1;
             await LoadBranchesAsync();
         }
     }
 
     private async Task ToggleStatusAsync(int id)
     {
+        _openActionBranchId = null;
+
         var result = await BranchService.ToggleStatusAsync(id);
         ShowMessage(result.Message, result.Success);
 
@@ -1037,6 +1454,8 @@
 
     private void ConfirmDelete(int id, string name)
     {
+        _openActionBranchId = null;
+
         _deleteId = id;
         _deleteBranchName = name;
         _showDeleteConfirm = true;
@@ -1063,6 +1482,13 @@
         {
             await LoadBranchesAsync();
         }
+    }
+
+    private int ParseRows(string value)
+    {
+        return int.TryParse(value, out var rows) && rows > 0
+            ? rows
+            : 10;
     }
 
     private string Money(decimal value)

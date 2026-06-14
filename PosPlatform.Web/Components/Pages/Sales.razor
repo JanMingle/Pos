@@ -20,6 +20,7 @@
 @using PosPlatform.Web.Models.Shifts
 @using PosPlatform.Web.Models.Customers
 @inject BranchService BranchService
+@inject SalesCartDraftService SalesCartDraftService
 @using Microsoft.AspNetCore.Components.Web
 
 <PageTitle>Sales</PageTitle>
@@ -2650,6 +2651,8 @@ disabled="@(_savingRefund ? "disabled" : null)"
             _customerOptions = await CustomerService.GetCustomerOptionsAsync();
         }
 
+        RestoreCartDraftFromMemory();
+
         await LoadProducts();
         await LoadMySalesAsync();
     }
@@ -2833,6 +2836,45 @@ disabled="@(_savingRefund ? "disabled" : null)"
         ShowMessage($"{GetProductDisplayName(product)} added to cart.", true);
     }
 
+    private void RestoreCartDraftFromMemory()
+    {
+        _cart = SalesCartDraftService.Cart;
+
+        _paymentMethod = string.IsNullOrWhiteSpace(SalesCartDraftService.PaymentMethod)
+            ? "Cash"
+            : SalesCartDraftService.PaymentMethod;
+
+        _discountAmount = SalesCartDraftService.DiscountAmount;
+        _amountPaid = SalesCartDraftService.AmountPaid;
+
+        _selectedCustomerId = SalesCartDraftService.SelectedCustomerId;
+        _customerName = SalesCartDraftService.CustomerName;
+        _customerPhone = SalesCartDraftService.CustomerPhone;
+        _saleNotes = SalesCartDraftService.SaleNotes;
+
+        _ageRestrictionConfirmed = SalesCartDraftService.AgeRestrictionConfirmed;
+
+        if (_cart.Count > 0)
+        {
+            ShowMessage($"Cart restored with {_cart.Count} item{(_cart.Count == 1 ? "" : "s")}.", true);
+        }
+    }
+
+    private void SaveCartDraftToMemory()
+    {
+        SalesCartDraftService.PaymentMethod = _paymentMethod;
+        SalesCartDraftService.DiscountAmount = _discountAmount;
+        SalesCartDraftService.AmountPaid = _amountPaid;
+
+        SalesCartDraftService.SelectedCustomerId = _selectedCustomerId;
+        SalesCartDraftService.CustomerName = _customerName;
+        SalesCartDraftService.CustomerPhone = _customerPhone;
+        SalesCartDraftService.SaleNotes = _saleNotes;
+
+        SalesCartDraftService.AgeRestrictionConfirmed = _ageRestrictionConfirmed;
+        SalesCartDraftService.Touch();
+    }
+
     private void AddToCart(SaleProductOptionViewModel product)
     {
         if (IsAddDisabled(product))
@@ -2857,6 +2899,7 @@ disabled="@(_savingRefund ? "disabled" : null)"
             }
 
             existing.Quantity += 1;
+            SaveCartDraftToMemory();
             return;
         }
 
@@ -2887,6 +2930,8 @@ disabled="@(_savingRefund ? "disabled" : null)"
         {
             _ageRestrictionConfirmed = false;
         }
+
+        SaveCartDraftToMemory();
     }
 
     private bool IsAddDisabled(SaleProductOptionViewModel product)
@@ -2908,6 +2953,7 @@ disabled="@(_savingRefund ? "disabled" : null)"
         }
 
         item.Quantity += 1;
+        SaveCartDraftToMemory();
     }
 
     private void DecreaseQuantity(int productId, int? productVariantId)
@@ -2922,6 +2968,7 @@ disabled="@(_savingRefund ? "disabled" : null)"
         }
 
         item.Quantity -= 1;
+        SaveCartDraftToMemory();
     }
 
     private void UpdateQuantity(int productId, int? productVariantId, string? value)
@@ -2932,17 +2979,20 @@ disabled="@(_savingRefund ? "disabled" : null)"
         if (!decimal.TryParse(value, out var quantity) || quantity <= 0)
         {
             item.Quantity = 1;
+            SaveCartDraftToMemory();
             return;
         }
 
         if (item.TrackStock && !_settings.AllowNegativeStock && quantity > item.AvailableStock)
         {
             item.Quantity = item.AvailableStock;
+            SaveCartDraftToMemory();
             ShowMessage($"Quantity adjusted to available stock for {GetCartItemName(item)}.", false);
             return;
         }
 
         item.Quantity = quantity;
+        SaveCartDraftToMemory();
     }
 
     private void RemoveFromCart(int productId, int? productVariantId)
@@ -2981,6 +3031,7 @@ disabled="@(_savingRefund ? "disabled" : null)"
         {
             _ageRestrictionConfirmed = false;
         }
+        SaveCartDraftToMemory();
     }
 
     private void CloseRemoveItemConfirmModal()
@@ -3011,18 +3062,22 @@ disabled="@(_savingRefund ? "disabled" : null)"
     {
         _amountPaid = 0;
     }
+
+        SaveCartDraftToMemory();
 }
 
-private void OnAmountPaidInput(ChangeEventArgs e)
-{
-    if (decimal.TryParse(e.Value?.ToString(), out var amount))
+    private void OnAmountPaidInput(ChangeEventArgs e)
     {
-        _amountPaid = amount < 0 ? 0 : amount;
-        return;
-    }
+        if (decimal.TryParse(e.Value?.ToString(), out var amount))
+        {
+            _amountPaid = amount < 0 ? 0 : amount;
+            SaveCartDraftToMemory();
+            return;
+        }
 
-    _amountPaid = 0;
-}
+        _amountPaid = 0;
+        SaveCartDraftToMemory();
+    }
 
 private string GetCompleteSaleButtonText()
 {
@@ -3218,15 +3273,7 @@ private string GetCompleteSaleButtonText()
                 _showReceipt = _receipt != null;
             }
 
-            _cart.Clear();
-            _discountAmount = 0;
-            _amountPaid = 0;
-            _paymentMethod = "Cash";
-            _selectedCustomerId = null;
-            _customerName = null;
-            _customerPhone = null;
-            _saleNotes = null;
-            _ageRestrictionConfirmed = false;
+            ClearCart();
 
             _openShift = await CashierShiftService.GetOpenShiftAsync();
 
@@ -3240,17 +3287,25 @@ private string GetCompleteSaleButtonText()
 
     private void ClearCart()
     {
-        _cart.Clear();
+        SalesCartDraftService.Clear();
+
+        _cart = SalesCartDraftService.Cart;
+
         _discountAmount = 0;
         _amountPaid = 0;
+        _paymentMethod = "Cash";
+
         _selectedCustomerId = null;
         _customerName = null;
         _customerPhone = null;
         _saleNotes = null;
+
         _ageRestrictionConfirmed = false;
+
         _showSaleConfirmModal = false;
         _showAgeConfirmModal = false;
         _showRemoveItemConfirmModal = false;
+
         _pendingRemoveProductId = null;
         _pendingRemoveProductVariantId = null;
         _pendingRemoveItemName = null;
@@ -3259,11 +3314,13 @@ private string GetCompleteSaleButtonText()
     private void SetExactPayment()
     {
         _amountPaid = TotalPreview;
+        SaveCartDraftToMemory();
     }
 
     private void AddPaidAmount(decimal amount)
     {
         _amountPaid += amount;
+        SaveCartDraftToMemory();
     }
 
     private async Task ViewReceiptAsync(int saleId)
@@ -3380,6 +3437,7 @@ private string GetCompleteSaleButtonText()
             _selectedCustomerId = null;
             _customerName = null;
             _customerPhone = null;
+            SaveCartDraftToMemory();
             return;
         }
 
@@ -3388,12 +3446,15 @@ private string GetCompleteSaleButtonText()
         if (customer == null)
         {
             _selectedCustomerId = null;
+            SaveCartDraftToMemory();
             return;
         }
 
         _selectedCustomerId = customer.Id;
         _customerName = customer.DisplayName;
         _customerPhone = customer.Phone;
+
+        SaveCartDraftToMemory();
     }
 
     private RefundableSaleViewModel? _refundableSale;

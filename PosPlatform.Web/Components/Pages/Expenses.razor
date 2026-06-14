@@ -3,31 +3,33 @@
 @rendermode InteractiveServer
 @layout MainLayout
 @attribute [Authorize]
+@using Microsoft.AspNetCore.Components.Web
 @using PosPlatform.Web.Components.Layout
 @using PosPlatform.Web.Models.Settings
 @using PosPlatform.Web.Models.Expenses
+@using PosPlatform.Web.Models.Branches
 @using PosPlatform.Web.Services
 @inject ExpenseService ExpenseService
 @inject BusinessSettingsService BusinessSettingsService
 @inject UserAccessService UserAccessService
 @inject NavigationManager NavigationManager
-@using PosPlatform.Web.Models.Branches
 @inject BranchService BranchService
 
 <PageTitle>Expenses</PageTitle>
 
 <section class="expenses-page">
-    <div class="expenses-header">
+    <div class="expenses-top">
         <div>
             <div class="expenses-kicker">
                 <i class="bi bi-wallet2"></i>
                 Business expenses
             </div>
+
             <h1>Expenses</h1>
             <p>Record rent, salaries, transport, electricity, internet, marketing and other business costs.</p>
         </div>
 
-        <div class="expenses-header-actions">
+        <div class="expenses-top-actions">
             <button type="button" class="expenses-secondary-btn" @onclick="OpenCategoryModal">
                 <i class="bi bi-tags"></i>
                 Add Category
@@ -74,24 +76,40 @@
     </div>
 
     <div class="expenses-summary-grid">
-        <div class="expenses-summary-card dark">
+        <div class="expenses-summary-card hero">
+            <div class="expenses-summary-icon">
+                <i class="bi bi-cash-stack"></i>
+            </div>
             <span>Total Expenses</span>
             <strong>@Money(TotalExpenses)</strong>
+            <small>For selected filters</small>
         </div>
 
         <div class="expenses-summary-card">
+            <div class="expenses-summary-icon blue">
+                <i class="bi bi-receipt"></i>
+            </div>
             <span>Expense Count</span>
             <strong>@_expenses.Count</strong>
+            <small>Expense records found</small>
         </div>
 
-        <div class="expenses-summary-card amber">
+        <div class="expenses-summary-card">
+            <div class="expenses-summary-icon amber">
+                <i class="bi bi-percent"></i>
+            </div>
             <span>Tax Amount</span>
             <strong>@Money(TotalTax)</strong>
+            <small>Tax captured</small>
         </div>
 
-        <div class="expenses-summary-card green">
+        <div class="expenses-summary-card">
+            <div class="expenses-summary-icon green">
+                <i class="bi bi-tags"></i>
+            </div>
             <span>Active Categories</span>
             <strong>@_categories.Count(x => x.IsActive)</strong>
+            <small>Available for expenses</small>
         </div>
     </div>
 
@@ -100,50 +118,72 @@
             <div class="expenses-panel-header">
                 <div>
                     <h2>Expense Records</h2>
-                    <p>Filter and manage recorded business expenses.</p>
+                    <p>Showing @ExpensePageStart - @ExpensePageEnd of @TotalExpenseRows expense@(TotalExpenseRows == 1 ? "" : "s").</p>
                 </div>
 
-                <div class="expenses-date-filters">
-                    <input type="date" @bind="_fromDate" />
-                    <input type="date" @bind="_toDate" />
+                <div class="expenses-panel-tools">
+                    <div class="expenses-date-filters">
+                        <input type="date" @bind="_fromDate" />
+                        <input type="date" @bind="_toDate" />
 
-                    <select class="expenses-filter-select" @bind="_branchFilter">
-                        <option value="">All branches</option>
-                        @foreach (var branch in _branches)
-                        {
-                            <option value="@branch.Id">
-                                @branch.Name
-                                @if (branch.IsMainBranch)
-                                {
-                                    @(" · Main")
-                                }
-                            </option>
-                        }
-                    </select>
+                        <select class="expenses-filter-select"
+                                value="@(_branchFilter?.ToString() ?? "")"
+                                @onchange="BranchFilterChanged">
+                            <option value="">All branches</option>
+                            @foreach (var branch in _branches)
+                            {
+                                <option value="@branch.Id">
+                                    @branch.Name
+                                    @if (branch.IsMainBranch)
+                                    {
+                                        @(" · Main")
+                                    }
+                                </option>
+                            }
+                        </select>
 
-                    <div class="expenses-search small-search">
-                        <i class="bi bi-search"></i>
-                        <input @bind="_expenseSearch"
-                               @bind:event="oninput"
-                               placeholder="Search expense" />
+                        <div class="expenses-search small-search">
+                            <i class="bi bi-search"></i>
+                            <input @bind="_expenseSearch"
+                                   @bind:event="oninput"
+                                   @onkeydown="HandleExpenseSearchKeyDown"
+                                   placeholder="Search expense" />
+                        </div>
+
+                        <button type="button" class="expenses-secondary-btn" @onclick="ApplyExpenseFiltersAsync">
+                            <i class="bi bi-filter"></i>
+                            Filter
+                        </button>
                     </div>
 
-                    <button type="button" class="expenses-secondary-btn" @onclick="ApplyExpenseFiltersAsync">
-                        Filter
-                    </button>
+                    <div class="expenses-rows-tool">
+                        <label>Rows</label>
+                        <select value="@_expenseRowsMode" @onchange="ExpenseRowsChanged">
+                            <option value="10">10 rows</option>
+                            <option value="25">25 rows</option>
+                            <option value="50">50 rows</option>
+                            <option value="all">Show all</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
             @if (_loadingExpenses)
             {
                 <div class="expenses-empty">
+                    <div class="expenses-empty-icon">
+                        <i class="bi bi-hourglass-split"></i>
+                    </div>
                     <strong>Loading expenses...</strong>
-                    <span>Please wait.</span>
+                    <span>Please wait while we fetch expense records.</span>
                 </div>
             }
             else if (_expenses.Count == 0)
             {
                 <div class="expenses-empty">
+                    <div class="expenses-empty-icon">
+                        <i class="bi bi-wallet2"></i>
+                    </div>
                     <strong>No expenses found</strong>
                     <span>Add your first expense or change the selected date range.</span>
                 </div>
@@ -164,15 +204,15 @@
                                 <th>Tax</th>
                                 <th>Total</th>
                                 <th>Created By</th>
-                                <th class="text-end">Actions</th>
+                                <th class="expenses-actions-col">Actions</th>
                             </tr>
                         </thead>
 
                         <tbody>
-                            @foreach (var expense in _expenses)
+                            @foreach (var expense in PaginatedExpenses)
                             {
                                 <tr>
-                                    <td>@expense.ExpenseNumber</td>
+                                    <td><strong>@expense.ExpenseNumber</strong></td>
                                     <td>@expense.ExpenseDate.ToLocalTime().ToString("yyyy-MM-dd")</td>
                                     <td>@expense.CategoryName</td>
                                     <td>@(string.IsNullOrWhiteSpace(expense.VendorName) ? "-" : expense.VendorName)</td>
@@ -182,16 +222,29 @@
                                     <td>@Money(expense.TaxAmount)</td>
                                     <td class="expenses-strong">@Money(expense.TotalAmount)</td>
                                     <td>@expense.CreatedByName</td>
-                                    <td class="text-end">
-                                        <div class="expenses-actions">
-                                            <button type="button" class="expenses-mini-btn edit" @onclick="() => EditExpenseAsync(expense.Id)">
-                                                <i class="bi bi-pencil"></i>
-                                                Edit
+                                    <td class="expenses-actions-cell">
+                                        <div class="expenses-action-menu">
+                                            <button type="button"
+                                                    class="expenses-action-toggle"
+                                                    @onclick="() => ToggleExpenseActionMenu(expense.Id)">
+                                                <span>Actions</span>
+                                                <i class="bi bi-chevron-down"></i>
                                             </button>
 
-                                            <button type="button" class="expenses-mini-btn delete" @onclick="() => DeleteExpenseAsync(expense.Id)">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
+                                            @if (_openExpenseActionId == expense.Id)
+                                            {
+                                                <div class="expenses-action-dropdown">
+                                                    <button type="button" @onclick="() => EditExpenseAsync(expense.Id)">
+                                                        <i class="bi bi-pencil"></i>
+                                                        <span>Edit expense</span>
+                                                    </button>
+
+                                                    <button type="button" class="danger" @onclick="() => DeleteExpenseAsync(expense.Id)">
+                                                        <i class="bi bi-trash"></i>
+                                                        <span>Delete expense</span>
+                                                    </button>
+                                                </div>
+                                            }
                                         </div>
                                     </td>
                                 </tr>
@@ -199,14 +252,51 @@
                         </tbody>
                     </table>
                 </div>
+
+                <div class="expenses-pagination">
+                    <div class="expenses-page-info">
+                        Showing
+                        <strong>@ExpensePageStart</strong>
+                        -
+                        <strong>@ExpensePageEnd</strong>
+                        of
+                        <strong>@TotalExpenseRows</strong>
+                    </div>
+
+                    <div class="expenses-page-controls">
+                        <button type="button" class="@PreviousExpensePageClass" @onclick="PreviousExpensePage">
+                            <i class="bi bi-chevron-left"></i>
+                            Previous
+                        </button>
+
+                        <span class="expenses-page-count">
+                            @(ShowAllExpenseRows ? "Showing all" : $"Page {_expensePage} of {ExpenseTotalPages}")
+                        </span>
+
+                        <button type="button" class="@NextExpensePageClass" @onclick="NextExpensePage">
+                            Next
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
             }
         </div>
 
         <div class="expenses-panel">
-            <div class="expenses-panel-header">
+            <div class="expenses-panel-header categories-header">
                 <div>
                     <h2>Categories</h2>
-                    <p>Organise expenses for cleaner reports.</p>
+                    <p>Showing @CategoryPageStart - @CategoryPageEnd of @TotalCategoryRows categor@(TotalCategoryRows == 1 ? "y" : "ies").</p>
+                </div>
+
+                <div class="expenses-rows-tool">
+                    <label>Rows</label>
+                    <select value="@_categoryRowsMode" @onchange="CategoryRowsChanged">
+                        <option value="10">10 rows</option>
+                        <option value="25">25 rows</option>
+                        <option value="50">50 rows</option>
+                        <option value="all">Show all</option>
+                    </select>
                 </div>
             </div>
 
@@ -215,16 +305,18 @@
                     <i class="bi bi-search"></i>
                     <input @bind="_categorySearch"
                            @bind:event="oninput"
+                           @onkeydown="HandleCategorySearchKeyDown"
                            placeholder="Search category" />
                 </div>
 
-                <select class="expenses-input" @bind="_categoryStatus">
+                <select class="expenses-input" value="@_categoryStatus" @onchange="CategoryStatusChanged">
                     <option value="all">All</option>
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
                 </select>
 
-                <button type="button" class="expenses-secondary-btn" @onclick="LoadCategoriesAsync">
+                <button type="button" class="expenses-secondary-btn" @onclick="ApplyCategoryFiltersAsync">
+                    <i class="bi bi-filter"></i>
                     Apply
                 </button>
             </div>
@@ -232,13 +324,19 @@
             @if (_loadingCategories)
             {
                 <div class="expenses-empty">
+                    <div class="expenses-empty-icon">
+                        <i class="bi bi-hourglass-split"></i>
+                    </div>
                     <strong>Loading categories...</strong>
-                    <span>Please wait.</span>
+                    <span>Please wait while we fetch expense categories.</span>
                 </div>
             }
             else if (_categories.Count == 0)
             {
                 <div class="expenses-empty">
+                    <div class="expenses-empty-icon">
+                        <i class="bi bi-tags"></i>
+                    </div>
                     <strong>No categories found</strong>
                     <span>Create categories such as Rent, Salaries, Internet and Transport.</span>
                 </div>
@@ -246,7 +344,7 @@
             else
             {
                 <div class="expenses-category-list">
-                    @foreach (var category in _categories)
+                    @foreach (var category in PaginatedCategories)
                     {
                         <div class="expenses-category-card">
                             <div>
@@ -260,20 +358,63 @@
                                     @(category.IsActive ? "Active" : "Inactive")
                                 </span>
 
-                                <button type="button" @onclick="() => EditCategoryAsync(category.Id)">
-                                    <i class="bi bi-pencil"></i>
-                                </button>
+                                <div class="expenses-action-menu">
+                                    <button type="button"
+                                            class="expenses-category-toggle"
+                                            @onclick="() => ToggleCategoryActionMenu(category.Id)">
+                                        <i class="bi bi-three-dots"></i>
+                                    </button>
 
-                                <button type="button" @onclick="() => ToggleCategoryAsync(category.Id)">
-                                    <i class="bi @(category.IsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
-                                </button>
+                                    @if (_openCategoryActionId == category.Id)
+                                    {
+                                        <div class="expenses-action-dropdown category-dropdown">
+                                            <button type="button" @onclick="() => EditCategoryAsync(category.Id)">
+                                                <i class="bi bi-pencil"></i>
+                                                <span>Edit category</span>
+                                            </button>
 
-                                <button type="button" class="danger" @onclick="() => DeleteCategoryAsync(category.Id)">
-                                    <i class="bi bi-trash"></i>
-                                </button>
+                                            <button type="button" @onclick="() => ToggleCategoryAsync(category.Id)">
+                                                <i class="bi @GetCategoryToggleIcon(category.IsActive)"></i>
+                                                <span>@(category.IsActive ? "Pause category" : "Activate category")</span>
+                                            </button>
+
+                                            <button type="button" class="danger" @onclick="() => DeleteCategoryAsync(category.Id)">
+                                                <i class="bi bi-trash"></i>
+                                                <span>Delete category</span>
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
                             </div>
                         </div>
                     }
+                </div>
+
+                <div class="expenses-pagination">
+                    <div class="expenses-page-info">
+                        Showing
+                        <strong>@CategoryPageStart</strong>
+                        -
+                        <strong>@CategoryPageEnd</strong>
+                        of
+                        <strong>@TotalCategoryRows</strong>
+                    </div>
+
+                    <div class="expenses-page-controls">
+                        <button type="button" class="@PreviousCategoryPageClass" @onclick="PreviousCategoryPage">
+                            <i class="bi bi-chevron-left"></i>
+                            Previous
+                        </button>
+
+                        <span class="expenses-page-count">
+                            @(ShowAllCategoryRows ? "Showing all" : $"Page {_categoryPage} of {CategoryTotalPages}")
+                        </span>
+
+                        <button type="button" class="@NextCategoryPageClass" @onclick="NextCategoryPage">
+                            Next
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
                 </div>
             }
         </div>
@@ -363,7 +504,8 @@
 
                 <div class="expenses-modal-actions">
                     <button type="button" class="expenses-ghost-btn" @onclick="CloseExpenseModal">Cancel</button>
-                    <button type="submit" class="expenses-primary-btn" disabled="@_savingExpense">
+
+                    <button type="submit" class="@ExpenseSaveButtonClass">
                         <i class="bi bi-check2-circle"></i>
                         @(_savingExpense ? "Saving..." : "Save Expense")
                     </button>
@@ -417,7 +559,8 @@
 
                 <div class="expenses-modal-actions">
                     <button type="button" class="expenses-ghost-btn" @onclick="CloseCategoryModal">Cancel</button>
-                    <button type="submit" class="expenses-primary-btn" disabled="@_savingCategory">
+
+                    <button type="submit" class="@CategorySaveButtonClass">
                         <i class="bi bi-check2-circle"></i>
                         @(_savingCategory ? "Saving..." : "Save Category")
                     </button>
@@ -426,160 +569,867 @@
         </div>
     </div>
 }
+
 <style>
-    .expenses-page { animation: expensesIn .22s ease both; }
-    .expenses-header { display:flex; justify-content:space-between; align-items:flex-end; gap:18px; margin-bottom:18px; }
-    .expenses-kicker { display:inline-flex; align-items:center; gap:8px; color:#2563eb; font-size:.74rem; font-weight:750; letter-spacing:.06em; text-transform:uppercase; margin-bottom:8px; }
-    .expenses-header h1 { margin:0; color:#0f172a; font-size:1.45rem; font-weight:680; letter-spacing:-.03em; }
-    .expenses-header p { margin:6px 0 0; color:#64748b; font-size:.88rem; }
-    .expenses-header-actions { display:flex; gap:10px; flex-wrap:wrap; }
-
-    .expenses-primary-btn,.expenses-secondary-btn,.expenses-ghost-btn,.expenses-mini-btn {
-        min-height:38px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; gap:8px;
-        padding:0 14px; font-size:.8rem; font-weight:650; border:0; white-space:nowrap;
+    .expenses-page {
+        animation: expensesIn .22s ease both;
     }
-    .expenses-primary-btn { color:#fff; background:#111827; box-shadow:0 12px 24px rgba(15,23,42,.14); }
-    .expenses-secondary-btn { color:#2563eb; background:#eef5ff; }
-    .expenses-ghost-btn { color:#475569; background:#fff; border:1px solid #e5e7eb; }
-    .expenses-mini-btn { min-height:30px; padding:0 10px; border:1px solid; font-size:.74rem; }
-    .expenses-mini-btn.edit { color:#2563eb; background:#eff6ff; border-color:#bfdbfe; }
-    .expenses-mini-btn.delete { color:#dc2626; background:#fef2f2; border-color:#fecaca; }
 
-    .expenses-alert { display:flex; align-items:center; gap:10px; padding:12px 14px; margin-bottom:16px; border-radius:14px; font-size:.84rem; font-weight:600; border:1px solid; }
-    .expenses-alert.success { color:#166534; background:#f0fdf4; border-color:#bbf7d0; }
-    .expenses-alert.danger { color:#991b1b; background:#fef2f2; border-color:#fecaca; }
-    .expenses-alert span { flex:1; }
-    .expenses-alert button { border:0; background:transparent; color:inherit; }
-
-    .expenses-settings-strip,.expenses-summary-grid { display:grid; gap:10px; margin-bottom:16px; }
-    .expenses-settings-strip { grid-template-columns:repeat(4,minmax(0,1fr)); }
-    .expenses-summary-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
-    .expenses-settings-strip div,.expenses-summary-card {
-        padding:13px; border-radius:16px; background:#fff; border:1px solid #e7edf5; box-shadow:0 12px 28px rgba(15,23,42,.04);
+    .expenses-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 18px;
+        margin-bottom: 16px;
     }
-    .expenses-summary-card { padding:16px; }
-    .expenses-settings-strip span,.expenses-settings-strip strong,.expenses-summary-card span,.expenses-summary-card strong { display:block; }
-    .expenses-settings-strip span,.expenses-summary-card span { color:#64748b; font-size:.72rem; font-weight:650; }
-    .expenses-settings-strip strong,.expenses-summary-card strong { margin-top:4px; color:#0f172a; font-size:.88rem; font-weight:720; }
-    .expenses-summary-card strong { font-size:1.08rem; }
-    .expenses-summary-card.dark { background:#111827; border-color:#111827; }
-    .expenses-summary-card.dark span,.expenses-summary-card.dark strong { color:#fff; }
-    .expenses-summary-card.green strong { color:#16a34a; }
-    .expenses-summary-card.amber strong { color:#d97706; }
 
-    .expenses-grid { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(320px,.6fr); gap:16px; align-items:start; }
-    .expenses-panel { background:#fff; border:1px solid #e7edf5; border-radius:20px; box-shadow:0 16px 34px rgba(15,23,42,.055); overflow:hidden; }
-    .expenses-panel-header { padding:17px 18px; border-bottom:1px solid #edf2f7; display:flex; justify-content:space-between; align-items:center; gap:12px; }
-    .expenses-panel-header h2 { margin:0; color:#0f172a; font-size:.92rem; font-weight:720; }
-    .expenses-panel-header p { margin:4px 0 0; color:#94a3b8; font-size:.76rem; }
+    .expenses-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
 
-    .expenses-date-filters,.expenses-category-filters { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:0; }
-    .expenses-category-filters { padding:14px 18px; border-bottom:1px solid #edf2f7; }
-    .expenses-date-filters input[type="date"],
-    .expenses-filter-select {
+    .expenses-top h1 {
+        margin: 0;
+        color: #111827;
+        font-size: 1.45rem;
+        font-weight: 720;
+        letter-spacing: -.035em;
+    }
+
+    .expenses-top p {
+        margin: 6px 0 0;
+        color: #667085;
+        font-size: .88rem;
+    }
+
+    .expenses-top-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .expenses-primary-btn,
+    .expenses-secondary-btn,
+    .expenses-ghost-btn,
+    .expenses-page-btn {
         min-height: 38px;
-        border-radius: 10px;
-        border: 1px solid #e5e7eb;
-        padding: 0 10px;
-        font-size: .82rem;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 680;
+        border: 0;
+        white-space: nowrap;
+        transition: transform .18s ease;
+    }
+
+    .expenses-primary-btn {
+        color: #ffffff;
+        background: #252525;
+        box-shadow: 0 12px 24px rgba(17,24,39,.12);
+    }
+
+    .expenses-secondary-btn {
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
+    }
+
+    .expenses-ghost-btn,
+    .expenses-page-btn {
+        color: #475569;
         background: #ffffff;
-        color: #0f172a;
+        border: 1px solid #e5e7eb;
+    }
+
+        .expenses-primary-btn:hover,
+        .expenses-secondary-btn:hover,
+        .expenses-ghost-btn:hover,
+        .expenses-page-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .expenses-primary-btn.is-disabled,
+        .expenses-page-btn.is-disabled {
+            opacity: .45;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+    .expenses-alert {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        font-size: .84rem;
+        font-weight: 600;
+        border: 1px solid;
+    }
+
+        .expenses-alert.success {
+            color: #166534;
+            background: #f0fdf4;
+            border-color: #bbf7d0;
+        }
+
+        .expenses-alert.danger {
+            color: #991b1b;
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+        .expenses-alert span {
+            flex: 1;
+        }
+
+        .expenses-alert button {
+            border: 0;
+            background: transparent;
+            color: inherit;
+        }
+
+    .expenses-settings-strip,
+    .expenses-summary-grid {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .expenses-settings-strip {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .expenses-summary-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .expenses-settings-strip div,
+    .expenses-summary-card {
+        padding: 15px;
+        border-radius: 20px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17,24,39,.045);
+    }
+
+        .expenses-settings-strip span,
+        .expenses-settings-strip strong,
+        .expenses-summary-card span,
+        .expenses-summary-card strong,
+        .expenses-summary-card small {
+            display: block;
+        }
+
+        .expenses-settings-strip span,
+        .expenses-summary-card span {
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .expenses-settings-strip strong,
+        .expenses-summary-card strong {
+            margin-top: 6px;
+            color: #111827;
+            font-size: 1.05rem;
+            font-weight: 760;
+            letter-spacing: -.02em;
+        }
+
+        .expenses-summary-card small {
+            margin-top: 4px;
+            color: #98a2b3;
+            font-size: .72rem;
+            line-height: 1.35;
+        }
+
+        .expenses-summary-card.hero {
+            background: #252525;
+            border-color: #252525;
+        }
+
+            .expenses-summary-card.hero span,
+            .expenses-summary-card.hero strong,
+            .expenses-summary-card.hero small {
+                color: #ffffff;
+            }
+
+    .expenses-summary-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #252525;
+        box-shadow: 0 10px 22px rgba(17, 24, 39, .08);
+    }
+
+        .expenses-summary-icon.green {
+            color: #8FA6A1;
+            background: #f2f6f5;
+        }
+
+        .expenses-summary-icon.blue {
+            color: #2563eb;
+            background: #eff6ff;
+        }
+
+        .expenses-summary-icon.amber {
+            color: #b7791f;
+            background: #fffbeb;
+        }
+
+    .expenses-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(340px, .65fr);
+        gap: 16px;
+        align-items: start;
+    }
+
+    .expenses-panel {
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        border-radius: 22px;
+        box-shadow: 0 14px 32px rgba(17,24,39,.045);
+        overflow: visible;
+    }
+
+    .expenses-panel-header {
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 14px;
+    }
+
+        .expenses-panel-header h2 {
+            margin: 0;
+            color: #111827;
+            font-size: .94rem;
+            font-weight: 720;
+        }
+
+        .expenses-panel-header p {
+            margin: 4px 0 0;
+            color: #98a2b3;
+            font-size: .75rem;
+        }
+
+    .expenses-panel-tools {
+        display: grid;
+        gap: 10px;
+        justify-items: end;
+    }
+
+    .expenses-date-filters,
+    .expenses-category-filters {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .expenses-category-filters {
+        padding: 14px 18px;
+        border-bottom: 1px solid #f1f2f5;
+    }
+
+    .expenses-date-filters input[type="date"],
+    .expenses-filter-select,
+    .expenses-input,
+    .expenses-rows-tool select {
+        min-height: 40px;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+        padding: 0 12px;
+        font-size: 16px;
+        background: #ffffff;
+        color: #111827;
         outline: none;
     }
 
     .expenses-search {
-        min-height: 38px;
+        min-height: 40px;
         display: flex;
         align-items: center;
         gap: 10px;
         padding: 0 12px;
-        border-radius: 10px;
-        background: #f8fafc;
+        border-radius: 12px;
+        background: #fafafa;
         border: 1px solid #e5e7eb;
-        color: #94a3b8;
+        color: #98a2b3;
     }
 
-    .expenses-search input { border:0; outline:none; background:transparent; color:#0f172a; font-size:.84rem; }
-    .small-search { width:230px; }
+        .expenses-search input {
+            border: 0;
+            outline: none;
+            background: transparent;
+            color: #111827;
+            font-size: 16px;
+            width: 100%;
+        }
 
-    .expenses-input { width:100%; min-height:40px; border-radius:12px; border:1px solid #e5e7eb; background:#fff; color:#0f172a; padding:0 12px; font-size:.84rem; outline:none; }
-    .expenses-textarea { min-height:86px; padding-top:10px; resize:vertical; }
-    .expenses-label { display:block; margin-bottom:6px; color:#475569; font-size:.77rem; font-weight:700; }
-
-    .expenses-table-wrap { overflow-x:auto; }
-    .expenses-table { width:100%; min-width:1050px; border-collapse:collapse; }
-    .expenses-table th { padding:12px 16px; background:#f8fafc; color:#64748b; font-size:.7rem; font-weight:750; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #e7edf5; white-space:nowrap; }
-    .expenses-table td { padding:14px 16px; color:#334155; font-size:.82rem; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
-    .expenses-strong { color:#0f172a!important; font-weight:750; }
-    .expenses-actions { display:flex; justify-content:flex-end; gap:6px; flex-wrap:wrap; }
-
-    .expenses-empty { margin:18px; padding:34px 20px; border-radius:16px; background:#f8fafc; border:1px dashed #dbe3ef; text-align:center; }
-    .expenses-empty strong,.expenses-empty span { display:block; }
-    .expenses-empty strong { color:#0f172a; font-size:.9rem; }
-    .expenses-empty span { margin-top:4px; color:#64748b; font-size:.78rem; }
-
-    .expenses-category-list { padding:14px 18px; display:grid; gap:10px; }
-    .expenses-category-card { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; padding:13px; border-radius:16px; background:#f8fafc; border:1px solid #e7edf5; }
-    .expenses-category-card strong,.expenses-category-card span,.expenses-category-card small { display:block; }
-    .expenses-category-card strong { color:#0f172a; font-size:.86rem; }
-    .expenses-category-card span { margin-top:3px; color:#64748b; font-size:.74rem; }
-    .expenses-category-card small { margin-top:4px; color:#94a3b8; font-size:.72rem; }
-    .expenses-category-actions { display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
-    .expenses-category-actions button { width:30px; height:30px; border-radius:9px; border:1px solid #e5e7eb; background:#fff; color:#475569; }
-    .expenses-category-actions button.danger { color:#dc2626; background:#fef2f2; border-color:#fecaca; }
-    .expenses-status-pill { display:inline-flex; min-height:26px; align-items:center; padding:0 9px; border-radius:999px; font-size:.72rem; font-weight:750; }
-    .expenses-status-pill.active { color:#15803d; background:#ecfdf5; }
-    .expenses-status-pill.inactive { color:#64748b; background:#f1f5f9; }
-
-    .expenses-modal-backdrop { position:fixed; inset:0; z-index:1100; padding:20px; background:rgba(15,23,42,.45); display:flex; align-items:center; justify-content:center; }
-    .expenses-modal { width:100%; max-width:760px; max-height:calc(100vh - 40px); overflow-y:auto; background:#fff; border-radius:22px; padding:22px; box-shadow:0 24px 60px rgba(15,23,42,.24); }
-    .expenses-modal.small { max-width:520px; }
-    .expenses-modal-header { display:flex; justify-content:space-between; gap:18px; padding-bottom:16px; margin-bottom:18px; border-bottom:1px solid #edf2f7; }
-    .expenses-modal-header span { color:#2563eb; font-size:.72rem; font-weight:750; letter-spacing:.06em; text-transform:uppercase; }
-    .expenses-modal-header h4 { margin:3px 0 0; color:#0f172a; font-size:1.08rem; font-weight:720; }
-    .expenses-modal-header p { margin:5px 0 0; color:#64748b; font-size:.84rem; line-height:1.5; }
-    .expenses-close-btn { width:34px; height:34px; border-radius:10px; border:1px solid #e5e7eb; background:#fff; color:#64748b; }
-    .expenses-validation { padding:12px 14px; margin-bottom:16px; border-radius:14px; background:#fef2f2; color:#991b1b; font-size:.82rem; }
-    .expenses-modal-actions { display:flex; justify-content:flex-end; gap:10px; padding-top:16px; margin-top:20px; border-top:1px solid #edf2f7; }
-
-    .expenses-total-preview { display:flex; justify-content:space-between; padding:13px; border-radius:16px; background:#f8fafc; border:1px solid #e7edf5; }
-    .expenses-total-preview span { color:#64748b; font-size:.8rem; font-weight:650; }
-    .expenses-total-preview strong { color:#0f172a; font-weight:750; }
-
-    .expenses-check { display:flex; align-items:flex-start; gap:10px; padding:12px; border-radius:14px; background:#f8fafc; border:1px solid #e7edf5; }
-    .expenses-check input { margin-top:4px; }
-    .expenses-check strong,.expenses-check small { display:block; }
-    .expenses-check strong { color:#0f172a; font-size:.85rem; }
-    .expenses-check small { color:#64748b; font-size:.76rem; margin-top:2px; }
-
-    @@keyframes expensesIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-
-    @@media (max-width:1199px) {
-        .expenses-grid { grid-template-columns:1fr; }
-        .expenses-settings-strip,.expenses-summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .small-search {
+        width: 230px;
     }
 
-    @@media (max-width:768px) {
-        .expenses-header,.expenses-panel-header { flex-direction:column; align-items:flex-start; }
-        .expenses-header-actions,.expenses-header-actions button { width:100%; }
-        .expenses-settings-strip,.expenses-summary-grid { grid-template-columns:1fr; }
+    .expenses-rows-tool {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
 
+        .expenses-rows-tool label {
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+    .expenses-input {
+        width: 100%;
+    }
+
+    .expenses-textarea {
+        min-height: 86px;
+        padding-top: 10px;
+        resize: vertical;
+    }
+
+    .expenses-label {
+        display: block;
+        margin-bottom: 6px;
+        color: #475569;
+        font-size: .77rem;
+        font-weight: 700;
+    }
+
+    .expenses-table-wrap {
+        overflow-x: auto;
+        padding-bottom: 100px;
+    }
+
+    .expenses-table {
+        width: 100%;
+        min-width: 1050px;
+        border-collapse: collapse;
+    }
+
+        .expenses-table th {
+            padding: 12px 16px;
+            background: #fafafa;
+            color: #667085;
+            font-size: .7rem;
+            font-weight: 750;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            border-bottom: 1px solid #e8eaef;
+            white-space: nowrap;
+        }
+
+        .expenses-table td {
+            padding: 14px 16px;
+            color: #334155;
+            font-size: .82rem;
+            border-bottom: 1px solid #f1f2f5;
+            vertical-align: middle;
+        }
+
+    .expenses-strong {
+        color: #111827 !important;
+        font-weight: 750;
+    }
+
+    .expenses-actions-col,
+    .expenses-actions-cell {
+        text-align: right;
+    }
+
+    .expenses-actions-cell {
+        position: relative;
+        min-width: 150px;
+    }
+
+    .expenses-action-menu {
+        position: relative;
+        display: inline-block;
+    }
+
+    .expenses-action-toggle,
+    .expenses-category-toggle {
+        min-height: 34px;
+        border-radius: 11px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        color: #252525;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 11px;
+        font-size: .74rem;
+        font-weight: 750;
+        cursor: pointer;
+        box-shadow: 0 8px 18px rgba(17, 24, 39, .04);
+    }
+
+    .expenses-category-toggle {
+        width: 34px;
+        padding: 0;
+    }
+
+    .expenses-action-dropdown {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        width: 195px;
+        padding: 7px;
+        border-radius: 15px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 18px 38px rgba(17, 24, 39, .14);
+        z-index: 100;
+        display: grid;
+        gap: 4px;
+        text-align: left;
+    }
+
+        .expenses-action-dropdown.category-dropdown {
+            width: 210px;
+        }
+
+        .expenses-action-dropdown button {
+            width: 100%;
+            min-height: 36px;
+            border: 0;
+            border-radius: 11px;
+            background: transparent;
+            color: #344054;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 10px;
+            font-size: .78rem;
+            font-weight: 650;
+            text-align: left;
+        }
+
+            .expenses-action-dropdown button:hover {
+                background: #fafafa;
+                color: #252525;
+            }
+
+            .expenses-action-dropdown button i {
+                width: 18px;
+                color: #8FA6A1;
+            }
+
+            .expenses-action-dropdown button.danger,
+            .expenses-action-dropdown button.danger i {
+                color: #d92d20;
+            }
+
+    .expenses-empty {
+        margin: 18px;
+        padding: 34px 20px;
+        border-radius: 18px;
+        background: #fafafa;
+        border: 1px dashed #d0d5dd;
+        text-align: center;
+    }
+
+    .expenses-empty-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 10px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .expenses-empty strong,
+    .expenses-empty span {
+        display: block;
+    }
+
+    .expenses-empty strong {
+        color: #111827;
+        font-size: .9rem;
+        font-weight: 720;
+    }
+
+    .expenses-empty span {
+        margin-top: 4px;
+        color: #667085;
+        font-size: .78rem;
+    }
+
+    .expenses-category-list {
+        padding: 14px 18px;
+        display: grid;
+        gap: 10px;
+    }
+
+    .expenses-category-card {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+        padding: 13px;
+        border-radius: 16px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+    }
+
+        .expenses-category-card strong,
+        .expenses-category-card span,
+        .expenses-category-card small {
+            display: block;
+        }
+
+        .expenses-category-card strong {
+            color: #111827;
+            font-size: .86rem;
+        }
+
+        .expenses-category-card span {
+            margin-top: 3px;
+            color: #667085;
+            font-size: .74rem;
+        }
+
+        .expenses-category-card small {
+            margin-top: 4px;
+            color: #98a2b3;
+            font-size: .72rem;
+        }
+
+    .expenses-category-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        position: relative;
+    }
+
+    .expenses-status-pill {
+        display: inline-flex;
+        min-height: 26px;
+        align-items: center;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 750;
+    }
+
+        .expenses-status-pill.active {
+            color: #15803d;
+            background: #ecfdf5;
+        }
+
+        .expenses-status-pill.inactive {
+            color: #667085;
+            background: #f3f4f6;
+        }
+
+    .expenses-pagination {
+        padding: 14px 18px;
+        border-top: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        background: #ffffff;
+        border-radius: 0 0 22px 22px;
+    }
+
+    .expenses-page-info {
+        color: #667085;
+        font-size: .78rem;
+        font-weight: 600;
+    }
+
+        .expenses-page-info strong {
+            color: #111827;
+        }
+
+    .expenses-page-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .expenses-page-count {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 11px;
+        border-radius: 11px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+        color: #667085;
+        font-size: .76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .expenses-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1100;
+        padding: 20px;
+        background: rgba(15,23,42,.45);
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        overflow-y: auto;
+    }
+
+    .expenses-modal {
+        width: 100%;
+        max-width: 760px;
+        max-height: none;
+        margin-top: 10px;
+        margin-bottom: 20px;
+        overflow-y: visible;
+        background: #ffffff;
+        border-radius: 22px;
+        padding: 22px;
+        box-shadow: 0 24px 60px rgba(15,23,42,.24);
+    }
+
+        .expenses-modal.small {
+            max-width: 520px;
+        }
+
+    .expenses-modal-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding-bottom: 16px;
+        margin-bottom: 18px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .expenses-modal-header span {
+            color: #8FA6A1;
+            font-size: .72rem;
+            font-weight: 750;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+
+        .expenses-modal-header h4 {
+            margin: 3px 0 0;
+            color: #111827;
+            font-size: 1.08rem;
+            font-weight: 720;
+        }
+
+        .expenses-modal-header p {
+            margin: 5px 0 0;
+            color: #667085;
+            font-size: .84rem;
+            line-height: 1.5;
+        }
+
+    .expenses-close-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        color: #667085;
+    }
+
+    .expenses-validation {
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        background: #fef2f2;
+        color: #991b1b;
+        font-size: .82rem;
+    }
+
+    .expenses-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding-top: 16px;
+        margin-top: 20px;
+        border-top: 1px solid #edf2f7;
+    }
+
+    .expenses-total-preview {
+        display: flex;
+        justify-content: space-between;
+        padding: 13px;
+        border-radius: 16px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+    }
+
+        .expenses-total-preview span {
+            color: #667085;
+            font-size: .8rem;
+            font-weight: 650;
+        }
+
+        .expenses-total-preview strong {
+            color: #111827;
+            font-weight: 750;
+        }
+
+    .expenses-check {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px;
+        border-radius: 14px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+    }
+
+        .expenses-check input {
+            margin-top: 4px;
+        }
+
+        .expenses-check strong,
+        .expenses-check small {
+            display: block;
+        }
+
+        .expenses-check strong {
+            color: #111827;
+            font-size: .85rem;
+        }
+
+        .expenses-check small {
+            color: #667085;
+            font-size: .76rem;
+            margin-top: 2px;
+        }
+
+    @@keyframes expensesIn {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width: 1199px) {
+        .expenses-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .expenses-settings-strip,
+        .expenses-summary-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .expenses-panel-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .expenses-panel-tools,
+        .expenses-date-filters,
+        .expenses-rows-tool {
+            width: 100%;
+            justify-items: stretch;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .expenses-top {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .expenses-top-actions,
+        .expenses-top-actions button,
+        .expenses-settings-strip,
+        .expenses-summary-grid,
         .expenses-date-filters,
         .expenses-date-filters input,
         .expenses-filter-select,
         .expenses-date-filters button,
-        .small-search {
+        .small-search,
+        .expenses-category-filters,
+        .expenses-category-filters button,
+        .expenses-rows-tool,
+        .expenses-rows-tool select {
             width: 100%;
         }
 
-        .expenses-search input {
+        .expenses-settings-strip,
+        .expenses-summary-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .expenses-category-card {
+            flex-direction: column;
+        }
+
+        .expenses-category-actions {
+            width: 100%;
+            justify-content: space-between;
+        }
+
+        .expenses-pagination {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .expenses-page-controls,
+        .expenses-page-btn {
             width: 100%;
         }
-        .expenses-modal-actions { flex-direction:column-reverse; }
-        .expenses-modal-actions button { width:100%; }
-        .expenses-category-card { flex-direction:column; }
+
+        .expenses-page-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .expenses-page-count {
+            justify-content: center;
+            width: 100%;
+        }
+
+        .expenses-modal-actions {
+            flex-direction: column-reverse;
+        }
+
+            .expenses-modal-actions button {
+                width: 100%;
+            }
     }
 </style>
+
 @code {
     private BusinessSettingsFormModel _settings = new();
 
@@ -587,6 +1437,7 @@
     private List<ExpenseCategoryListItemViewModel> _categories = new();
     private List<ExpenseCategoryOptionViewModel> _categoryOptions = new();
     private List<BranchOptionViewModel> _branches = new();
+
     private int? _branchFilter;
 
     private ExpenseFormModel _expenseForm = new();
@@ -609,6 +1460,15 @@
     private string? _message;
     private bool _isSuccess;
 
+    private int _expensePage = 1;
+    private int _categoryPage = 1;
+
+    private string _expenseRowsMode = "10";
+    private string _categoryRowsMode = "10";
+
+    private int? _openExpenseActionId;
+    private int? _openCategoryActionId;
+
     private decimal TotalExpenses => _expenses.Sum(x => x.TotalAmount);
     private decimal TotalTax => _expenses.Sum(x => x.TaxAmount);
 
@@ -616,6 +1476,119 @@
         string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
             ? "R"
             : _settings.CurrencySymbol;
+
+    private bool ShowAllExpenseRows =>
+        _expenseRowsMode.Equals("all", StringComparison.OrdinalIgnoreCase);
+
+    private bool ShowAllCategoryRows =>
+        _categoryRowsMode.Equals("all", StringComparison.OrdinalIgnoreCase);
+
+    private int ExpensePageSize => ParseRows(_expenseRowsMode);
+    private int CategoryPageSize => ParseRows(_categoryRowsMode);
+
+    private List<ExpenseListItemViewModel> OrderedExpenses =>
+        _expenses
+            .OrderByDescending(x => x.ExpenseDate)
+            .ThenByDescending(x => x.Id)
+            .ToList();
+
+    private List<ExpenseCategoryListItemViewModel> OrderedCategories =>
+        _categories
+            .OrderBy(x => x.CategoryName)
+            .ToList();
+
+    private int TotalExpenseRows => OrderedExpenses.Count;
+    private int TotalCategoryRows => OrderedCategories.Count;
+
+    private int ExpenseTotalPages =>
+        TotalExpenseRows == 0 || ShowAllExpenseRows
+            ? 1
+            : (int)Math.Ceiling(TotalExpenseRows / (double)ExpensePageSize);
+
+    private int CategoryTotalPages =>
+        TotalCategoryRows == 0 || ShowAllCategoryRows
+            ? 1
+            : (int)Math.Ceiling(TotalCategoryRows / (double)CategoryPageSize);
+
+    private int SafeExpensePage =>
+        Math.Min(Math.Max(_expensePage, 1), ExpenseTotalPages);
+
+    private int SafeCategoryPage =>
+        Math.Min(Math.Max(_categoryPage, 1), CategoryTotalPages);
+
+    private int ExpensePageStart =>
+        TotalExpenseRows == 0
+            ? 0
+            : ShowAllExpenseRows
+                ? 1
+                : ((SafeExpensePage - 1) * ExpensePageSize) + 1;
+
+    private int ExpensePageEnd =>
+        TotalExpenseRows == 0
+            ? 0
+            : ShowAllExpenseRows
+                ? TotalExpenseRows
+                : Math.Min(SafeExpensePage * ExpensePageSize, TotalExpenseRows);
+
+    private int CategoryPageStart =>
+        TotalCategoryRows == 0
+            ? 0
+            : ShowAllCategoryRows
+                ? 1
+                : ((SafeCategoryPage - 1) * CategoryPageSize) + 1;
+
+    private int CategoryPageEnd =>
+        TotalCategoryRows == 0
+            ? 0
+            : ShowAllCategoryRows
+                ? TotalCategoryRows
+                : Math.Min(SafeCategoryPage * CategoryPageSize, TotalCategoryRows);
+
+    private List<ExpenseListItemViewModel> PaginatedExpenses =>
+        ShowAllExpenseRows
+            ? OrderedExpenses
+            : OrderedExpenses
+                .Skip((SafeExpensePage - 1) * ExpensePageSize)
+                .Take(ExpensePageSize)
+                .ToList();
+
+    private List<ExpenseCategoryListItemViewModel> PaginatedCategories =>
+        ShowAllCategoryRows
+            ? OrderedCategories
+            : OrderedCategories
+                .Skip((SafeCategoryPage - 1) * CategoryPageSize)
+                .Take(CategoryPageSize)
+                .ToList();
+
+    private string PreviousExpensePageClass =>
+        _expensePage <= 1 || ShowAllExpenseRows
+            ? "expenses-page-btn is-disabled"
+            : "expenses-page-btn";
+
+    private string NextExpensePageClass =>
+        _expensePage >= ExpenseTotalPages || ShowAllExpenseRows
+            ? "expenses-page-btn is-disabled"
+            : "expenses-page-btn";
+
+    private string PreviousCategoryPageClass =>
+        _categoryPage <= 1 || ShowAllCategoryRows
+            ? "expenses-page-btn is-disabled"
+            : "expenses-page-btn";
+
+    private string NextCategoryPageClass =>
+        _categoryPage >= CategoryTotalPages || ShowAllCategoryRows
+            ? "expenses-page-btn is-disabled"
+            : "expenses-page-btn";
+
+    private string ExpenseSaveButtonClass =>
+        _savingExpense
+            ? "expenses-primary-btn is-disabled"
+            : "expenses-primary-btn";
+
+    private string CategorySaveButtonClass =>
+        _savingCategory
+            ? "expenses-primary-btn is-disabled"
+            : "expenses-primary-btn";
 
     protected override async Task OnInitializedAsync()
     {
@@ -635,9 +1608,15 @@
     private async Task LoadCategoriesAsync()
     {
         _loadingCategories = true;
+        _openCategoryActionId = null;
 
         _categories = await ExpenseService.GetCategoriesAsync(_categorySearch, _categoryStatus, _branchFilter);
         _categoryOptions = await ExpenseService.GetCategoryOptionsAsync();
+
+        if (_categoryPage > CategoryTotalPages)
+        {
+            _categoryPage = CategoryTotalPages;
+        }
 
         _loadingCategories = false;
     }
@@ -645,19 +1624,131 @@
     private async Task LoadExpensesAsync()
     {
         _loadingExpenses = true;
+        _openExpenseActionId = null;
+
         _expenses = await ExpenseService.GetExpensesAsync(_fromDate, _toDate, _expenseSearch, _branchFilter);
+
+        if (_expensePage > ExpenseTotalPages)
+        {
+            _expensePage = ExpenseTotalPages;
+        }
+
         _loadingExpenses = false;
     }
 
     private async Task ApplyExpenseFiltersAsync()
     {
+        _expensePage = 1;
+        _categoryPage = 1;
+
         await LoadExpensesAsync();
         await LoadCategoriesAsync();
+    }
+
+    private async Task ApplyCategoryFiltersAsync()
+    {
+        _categoryPage = 1;
         await LoadCategoriesAsync();
+    }
+
+    private async Task HandleExpenseSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyExpenseFiltersAsync();
+        }
+    }
+
+    private async Task HandleCategorySearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyCategoryFiltersAsync();
+        }
+    }
+
+    private void BranchFilterChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+
+        _branchFilter = int.TryParse(value, out var branchId)
+            ? branchId
+            : null;
+
+        _expensePage = 1;
+        _categoryPage = 1;
+    }
+
+    private void CategoryStatusChanged(ChangeEventArgs e)
+    {
+        _categoryStatus = e.Value?.ToString() ?? "all";
+        _categoryPage = 1;
+    }
+
+    private void ExpenseRowsChanged(ChangeEventArgs e)
+    {
+        _expenseRowsMode = e.Value?.ToString() ?? "10";
+        _expensePage = 1;
+    }
+
+    private void CategoryRowsChanged(ChangeEventArgs e)
+    {
+        _categoryRowsMode = e.Value?.ToString() ?? "10";
+        _categoryPage = 1;
+    }
+
+    private void NextExpensePage()
+    {
+        if (!ShowAllExpenseRows && _expensePage < ExpenseTotalPages)
+        {
+            _expensePage++;
+            _openExpenseActionId = null;
+        }
+    }
+
+    private void PreviousExpensePage()
+    {
+        if (!ShowAllExpenseRows && _expensePage > 1)
+        {
+            _expensePage--;
+            _openExpenseActionId = null;
+        }
+    }
+
+    private void NextCategoryPage()
+    {
+        if (!ShowAllCategoryRows && _categoryPage < CategoryTotalPages)
+        {
+            _categoryPage++;
+            _openCategoryActionId = null;
+        }
+    }
+
+    private void PreviousCategoryPage()
+    {
+        if (!ShowAllCategoryRows && _categoryPage > 1)
+        {
+            _categoryPage--;
+            _openCategoryActionId = null;
+        }
+    }
+
+    private void ToggleExpenseActionMenu(int expenseId)
+    {
+        _openCategoryActionId = null;
+        _openExpenseActionId = _openExpenseActionId == expenseId ? null : expenseId;
+    }
+
+    private void ToggleCategoryActionMenu(int categoryId)
+    {
+        _openExpenseActionId = null;
+        _openCategoryActionId = _openCategoryActionId == categoryId ? null : categoryId;
     }
 
     private void OpenExpenseModal()
     {
+        _openExpenseActionId = null;
+
         _expenseForm = new ExpenseFormModel
         {
             ExpenseDate = DateTime.Today,
@@ -669,6 +1760,8 @@
 
     private async Task EditExpenseAsync(int id)
     {
+        _openExpenseActionId = null;
+
         var model = await ExpenseService.GetExpenseByIdAsync(id);
 
         if (model == null)
@@ -689,6 +1782,11 @@
 
     private async Task SaveExpenseAsync()
     {
+        if (_savingExpense)
+        {
+            return;
+        }
+
         _savingExpense = true;
 
         var result = await ExpenseService.SaveExpenseAsync(_expenseForm);
@@ -699,6 +1797,7 @@
         if (result.Success)
         {
             CloseExpenseModal();
+            _expensePage = 1;
             await LoadExpensesAsync();
             await LoadCategoriesAsync();
         }
@@ -706,6 +1805,8 @@
 
     private async Task DeleteExpenseAsync(int id)
     {
+        _openExpenseActionId = null;
+
         var result = await ExpenseService.DeleteExpenseAsync(id);
         ShowMessage(result.Message, result.Success);
 
@@ -718,6 +1819,8 @@
 
     private void OpenCategoryModal()
     {
+        _openCategoryActionId = null;
+
         _categoryForm = new ExpenseCategoryFormModel
         {
             IsActive = true
@@ -728,6 +1831,8 @@
 
     private async Task EditCategoryAsync(int id)
     {
+        _openCategoryActionId = null;
+
         var model = await ExpenseService.GetCategoryByIdAsync(id);
 
         if (model == null)
@@ -748,6 +1853,11 @@
 
     private async Task SaveCategoryAsync()
     {
+        if (_savingCategory)
+        {
+            return;
+        }
+
         _savingCategory = true;
 
         var result = await ExpenseService.SaveCategoryAsync(_categoryForm);
@@ -758,12 +1868,15 @@
         if (result.Success)
         {
             CloseCategoryModal();
+            _categoryPage = 1;
             await LoadCategoriesAsync();
         }
     }
 
     private async Task ToggleCategoryAsync(int id)
     {
+        _openCategoryActionId = null;
+
         var result = await ExpenseService.ToggleCategoryStatusAsync(id);
         ShowMessage(result.Message, result.Success);
 
@@ -775,6 +1888,8 @@
 
     private async Task DeleteCategoryAsync(int id)
     {
+        _openCategoryActionId = null;
+
         var result = await ExpenseService.DeleteCategoryAsync(id);
         ShowMessage(result.Message, result.Success);
 
@@ -782,6 +1897,18 @@
         {
             await LoadCategoriesAsync();
         }
+    }
+
+    private string GetCategoryToggleIcon(bool isActive)
+    {
+        return isActive ? "bi-pause-circle" : "bi-play-circle";
+    }
+
+    private int ParseRows(string value)
+    {
+        return int.TryParse(value, out var rows) && rows > 0
+            ? rows
+            : 10;
     }
 
     private string Money(decimal value)

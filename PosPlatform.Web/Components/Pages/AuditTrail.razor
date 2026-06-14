@@ -3,6 +3,8 @@
 @rendermode InteractiveServer
 @layout MainLayout
 @attribute [Authorize]
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Web
 @using PosPlatform.Web.Components.Layout
 @using PosPlatform.Web.Models.Audit
 @using PosPlatform.Web.Models.Settings
@@ -15,12 +17,13 @@
 <PageTitle>Audit Trail</PageTitle>
 
 <section class="audit-page">
-    <div class="audit-header">
+    <div class="audit-top">
         <div>
             <div class="audit-kicker">
                 <i class="bi bi-shield-lock"></i>
                 Security record
             </div>
+
             <h1>Audit Trail</h1>
             <p>Track important actions across the business, including who did what and when.</p>
         </div>
@@ -34,7 +37,7 @@
 
         <div>
             <span>Records Showing</span>
-            <strong>@_logs.Count</strong>
+            <strong>@TotalLogRows</strong>
         </div>
 
         <div>
@@ -48,11 +51,49 @@
         </div>
     </div>
 
+    <div class="audit-summary-grid">
+        <div class="audit-summary-card hero">
+            <div class="audit-summary-icon">
+                <i class="bi bi-list-check"></i>
+            </div>
+            <span>Total Records</span>
+            <strong>@TotalLogRows</strong>
+            <small>Matching audit records</small>
+        </div>
+
+        <div class="audit-summary-card">
+            <div class="audit-summary-icon blue">
+                <i class="bi bi-boxes"></i>
+            </div>
+            <span>Top Module</span>
+            <strong>@TopModuleName</strong>
+            <small>Most active area</small>
+        </div>
+
+        <div class="audit-summary-card">
+            <div class="audit-summary-icon green">
+                <i class="bi bi-person-check"></i>
+            </div>
+            <span>Active Users</span>
+            <strong>@UniqueUserCount</strong>
+            <small>Users in current result</small>
+        </div>
+
+        <div class="audit-summary-card">
+            <div class="audit-summary-icon amber">
+                <i class="bi bi-lightning-charge"></i>
+            </div>
+            <span>Top Action</span>
+            <strong>@TopActionName</strong>
+            <small>Most common action</small>
+        </div>
+    </div>
+
     <div class="audit-control-panel">
         <input type="date" @bind="_fromDate" />
         <input type="date" @bind="_toDate" />
 
-        <select class="audit-filter" @bind="_moduleFilter">
+        <select class="audit-filter" value="@_moduleFilter" @onchange="ModuleFilterChanged">
             <option value="all">All modules</option>
             <option value="Products">Products</option>
             <option value="Stock">Stock</option>
@@ -69,7 +110,7 @@
             <option value="Invoices">Invoices</option>
         </select>
 
-        <select class="audit-filter" @bind="_actionFilter">
+        <select class="audit-filter" value="@_actionFilter" @onchange="ActionFilterChanged">
             <option value="all">All actions</option>
             <option value="Create">Create</option>
             <option value="Update">Update</option>
@@ -92,10 +133,11 @@
             <i class="bi bi-search"></i>
             <input @bind="_searchTerm"
                    @bind:event="oninput"
+                   @onkeydown="HandleSearchKeyDown"
                    placeholder="Search user, action, module or summary" />
         </div>
 
-        <button type="button" class="audit-secondary-btn" @onclick="LoadLogsAsync">
+        <button type="button" class="audit-secondary-btn" @onclick="ApplyFiltersAsync">
             <i class="bi bi-filter"></i>
             Filter
         </button>
@@ -106,24 +148,95 @@
         </button>
     </div>
 
+    @if (!_loading && _logs.Count > 0)
+    {
+        <div class="audit-chart-grid">
+            <div class="audit-chart-card">
+                <div class="audit-chart-header">
+                    <div>
+                        <h2>Activity by Module</h2>
+                        <p>Which system areas are receiving the most activity.</p>
+                    </div>
+                </div>
+
+                <div class="audit-bar-chart">
+                    @foreach (var item in TopModules)
+                    {
+                        <div class="audit-bar-row">
+                            <div class="audit-bar-label">
+                                <span>@item.Name</span>
+                                <strong>@item.Count</strong>
+                            </div>
+
+                            <div class="audit-bar-track">
+                                <div class="audit-bar-fill blue" style="@GetBarStyle(item.Count, TopModuleMax)"></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="audit-chart-card">
+                <div class="audit-chart-header">
+                    <div>
+                        <h2>Activity by Action</h2>
+                        <p>Create, update, delete and operational movement types.</p>
+                    </div>
+                </div>
+
+                <div class="audit-bar-chart">
+                    @foreach (var item in TopActions)
+                    {
+                        <div class="audit-bar-row">
+                            <div class="audit-bar-label">
+                                <span>@item.Name</span>
+                                <strong>@item.Count</strong>
+                            </div>
+
+                            <div class="audit-bar-track">
+                                <div class="audit-bar-fill @GetActionBarClass(item.Name)" style="@GetBarStyle(item.Count, TopActionMax)"></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
     <div class="audit-table-card">
         <div class="audit-table-header">
             <div>
                 <h2>Activity Log</h2>
-                <p>Latest 250 matching audit records.</p>
+                <p>Showing @PageStart - @PageEnd of @TotalLogRows matching audit record@(TotalLogRows == 1 ? "" : "s").</p>
+            </div>
+
+            <div class="audit-rows-tool">
+                <label>Rows</label>
+                <select value="@_rowsMode" @onchange="RowsChanged">
+                    <option value="10">10 rows</option>
+                    <option value="25">25 rows</option>
+                    <option value="50">50 rows</option>
+                    <option value="all">Show all</option>
+                </select>
             </div>
         </div>
 
         @if (_loading)
         {
             <div class="audit-empty">
+                <div class="audit-empty-icon">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
                 <strong>Loading audit records...</strong>
-                <span>Please wait.</span>
+                <span>Please wait while we fetch activity logs.</span>
             </div>
         }
         else if (_logs.Count == 0)
         {
             <div class="audit-empty">
+                <div class="audit-empty-icon">
+                    <i class="bi bi-shield-check"></i>
+                </div>
                 <strong>No audit records found</strong>
                 <span>Once actions are logged, they will appear here.</span>
             </div>
@@ -142,12 +255,12 @@
                             <th>Entity</th>
                             <th>Summary</th>
                             <th>IP</th>
-                            <th class="text-end">Details</th>
+                            <th class="audit-actions-col">Details</th>
                         </tr>
                     </thead>
 
                     <tbody>
-                        @foreach (var item in _logs)
+                        @foreach (var item in PaginatedLogs)
                         {
                             <tr>
                                 <td>@item.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
@@ -170,8 +283,9 @@
                                 </td>
                                 <td>@item.Summary</td>
                                 <td>@(string.IsNullOrWhiteSpace(item.IpAddress) ? "-" : item.IpAddress)</td>
-                                <td class="text-end">
+                                <td class="audit-actions-cell">
                                     <button type="button" class="audit-mini-btn" @onclick="() => ViewLog(item)">
+                                        <i class="bi bi-eye"></i>
                                         View
                                     </button>
                                 </td>
@@ -179,6 +293,33 @@
                         }
                     </tbody>
                 </table>
+            </div>
+
+            <div class="audit-pagination">
+                <div class="audit-page-info">
+                    Showing
+                    <strong>@PageStart</strong>
+                    -
+                    <strong>@PageEnd</strong>
+                    of
+                    <strong>@TotalLogRows</strong>
+                </div>
+
+                <div class="audit-page-controls">
+                    <button type="button" class="@PreviousPageClass" @onclick="PreviousPage">
+                        <i class="bi bi-chevron-left"></i>
+                        Previous
+                    </button>
+
+                    <span class="audit-page-count">
+                        @(ShowAllRows ? "Showing all" : $"Page {_currentPage} of {TotalPages}")
+                    </span>
+
+                    <button type="button" class="@NextPageClass" @onclick="NextPage">
+                        Next
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
             </div>
         }
     </div>
@@ -237,67 +378,138 @@
         animation: auditIn .22s ease both;
     }
 
-    .audit-header {
-        margin-bottom: 18px;
+    .audit-top {
+        margin-bottom: 16px;
     }
 
     .audit-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
 
-    .audit-header h1 {
+    .audit-top h1 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.45rem;
-        font-weight: 680;
-        letter-spacing: -.03em;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
-    .audit-header p {
+    .audit-top p {
         margin: 6px 0 0;
-        color: #64748b;
+        color: #667085;
         font-size: .88rem;
     }
 
-    .audit-settings-strip {
+    .audit-settings-strip,
+    .audit-summary-grid,
+    .audit-chart-grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 10px;
+        gap: 12px;
         margin-bottom: 16px;
     }
 
-        .audit-settings-strip div {
-            padding: 13px;
-            border-radius: 16px;
-            background: #ffffff;
-            border: 1px solid #e7edf5;
-            box-shadow: 0 12px 28px rgba(15,23,42,.04);
+    .audit-settings-strip,
+    .audit-summary-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .audit-chart-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .audit-settings-strip div,
+    .audit-summary-card,
+    .audit-chart-card,
+    .audit-table-card {
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17,24,39,.045);
+    }
+
+    .audit-settings-strip div {
+        padding: 15px;
+        border-radius: 20px;
+    }
+
+    .audit-settings-strip span,
+    .audit-settings-strip strong,
+    .audit-summary-card span,
+    .audit-summary-card strong,
+    .audit-summary-card small {
+        display: block;
+    }
+
+    .audit-settings-strip span,
+    .audit-summary-card span {
+        color: #667085;
+        font-size: .72rem;
+        font-weight: 700;
+    }
+
+    .audit-settings-strip strong,
+    .audit-summary-card strong {
+        margin-top: 6px;
+        color: #111827;
+        font-size: 1.05rem;
+        font-weight: 760;
+        letter-spacing: -.02em;
+    }
+
+    .audit-summary-card small {
+        margin-top: 4px;
+        color: #98a2b3;
+        font-size: .72rem;
+    }
+
+    .audit-summary-card {
+        padding: 15px;
+        border-radius: 20px;
+    }
+
+        .audit-summary-card.hero {
+            background: #252525;
+            border-color: #252525;
         }
 
-        .audit-settings-strip span,
-        .audit-settings-strip strong {
-            display: block;
+            .audit-summary-card.hero span,
+            .audit-summary-card.hero strong,
+            .audit-summary-card.hero small {
+                color: #ffffff;
+            }
+
+    .audit-summary-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #252525;
+        box-shadow: 0 10px 22px rgba(17, 24, 39, .08);
+    }
+
+        .audit-summary-icon.blue {
+            color: #2563eb;
+            background: #eff6ff;
         }
 
-        .audit-settings-strip span {
-            color: #64748b;
-            font-size: .72rem;
-            font-weight: 650;
+        .audit-summary-icon.green {
+            color: #8FA6A1;
+            background: #f2f6f5;
         }
 
-        .audit-settings-strip strong {
-            margin-top: 4px;
-            color: #0f172a;
-            font-size: .84rem;
-            font-weight: 720;
+        .audit-summary-icon.amber {
+            color: #b7791f;
+            background: #fffbeb;
         }
 
     .audit-control-panel {
@@ -308,33 +520,34 @@
         margin-bottom: 16px;
         border-radius: 18px;
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 10px 24px rgba(17,24,39,.035);
     }
 
         .audit-control-panel input,
-        .audit-filter {
+        .audit-filter,
+        .audit-rows-tool select {
             width: 100%;
             min-height: 40px;
             border-radius: 12px;
             border: 1px solid #e5e7eb;
             background: #ffffff;
-            color: #0f172a;
+            color: #111827;
             padding: 0 12px;
-            font-size: .84rem;
+            font-size: 16px;
             outline: none;
         }
 
     .audit-search {
-        min-height: 40px;
+        min-height: 42px;
         display: flex;
         align-items: center;
         gap: 10px;
         padding: 0 13px;
-        border-radius: 12px;
-        background: #f8fafc;
+        border-radius: 14px;
+        background: #fafafa;
         border: 1px solid #e5e7eb;
-        color: #94a3b8;
+        color: #98a2b3;
     }
 
         .audit-search input {
@@ -342,73 +555,174 @@
             border: 0;
             outline: none;
             background: transparent;
-            color: #0f172a;
-            font-size: .84rem;
+            color: #111827;
+            font-size: 16px;
         }
 
     .audit-secondary-btn,
     .audit-ghost-btn,
-    .audit-mini-btn {
+    .audit-mini-btn,
+    .audit-page-btn {
         min-height: 38px;
-        border-radius: 11px;
+        border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
         padding: 0 14px;
         font-size: .8rem;
-        font-weight: 650;
+        font-weight: 680;
         border: 0;
         white-space: nowrap;
+        transition: transform .18s ease;
     }
 
     .audit-secondary-btn {
-        color: #2563eb;
-        background: #eef5ff;
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
     }
 
-    .audit-ghost-btn {
+    .audit-ghost-btn,
+    .audit-page-btn {
         color: #475569;
         background: #ffffff;
         border: 1px solid #e5e7eb;
     }
 
     .audit-mini-btn {
-        min-height: 30px;
-        color: #2563eb;
-        background: #eff6ff;
-        border: 1px solid #bfdbfe;
+        min-height: 32px;
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
         padding: 0 10px;
     }
 
+        .audit-secondary-btn:hover,
+        .audit-ghost-btn:hover,
+        .audit-mini-btn:hover,
+        .audit-page-btn:hover {
+            transform: translateY(-1px);
+        }
+
+    .audit-page-btn.is-disabled {
+        opacity: .45;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .audit-chart-card,
     .audit-table-card {
-        overflow: hidden;
-        border-radius: 20px;
-        background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        border-radius: 22px;
+        overflow: visible;
     }
 
+    .audit-chart-header,
     .audit-table-header {
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
     }
 
+        .audit-chart-header h2,
         .audit-table-header h2 {
             margin: 0;
-            color: #0f172a;
-            font-size: .92rem;
+            color: #111827;
+            font-size: .94rem;
             font-weight: 720;
         }
 
+        .audit-chart-header p,
         .audit-table-header p {
             margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .76rem;
+            color: #98a2b3;
+            font-size: .75rem;
+        }
+
+    .audit-rows-tool {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 170px;
+    }
+
+        .audit-rows-tool label {
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+    .audit-bar-chart {
+        padding: 16px 18px;
+        display: grid;
+        gap: 13px;
+    }
+
+    .audit-bar-row {
+        display: grid;
+        gap: 7px;
+    }
+
+    .audit-bar-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+        .audit-bar-label span {
+            color: #667085;
+            font-size: .78rem;
+            font-weight: 700;
+        }
+
+        .audit-bar-label strong {
+            color: #111827;
+            font-size: .78rem;
+            font-weight: 760;
+        }
+
+    .audit-bar-track {
+        height: 10px;
+        border-radius: 999px;
+        background: #f3f4f6;
+        overflow: hidden;
+    }
+
+    .audit-bar-fill {
+        height: 100%;
+        min-width: 4px;
+        border-radius: 999px;
+        background: #252525;
+    }
+
+        .audit-bar-fill.blue {
+            background: #2563eb;
+        }
+
+        .audit-bar-fill.green {
+            background: #8FA6A1;
+        }
+
+        .audit-bar-fill.amber {
+            background: #b7791f;
+        }
+
+        .audit-bar-fill.red {
+            background: #d92d20;
+        }
+
+        .audit-bar-fill.gray {
+            background: #667085;
         }
 
     .audit-table-wrap {
         overflow-x: auto;
+        padding-bottom: 100px;
     }
 
     .audit-table {
@@ -419,13 +733,13 @@
 
         .audit-table th {
             padding: 12px 16px;
-            background: #f8fafc;
-            color: #64748b;
+            background: #fafafa;
+            color: #667085;
             font-size: .7rem;
             font-weight: 750;
             text-transform: uppercase;
             letter-spacing: .05em;
-            border-bottom: 1px solid #e7edf5;
+            border-bottom: 1px solid #e8eaef;
             white-space: nowrap;
         }
 
@@ -433,7 +747,7 @@
             padding: 14px 16px;
             color: #334155;
             font-size: .82rem;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f2f5;
             vertical-align: middle;
         }
 
@@ -470,46 +784,105 @@
     .audit-action-pill.delete,
     .audit-action-pill.cash-out,
     .audit-action-pill.refund {
-        color: #dc2626;
-        background: #fef2f2;
+        color: #d92d20;
+        background: #fef3f2;
     }
 
     .audit-action-pill.default {
-        color: #64748b;
-        background: #f1f5f9;
+        color: #667085;
+        background: #f3f4f6;
     }
 
     .audit-muted {
         display: block;
         margin-top: 2px;
-        color: #94a3b8;
+        color: #98a2b3;
         font-size: .7rem;
+    }
+
+    .audit-actions-col,
+    .audit-actions-cell {
+        text-align: right;
     }
 
     .audit-empty {
         margin: 18px;
         padding: 34px 20px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px dashed #dbe3ef;
+        border-radius: 18px;
+        background: #fafafa;
+        border: 1px dashed #d0d5dd;
         text-align: center;
     }
 
-        .audit-empty strong,
-        .audit-empty span {
-            display: block;
+    .audit-empty-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 10px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .audit-empty strong,
+    .audit-empty span {
+        display: block;
+    }
+
+    .audit-empty strong {
+        color: #111827;
+        font-size: .9rem;
+        font-weight: 720;
+    }
+
+    .audit-empty span {
+        margin-top: 4px;
+        color: #667085;
+        font-size: .78rem;
+    }
+
+    .audit-pagination {
+        padding: 14px 18px;
+        border-top: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        background: #ffffff;
+        border-radius: 0 0 22px 22px;
+    }
+
+    .audit-page-info {
+        color: #667085;
+        font-size: .78rem;
+        font-weight: 600;
+    }
+
+        .audit-page-info strong {
+            color: #111827;
         }
 
-        .audit-empty strong {
-            color: #0f172a;
-            font-size: .9rem;
-        }
+    .audit-page-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
 
-        .audit-empty span {
-            margin-top: 4px;
-            color: #64748b;
-            font-size: .78rem;
-        }
+    .audit-page-count {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 11px;
+        border-radius: 11px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+        color: #667085;
+        font-size: .76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
 
     .audit-modal-backdrop {
         position: fixed;
@@ -518,15 +891,18 @@
         padding: 20px;
         background: rgba(15, 23, 42, .44);
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: center;
+        overflow-y: auto;
     }
 
     .audit-modal {
         width: 100%;
         max-width: 980px;
-        max-height: calc(100vh - 40px);
-        overflow-y: auto;
+        max-height: none;
+        margin-top: 10px;
+        margin-bottom: 20px;
+        overflow-y: visible;
         padding: 22px;
         border-radius: 22px;
         background: #ffffff;
@@ -543,7 +919,7 @@
     }
 
         .audit-modal-header span {
-            color: #2563eb;
+            color: #8FA6A1;
             font-size: .72rem;
             font-weight: 750;
             letter-spacing: .06em;
@@ -552,14 +928,14 @@
 
         .audit-modal-header h4 {
             margin: 3px 0 0;
-            color: #0f172a;
+            color: #111827;
             font-size: 1.05rem;
             font-weight: 720;
         }
 
         .audit-modal-header p {
             margin: 5px 0 0;
-            color: #64748b;
+            color: #667085;
             font-size: .84rem;
         }
 
@@ -568,8 +944,8 @@
         height: 34px;
         border-radius: 10px;
         border: 1px solid #e5e7eb;
-        background: #fff;
-        color: #64748b;
+        background: #ffffff;
+        color: #667085;
     }
 
     .audit-detail-grid {
@@ -582,8 +958,8 @@
         .audit-detail-grid div {
             padding: 13px;
             border-radius: 16px;
-            background: #f8fafc;
-            border: 1px solid #e7edf5;
+            background: #fafafa;
+            border: 1px solid #e8eaef;
         }
 
         .audit-detail-grid span,
@@ -592,14 +968,14 @@
         }
 
         .audit-detail-grid span {
-            color: #64748b;
+            color: #667085;
             font-size: .72rem;
             font-weight: 650;
         }
 
         .audit-detail-grid strong {
             margin-top: 4px;
-            color: #0f172a;
+            color: #111827;
             font-size: .84rem;
         }
 
@@ -611,7 +987,7 @@
 
         .audit-json-grid h5 {
             margin: 0 0 8px;
-            color: #0f172a;
+            color: #111827;
             font-size: .86rem;
             font-weight: 720;
         }
@@ -622,7 +998,7 @@
             overflow: auto;
             padding: 13px;
             border-radius: 16px;
-            background: #0f172a;
+            background: #111827;
             color: #e5e7eb;
             font-size: .76rem;
             white-space: pre-wrap;
@@ -642,7 +1018,9 @@
 
     @@media (max-width: 1199px) {
         .audit-control-panel,
-        .audit-settings-strip {
+        .audit-settings-strip,
+        .audit-summary-grid,
+        .audit-chart-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
     }
@@ -650,17 +1028,43 @@
     @@media (max-width: 768px) {
         .audit-control-panel,
         .audit-settings-strip,
+        .audit-summary-grid,
+        .audit-chart-grid,
         .audit-detail-grid,
         .audit-json-grid {
             grid-template-columns: 1fr;
         }
 
-            .audit-control-panel button {
+            .audit-control-panel button,
+            .audit-rows-tool,
+            .audit-rows-tool select {
                 width: 100%;
             }
 
+        .audit-table-header,
         .audit-modal-header {
+            flex-direction: column;
             align-items: flex-start;
+        }
+
+        .audit-pagination {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .audit-page-controls,
+        .audit-page-btn {
+            width: 100%;
+        }
+
+        .audit-page-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .audit-page-count {
+            justify-content: center;
+            width: 100%;
         }
     }
 </style>
@@ -679,6 +1083,96 @@
     private string? _searchTerm;
 
     private AuditLogListItemViewModel? _selectedLog;
+
+    private int _currentPage = 1;
+    private string _rowsMode = "10";
+
+    private bool ShowAllRows =>
+        _rowsMode.Equals("all", StringComparison.OrdinalIgnoreCase);
+
+    private int PageSize => ParseRows(_rowsMode);
+
+    private List<AuditLogListItemViewModel> OrderedLogs =>
+        _logs
+            .OrderByDescending(x => x.CreatedAt)
+            .ToList();
+
+    private int TotalLogRows => OrderedLogs.Count;
+
+    private int TotalPages =>
+        TotalLogRows == 0 || ShowAllRows
+            ? 1
+            : (int)Math.Ceiling(TotalLogRows / (double)PageSize);
+
+    private int SafeCurrentPage =>
+        Math.Min(Math.Max(_currentPage, 1), TotalPages);
+
+    private int PageStart =>
+        TotalLogRows == 0
+            ? 0
+            : ShowAllRows
+                ? 1
+                : ((SafeCurrentPage - 1) * PageSize) + 1;
+
+    private int PageEnd =>
+        TotalLogRows == 0
+            ? 0
+            : ShowAllRows
+                ? TotalLogRows
+                : Math.Min(SafeCurrentPage * PageSize, TotalLogRows);
+
+    private List<AuditLogListItemViewModel> PaginatedLogs =>
+        ShowAllRows
+            ? OrderedLogs
+            : OrderedLogs
+                .Skip((SafeCurrentPage - 1) * PageSize)
+                .Take(PageSize)
+                .ToList();
+
+    private string PreviousPageClass =>
+        _currentPage <= 1 || ShowAllRows
+            ? "audit-page-btn is-disabled"
+            : "audit-page-btn";
+
+    private string NextPageClass =>
+        _currentPage >= TotalPages || ShowAllRows
+            ? "audit-page-btn is-disabled"
+            : "audit-page-btn";
+
+    private int UniqueUserCount =>
+        _logs
+            .Where(x => !string.IsNullOrWhiteSpace(x.UserName))
+            .Select(x => x.UserName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+
+    private List<AuditChartItem> TopModules =>
+        _logs
+            .GroupBy(x => string.IsNullOrWhiteSpace(x.Module) ? "Unknown" : x.Module)
+            .Select(x => new AuditChartItem(x.Key, x.Count()))
+            .OrderByDescending(x => x.Count)
+            .Take(6)
+            .ToList();
+
+    private List<AuditChartItem> TopActions =>
+        _logs
+            .GroupBy(x => string.IsNullOrWhiteSpace(x.Action) ? "Unknown" : x.Action)
+            .Select(x => new AuditChartItem(x.Key, x.Count()))
+            .OrderByDescending(x => x.Count)
+            .Take(6)
+            .ToList();
+
+    private int TopModuleMax =>
+        TopModules.Count == 0 ? 1 : TopModules.Max(x => x.Count);
+
+    private int TopActionMax =>
+        TopActions.Count == 0 ? 1 : TopActions.Max(x => x.Count);
+
+    private string TopModuleName =>
+        TopModules.FirstOrDefault()?.Name ?? "No data";
+
+    private string TopActionName =>
+        TopActions.FirstOrDefault()?.Name ?? "No data";
 
     protected override async Task OnInitializedAsync()
     {
@@ -703,7 +1197,60 @@
             _actionFilter,
             _searchTerm);
 
+        if (_currentPage > TotalPages)
+        {
+            _currentPage = TotalPages;
+        }
+
         _loading = false;
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _currentPage = 1;
+        await LoadLogsAsync();
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyFiltersAsync();
+        }
+    }
+
+    private void ModuleFilterChanged(ChangeEventArgs e)
+    {
+        _moduleFilter = e.Value?.ToString() ?? "all";
+        _currentPage = 1;
+    }
+
+    private void ActionFilterChanged(ChangeEventArgs e)
+    {
+        _actionFilter = e.Value?.ToString() ?? "all";
+        _currentPage = 1;
+    }
+
+    private void RowsChanged(ChangeEventArgs e)
+    {
+        _rowsMode = e.Value?.ToString() ?? "10";
+        _currentPage = 1;
+    }
+
+    private void NextPage()
+    {
+        if (!ShowAllRows && _currentPage < TotalPages)
+        {
+            _currentPage++;
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (!ShowAllRows && _currentPage > 1)
+        {
+            _currentPage--;
+        }
     }
 
     private async Task ResetFiltersAsync()
@@ -713,6 +1260,7 @@
         _moduleFilter = "all";
         _actionFilter = "all";
         _searchTerm = null;
+        _currentPage = 1;
 
         await LoadLogsAsync();
     }
@@ -725,6 +1273,46 @@
     private void CloseLog()
     {
         _selectedLog = null;
+    }
+
+    private int ParseRows(string value)
+    {
+        return int.TryParse(value, out var rows) && rows > 0
+            ? rows
+            : 10;
+    }
+
+    private string GetBarStyle(int value, int max)
+    {
+        if (max <= 0)
+        {
+            return "width:0%;";
+        }
+
+        var width = Math.Min(100, value / (decimal)max * 100);
+
+        return $"width:{width.ToString("0.##", CultureInfo.InvariantCulture)}%;";
+    }
+
+    private string GetActionBarClass(string action)
+    {
+        return action switch
+        {
+            "Create" => "green",
+            "Open" => "green",
+            "Cash In" => "green",
+            "Update" => "blue",
+            "Transfer" => "blue",
+            "Delete" => "red",
+            "Refund" => "red",
+            "Cash Out" => "red",
+            "Stock In" => "green",
+            "Stock Out" => "red",
+            "Correction" => "blue",
+            "Close" => "blue",
+            "Void" => "red",
+            _ => "gray"
+        };
     }
 
     private string GetActionClass(string action)
@@ -747,4 +1335,6 @@
             _ => "default"
         };
     }
+
+    private record AuditChartItem(string Name, int Count);
 }

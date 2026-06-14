@@ -4,6 +4,7 @@
 @layout MainLayout
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Web
 @using PosPlatform.Web.Components.Layout
 @using PosPlatform.Web.Models.Invoices
 @using PosPlatform.Web.Models.Settings
@@ -17,12 +18,13 @@
 <PageTitle>Invoice Follow-ups</PageTitle>
 
 <section class="follow-page">
-    <div class="follow-header">
+    <div class="follow-top">
         <div>
             <div class="follow-kicker">
                 <i class="bi bi-calendar-check"></i>
                 Collection reminders
             </div>
+
             <h1>Invoice Follow-ups</h1>
             <p>Track customer follow-ups for unpaid and partially paid invoices.</p>
         </div>
@@ -40,28 +42,40 @@
     }
 
     <div class="follow-summary-grid">
-        <div>
+        <div class="follow-summary-card hero">
+            <div class="follow-summary-icon">
+                <i class="bi bi-wallet2"></i>
+            </div>
             <span>Outstanding</span>
             <strong>@_summary.TotalOutstanding</strong>
-            <p>@Money(_summary.OutstandingBalance) due</p>
+            <small>@Money(_summary.OutstandingBalance) due</small>
         </div>
 
-        <div>
+        <div class="follow-summary-card">
+            <div class="follow-summary-icon amber">
+                <i class="bi bi-bell"></i>
+            </div>
             <span>Due for Follow-up</span>
             <strong>@_summary.DueForFollowUp</strong>
-            <p>Today or overdue</p>
+            <small>Today or overdue</small>
         </div>
 
-        <div>
+        <div class="follow-summary-card">
+            <div class="follow-summary-icon green">
+                <i class="bi bi-calendar-check"></i>
+            </div>
             <span>Promised to Pay</span>
             <strong>@_summary.PromisedToPay</strong>
-            <p>Invoices marked promised</p>
+            <small>Invoices marked promised</small>
         </div>
 
-        <div>
+        <div class="follow-summary-card">
+            <div class="follow-summary-icon red">
+                <i class="bi bi-exclamation-octagon"></i>
+            </div>
             <span>Escalated</span>
             <strong>@_summary.Escalated</strong>
-            <p>Needs urgent attention</p>
+            <small>Needs urgent attention</small>
         </div>
     </div>
 
@@ -70,10 +84,11 @@
             <i class="bi bi-search"></i>
             <input @bind="_searchTerm"
                    @bind:event="oninput"
+                   @onkeydown="HandleSearchKeyDown"
                    placeholder="Search invoice, customer, phone or email" />
         </div>
 
-        <select @bind="_followUpStatusFilter">
+        <select value="@_followUpStatusFilter" @onchange="FollowStatusChanged">
             <option value="all">All follow-up statuses</option>
             <option value="Not Started">Not Started</option>
             <option value="Contacted">Contacted</option>
@@ -83,7 +98,7 @@
             <option value="Escalated">Escalated</option>
         </select>
 
-        <select @bind="_reminderFilter">
+        <select value="@_reminderFilter" @onchange="ReminderFilterChanged">
             <option value="all">All reminders</option>
             <option value="due-today">Due today</option>
             <option value="overdue-follow-up">Follow-up overdue</option>
@@ -91,7 +106,7 @@
             <option value="overdue-invoice">Invoice overdue</option>
         </select>
 
-        <button type="button" class="follow-secondary-btn" @onclick="LoadFollowUpsAsync">
+        <button type="button" class="follow-secondary-btn" @onclick="ApplyFiltersAsync">
             <i class="bi bi-filter"></i>
             Filter
         </button>
@@ -106,20 +121,26 @@
         <div class="follow-table-header">
             <div>
                 <h2>Follow-up List</h2>
-                <p>Outstanding invoices that may need collection follow-up.</p>
+                <p>Showing @PageStart - @PageEnd of @TotalFollowUps follow-up@(FollowUpPlural).</p>
             </div>
         </div>
 
         @if (_loading)
         {
             <div class="follow-empty">
+                <div class="follow-empty-icon">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
                 <strong>Loading follow-ups...</strong>
-                <span>Please wait.</span>
+                <span>Please wait while we load outstanding invoice follow-ups.</span>
             </div>
         }
         else if (_items.Count == 0)
         {
             <div class="follow-empty">
+                <div class="follow-empty-icon">
+                    <i class="bi bi-check2-circle"></i>
+                </div>
                 <strong>No follow-ups found</strong>
                 <span>No outstanding invoices match the selected filters.</span>
             </div>
@@ -138,12 +159,12 @@
                             <th>Follow-up</th>
                             <th>Next</th>
                             <th>Count</th>
-                            <th class="text-end">Actions</th>
+                            <th class="follow-actions-col">Actions</th>
                         </tr>
                     </thead>
 
                     <tbody>
-                        @foreach (var item in _items)
+                        @foreach (var item in PaginatedItems)
                         {
                             <tr>
                                 <td>
@@ -194,19 +215,66 @@
 
                                 <td>@item.FollowUpCount</td>
 
-                                <td class="text-end">
-                                    <button type="button" class="follow-mini-btn" @onclick="() => OpenFollowUpModal(item)">
-                                        Update
-                                    </button>
+                                <td class="follow-actions-cell">
+                                    <div class="follow-action-menu">
+                                        <button type="button"
+                                                class="follow-action-toggle"
+                                                @onclick="() => ToggleActionMenu(item.Id)">
+                                            <span>Actions</span>
+                                            <i class="bi bi-chevron-down"></i>
+                                        </button>
 
-                                    <button type="button" class="follow-mini-btn" @onclick="() => ViewInvoice(item.Id)">
-                                        Invoice
-                                    </button>
+                                        @if (_openActionInvoiceId == item.Id)
+                                        {
+                                            <div class="follow-action-dropdown">
+                                                <button type="button" @onclick="() => OpenFollowUpModal(item)">
+                                                    <i class="bi bi-pencil-square"></i>
+                                                    <span>Update follow-up</span>
+                                                </button>
+
+                                                <button type="button" @onclick="() => ViewInvoice(item.Id)">
+                                                    <i class="bi bi-receipt"></i>
+                                                    <span>View invoice</span>
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
                                 </td>
                             </tr>
                         }
                     </tbody>
                 </table>
+            </div>
+
+            <div class="follow-pagination">
+                <div class="follow-page-info">
+                    Showing
+                    <strong>@PageStart</strong>
+                    -
+                    <strong>@PageEnd</strong>
+                    of
+                    <strong>@TotalFollowUps</strong>
+                </div>
+
+                <div class="follow-page-controls">
+                    <button type="button"
+                            class="@PreviousPageClass"
+                            @onclick="PreviousPage">
+                        <i class="bi bi-chevron-left"></i>
+                        Previous
+                    </button>
+
+                    <span class="follow-page-count">
+                        Page @_currentPage of @TotalPages
+                    </span>
+
+                    <button type="button"
+                            class="@NextPageClass"
+                            @onclick="NextPage">
+                        Next
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
             </div>
         }
     </div>
@@ -251,7 +319,7 @@
                 </div>
             </div>
 
-            <button type="button" class="follow-primary-btn full mt" disabled="@_saving" @onclick="SaveFollowUpAsync">
+            <button type="button" class="follow-primary-btn full mt @(_saving ? "is-disabled" : "")" @onclick="SaveFollowUpAsync">
                 <i class="bi bi-check-circle"></i>
                 @(_saving ? "Saving..." : "Save Follow-up")
             </button>
@@ -264,35 +332,86 @@
         animation: followIn .22s ease both;
     }
 
-    .follow-header {
-        margin-bottom: 18px;
+    .follow-top {
+        margin-bottom: 16px;
     }
 
     .follow-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
 
-    .follow-header h1 {
+    .follow-top h1 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.45rem;
-        font-weight: 680;
-        letter-spacing: -.03em;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
-    .follow-header p {
+    .follow-top p {
         margin: 6px 0 0;
-        color: #64748b;
+        color: #667085;
         font-size: .88rem;
     }
+
+    .follow-primary-btn,
+    .follow-secondary-btn,
+    .follow-ghost-btn,
+    .follow-page-btn {
+        min-height: 38px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 680;
+        border: 0;
+        white-space: nowrap;
+        transition: transform .18s ease;
+    }
+
+    .follow-primary-btn {
+        color: #fff;
+        background: #252525;
+        box-shadow: 0 12px 24px rgba(17,24,39,.12);
+    }
+
+    .follow-secondary-btn {
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
+    }
+
+    .follow-ghost-btn,
+    .follow-page-btn {
+        color: #475569;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+    }
+
+        .follow-primary-btn:hover,
+        .follow-secondary-btn:hover,
+        .follow-ghost-btn:hover,
+        .follow-page-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .follow-primary-btn.is-disabled,
+        .follow-page-btn.is-disabled {
+            opacity: .45;
+            cursor: not-allowed;
+            transform: none;
+        }
 
     .follow-alert {
         display: flex;
@@ -331,41 +450,82 @@
     .follow-summary-grid {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 10px;
+        gap: 12px;
         margin-bottom: 16px;
     }
 
-        .follow-summary-grid div,
-        .follow-table-card {
-            border-radius: 20px;
-            background: #fff;
-            border: 1px solid #e7edf5;
-            box-shadow: 0 16px 34px rgba(15,23,42,.055);
+    .follow-summary-card {
+        padding: 15px;
+        border-radius: 20px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
+    }
+
+        .follow-summary-card.hero {
+            background: #252525;
+            border-color: #252525;
         }
 
-        .follow-summary-grid div {
-            padding: 14px;
-        }
-
-        .follow-summary-grid span {
+        .follow-summary-card span,
+        .follow-summary-card strong,
+        .follow-summary-card small {
             display: block;
-            color: #64748b;
+        }
+
+        .follow-summary-card span {
+            margin-top: 11px;
+            color: #667085;
             font-size: .72rem;
-            font-weight: 650;
+            font-weight: 700;
         }
 
-        .follow-summary-grid strong {
-            display: block;
-            margin-top: 5px;
-            color: #0f172a;
-            font-size: 1rem;
+        .follow-summary-card strong {
+            margin-top: 6px;
+            color: #111827;
+            font-size: 1.05rem;
             font-weight: 760;
+            letter-spacing: -.02em;
         }
 
-        .follow-summary-grid p {
-            margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .74rem;
+        .follow-summary-card small {
+            margin-top: 4px;
+            color: #98a2b3;
+            font-size: .72rem;
+            line-height: 1.35;
+        }
+
+        .follow-summary-card.hero span,
+        .follow-summary-card.hero strong,
+        .follow-summary-card.hero small {
+            color: #ffffff;
+        }
+
+    .follow-summary-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #252525;
+        box-shadow: 0 10px 22px rgba(17, 24, 39, .08);
+    }
+
+        .follow-summary-icon.green {
+            color: #8FA6A1;
+            background: #f2f6f5;
+        }
+
+        .follow-summary-icon.amber {
+            color: #b7791f;
+            background: #fffbeb;
+        }
+
+        .follow-summary-icon.red {
+            color: #d92d20;
+            background: #fef3f2;
         }
 
     .follow-control-panel {
@@ -376,8 +536,8 @@
         margin-bottom: 16px;
         border-radius: 18px;
         background: #fff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 10px 24px rgba(17,24,39,.035);
     }
 
         .follow-control-panel select,
@@ -389,22 +549,22 @@
             border-radius: 12px;
             border: 1px solid #e5e7eb;
             background: #fff;
-            color: #0f172a;
+            color: #111827;
             padding: 0 12px;
-            font-size: .84rem;
+            font-size: 16px;
             outline: none;
         }
 
     .follow-search {
-        min-height: 40px;
+        min-height: 42px;
         display: flex;
         align-items: center;
         gap: 10px;
         padding: 0 13px;
-        border-radius: 12px;
-        background: #f8fafc;
+        border-radius: 14px;
+        background: #fafafa;
         border: 1px solid #e5e7eb;
-        color: #94a3b8;
+        color: #98a2b3;
     }
 
         .follow-search input {
@@ -412,81 +572,39 @@
             border: 0;
             outline: none;
             background: transparent;
-            color: #0f172a;
-            font-size: .84rem;
+            color: #111827;
+            font-size: 16px;
         }
-
-    .follow-primary-btn,
-    .follow-secondary-btn,
-    .follow-ghost-btn,
-    .follow-mini-btn {
-        min-height: 38px;
-        border-radius: 11px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        padding: 0 14px;
-        font-size: .8rem;
-        font-weight: 650;
-        border: 0;
-        white-space: nowrap;
-    }
-
-    .follow-primary-btn {
-        color: #fff;
-        background: #111827;
-        box-shadow: 0 12px 24px rgba(15,23,42,.14);
-    }
-
-        .follow-primary-btn:disabled {
-            opacity: .55;
-            cursor: not-allowed;
-        }
-
-    .follow-secondary-btn {
-        color: #2563eb;
-        background: #eef5ff;
-    }
-
-    .follow-ghost-btn {
-        color: #475569;
-        background: #fff;
-        border: 1px solid #e5e7eb;
-    }
-
-    .follow-mini-btn {
-        min-height: 30px;
-        color: #2563eb;
-        background: #eff6ff;
-        border: 1px solid #bfdbfe;
-        padding: 0 10px;
-    }
 
     .follow-table-card {
-        overflow: hidden;
+        overflow: visible;
+        border-radius: 22px;
+        background: #fff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17,24,39,.045);
     }
 
     .follow-table-header {
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
     }
 
         .follow-table-header h2 {
             margin: 0;
-            color: #0f172a;
-            font-size: .92rem;
+            color: #111827;
+            font-size: .94rem;
             font-weight: 720;
         }
 
         .follow-table-header p {
             margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .76rem;
+            color: #98a2b3;
+            font-size: .75rem;
         }
 
     .follow-table-wrap {
         overflow-x: auto;
+        padding-bottom: 100px;
     }
 
     .follow-table {
@@ -497,12 +615,12 @@
 
         .follow-table th {
             padding: 12px 16px;
-            background: #f8fafc;
-            color: #64748b;
+            background: #fafafa;
+            color: #667085;
             font-size: .7rem;
             font-weight: 750;
             text-transform: uppercase;
-            border-bottom: 1px solid #e7edf5;
+            border-bottom: 1px solid #e8eaef;
             white-space: nowrap;
         }
 
@@ -510,23 +628,23 @@
             padding: 14px 16px;
             color: #334155;
             font-size: .82rem;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f2f5;
             vertical-align: middle;
         }
 
     .follow-muted {
         display: block;
-        color: #64748b;
+        color: #667085;
         font-size: .74rem;
         margin-top: 2px;
     }
 
         .follow-muted.danger {
-            color: #dc2626;
+            color: #d92d20;
         }
 
     .follow-money {
-        color: #0f172a;
+        color: #111827;
         font-weight: 760;
     }
 
@@ -540,11 +658,12 @@
         border-radius: 999px;
         font-size: .72rem;
         font-weight: 750;
+        white-space: nowrap;
     }
 
         .follow-pill.not-started {
-            color: #64748b;
-            background: #f1f5f9;
+            color: #667085;
+            background: #f3f4f6;
         }
 
         .follow-pill.contacted {
@@ -558,14 +677,14 @@
         }
 
         .follow-pill.no-response {
-            color: #d97706;
+            color: #b7791f;
             background: #fffbeb;
         }
 
         .follow-pill.disputed,
         .follow-pill.escalated {
-            color: #dc2626;
-            background: #fef2f2;
+            color: #d92d20;
+            background: #fef3f2;
         }
 
     .follow-next-due {
@@ -574,34 +693,162 @@
     }
 
     .follow-next-overdue {
-        color: #dc2626;
-        background: #fef2f2;
+        color: #d92d20;
+        background: #fef3f2;
     }
+
+    .follow-actions-col,
+    .follow-actions-cell {
+        text-align: right;
+    }
+
+    .follow-actions-cell {
+        position: relative;
+        min-width: 150px;
+    }
+
+    .follow-action-menu {
+        position: relative;
+        display: inline-block;
+    }
+
+    .follow-action-toggle {
+        min-height: 34px;
+        border-radius: 11px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        color: #252525;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 11px;
+        font-size: .74rem;
+        font-weight: 750;
+        cursor: pointer;
+        box-shadow: 0 8px 18px rgba(17, 24, 39, .04);
+    }
+
+    .follow-action-dropdown {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        width: 195px;
+        padding: 7px;
+        border-radius: 15px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 18px 38px rgba(17, 24, 39, .14);
+        z-index: 100;
+        display: grid;
+        gap: 4px;
+        text-align: left;
+    }
+
+        .follow-action-dropdown button {
+            width: 100%;
+            min-height: 36px;
+            border: 0;
+            border-radius: 11px;
+            background: transparent;
+            color: #344054;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 10px;
+            font-size: .78rem;
+            font-weight: 650;
+            text-align: left;
+        }
+
+            .follow-action-dropdown button:hover {
+                background: #fafafa;
+                color: #252525;
+            }
+
+            .follow-action-dropdown button i {
+                width: 18px;
+                color: #8FA6A1;
+            }
 
     .follow-empty {
         margin: 18px;
         padding: 34px 20px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px dashed #dbe3ef;
+        border-radius: 18px;
+        background: #fafafa;
+        border: 1px dashed #d0d5dd;
         text-align: center;
     }
 
-        .follow-empty strong,
-        .follow-empty span {
-            display: block;
+    .follow-empty-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 10px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .follow-empty strong,
+    .follow-empty span {
+        display: block;
+    }
+
+    .follow-empty strong {
+        color: #111827;
+        font-size: .9rem;
+        font-weight: 720;
+    }
+
+    .follow-empty span {
+        margin-top: 4px;
+        color: #667085;
+        font-size: .78rem;
+    }
+
+    .follow-pagination {
+        padding: 14px 18px;
+        border-top: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        background: #ffffff;
+        border-radius: 0 0 22px 22px;
+    }
+
+    .follow-page-info {
+        color: #667085;
+        font-size: .78rem;
+        font-weight: 600;
+    }
+
+        .follow-page-info strong {
+            color: #111827;
         }
 
-        .follow-empty strong {
-            color: #0f172a;
-            font-size: .9rem;
-        }
+    .follow-page-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
 
-        .follow-empty span {
-            margin-top: 4px;
-            color: #64748b;
-            font-size: .78rem;
-        }
+    .follow-page-count {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 11px;
+        border-radius: 11px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+        color: #667085;
+        font-size: .76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
 
     .follow-modal-backdrop {
         position: fixed;
@@ -610,15 +857,17 @@
         padding: 20px;
         background: rgba(15, 23, 42, .44);
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: center;
+        overflow-y: auto;
     }
 
     .follow-modal {
         width: 100%;
         max-width: 650px;
-        max-height: calc(100vh - 40px);
-        overflow-y: auto;
+        max-height: none;
+        margin-top: 10px;
+        margin-bottom: 20px;
         padding: 22px;
         border-radius: 22px;
         background: #fff;
@@ -635,7 +884,7 @@
     }
 
         .follow-modal-header span {
-            color: #2563eb;
+            color: #8FA6A1;
             font-size: .72rem;
             font-weight: 750;
             letter-spacing: .06em;
@@ -644,14 +893,14 @@
 
         .follow-modal-header h4 {
             margin: 3px 0 0;
-            color: #0f172a;
+            color: #111827;
             font-size: 1.05rem;
             font-weight: 720;
         }
 
         .follow-modal-header p {
             margin: 5px 0 0;
-            color: #64748b;
+            color: #667085;
             font-size: .84rem;
         }
 
@@ -661,7 +910,7 @@
         border-radius: 10px;
         border: 1px solid #e5e7eb;
         background: #fff;
-        color: #64748b;
+        color: #667085;
     }
 
     .follow-form-grid {
@@ -673,7 +922,7 @@
         .follow-form-grid label {
             display: block;
             margin-bottom: 5px;
-            color: #64748b;
+            color: #667085;
             font-size: .72rem;
             font-weight: 700;
         }
@@ -722,6 +971,26 @@
         .follow-control-panel button {
             width: 100%;
         }
+
+        .follow-pagination {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .follow-page-controls,
+        .follow-page-btn {
+            width: 100%;
+        }
+
+        .follow-page-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .follow-page-count {
+            justify-content: center;
+            width: 100%;
+        }
     }
 </style>
 
@@ -745,10 +1014,54 @@
     private string _activeInvoiceNumber = string.Empty;
     private decimal _activeBalanceDue;
 
+    private int _currentPage = 1;
+    private int _pageSize = 10;
+    private int? _openActionInvoiceId;
+
     private string CurrencyLabel =>
         string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
             ? "R"
             : _settings.CurrencySymbol;
+
+    private List<InvoiceFollowUpItemViewModel> OrderedItems =>
+        _items
+            .OrderBy(x => x.NextFollowUpDate.HasValue ? x.NextFollowUpDate.Value.Date : DateTime.MaxValue)
+            .ThenByDescending(x => x.DaysOverdue)
+            .ToList();
+
+    private int TotalFollowUps => OrderedItems.Count;
+
+    private string FollowUpPlural => TotalFollowUps == 1 ? "" : "s";
+
+    private int TotalPages =>
+        TotalFollowUps == 0
+            ? 1
+            : (int)Math.Ceiling(TotalFollowUps / (double)_pageSize);
+
+    private int SafeCurrentPage =>
+        Math.Min(Math.Max(_currentPage, 1), TotalPages);
+
+    private int PageStart =>
+        TotalFollowUps == 0
+            ? 0
+            : ((SafeCurrentPage - 1) * _pageSize) + 1;
+
+    private int PageEnd =>
+        TotalFollowUps == 0
+            ? 0
+            : Math.Min(SafeCurrentPage * _pageSize, TotalFollowUps);
+
+    private List<InvoiceFollowUpItemViewModel> PaginatedItems =>
+        OrderedItems
+            .Skip((SafeCurrentPage - 1) * _pageSize)
+            .Take(_pageSize)
+            .ToList();
+
+    private string PreviousPageClass =>
+        _currentPage <= 1 ? "follow-page-btn is-disabled" : "follow-page-btn";
+
+    private string NextPageClass =>
+        _currentPage >= TotalPages ? "follow-page-btn is-disabled" : "follow-page-btn";
 
     protected override async Task OnInitializedAsync()
     {
@@ -765,6 +1078,7 @@
     private async Task LoadFollowUpsAsync()
     {
         _loading = true;
+        _openActionInvoiceId = null;
 
         _items = await InvoiceFollowUpService.GetFollowUpsAsync(
             _searchTerm,
@@ -773,7 +1087,38 @@
 
         _summary = InvoiceFollowUpService.BuildSummary(_items);
 
+        if (_currentPage > TotalPages)
+        {
+            _currentPage = TotalPages;
+        }
+
         _loading = false;
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _currentPage = 1;
+        await LoadFollowUpsAsync();
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyFiltersAsync();
+        }
+    }
+
+    private void FollowStatusChanged(ChangeEventArgs e)
+    {
+        _followUpStatusFilter = e.Value?.ToString() ?? "all";
+        _currentPage = 1;
+    }
+
+    private void ReminderFilterChanged(ChangeEventArgs e)
+    {
+        _reminderFilter = e.Value?.ToString() ?? "all";
+        _currentPage = 1;
     }
 
     private async Task ResetFiltersAsync()
@@ -781,12 +1126,38 @@
         _searchTerm = null;
         _followUpStatusFilter = "all";
         _reminderFilter = "all";
+        _currentPage = 1;
 
         await LoadFollowUpsAsync();
     }
 
+    private void NextPage()
+    {
+        if (_currentPage < TotalPages)
+        {
+            _currentPage++;
+            _openActionInvoiceId = null;
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (_currentPage > 1)
+        {
+            _currentPage--;
+            _openActionInvoiceId = null;
+        }
+    }
+
+    private void ToggleActionMenu(int invoiceId)
+    {
+        _openActionInvoiceId = _openActionInvoiceId == invoiceId ? null : invoiceId;
+    }
+
     private void OpenFollowUpModal(InvoiceFollowUpItemViewModel item)
     {
+        _openActionInvoiceId = null;
+
         _followModel = new UpdateInvoiceFollowUpModel
         {
             InvoiceId = item.Id,
@@ -825,12 +1196,14 @@
         if (result.Success)
         {
             _showFollowModal = false;
+            _currentPage = 1;
             await LoadFollowUpsAsync();
         }
     }
 
     private void ViewInvoice(int invoiceId)
     {
+        _openActionInvoiceId = null;
         NavigationManager.NavigateTo($"/invoices/print/{invoiceId}");
     }
 

@@ -18,21 +18,22 @@
 <PageTitle>Stock</PageTitle>
 
 <section class="stock-page">
-    <div class="stock-header">
+    <div class="stock-top">
         <div>
             <div class="stock-kicker">
                 <i class="bi bi-boxes"></i>
                 Inventory control
             </div>
+
             <h1>Stock Management</h1>
-            <p>Monitor stock-tracked items by branch. Services and digital products are excluded from stock control.</p>
+            <p>Monitor stock-tracked items, scan SKU/barcodes, adjust quantities and review stock movement history.</p>
         </div>
 
         @if (StockEnabled)
         {
             <button type="button" class="stock-primary-btn" @onclick="OpenAdjustment">
                 <i class="bi bi-plus-lg"></i>
-                Adjust Stock
+                New Adjustment
             </button>
         }
     </div>
@@ -86,31 +87,52 @@
     else
     {
         <div class="stock-summary-grid">
-            <div class="stock-summary-card">
+            <div class="stock-summary-card hero">
+                <div class="stock-summary-icon">
+                    <i class="bi bi-box-seam"></i>
+                </div>
                 <span>Stock Items</span>
                 <strong>@_summary.TotalStockItems</strong>
+                <small>Tracked inventory items</small>
             </div>
 
-            <div class="stock-summary-card blue">
+            <div class="stock-summary-card">
+                <div class="stock-summary-icon blue">
+                    <i class="bi bi-stack"></i>
+                </div>
                 <span>Total Units</span>
                 <strong>@_summary.TotalUnits.ToString("0.##")</strong>
+                <small>Units currently available</small>
             </div>
 
-            <div class="stock-summary-card amber">
+            <div class="stock-summary-card">
+                <div class="stock-summary-icon amber">
+                    <i class="bi bi-exclamation-circle"></i>
+                </div>
                 <span>Low Stock</span>
                 <strong>@_summary.LowStockItems</strong>
+                <small>Items needing attention</small>
             </div>
 
-            <div class="stock-summary-card red">
+            <div class="stock-summary-card">
+                <div class="stock-summary-icon red">
+                    <i class="bi bi-x-octagon"></i>
+                </div>
                 <span>Out of Stock</span>
                 <strong>@_summary.OutOfStockItems</strong>
+                <small>Unavailable items</small>
             </div>
 
-            <div class="stock-summary-card green">
+            <div class="stock-summary-card">
+                <div class="stock-summary-icon green">
+                    <i class="bi bi-cash-stack"></i>
+                </div>
                 <span>Stock Value</span>
                 <strong>@Money(_summary.TotalStockValue)</strong>
+                <small>Cost value of inventory</small>
             </div>
         </div>
+
         <div class="stock-barcode-row">
             <div class="stock-barcode-box">
                 <i class="bi bi-upc-scan"></i>
@@ -122,21 +144,22 @@
 
             <button type="button"
                     class="stock-primary-btn"
-                    disabled="@_barcodeScanning"
                     @onclick="ScanBarcodeAsync">
                 <i class="bi bi-upc"></i>
                 @(_barcodeScanning ? "Checking..." : "Find Item")
             </button>
         </div>
+
         <div class="stock-control-panel">
             <div class="stock-search">
                 <i class="bi bi-search"></i>
                 <input @bind="_searchTerm"
                        @bind:event="oninput"
+                       @onkeydown="HandleSearchKeyDown"
                        placeholder="Search stock item, SKU, barcode or type" />
             </div>
 
-            <select class="stock-filter" @bind="_statusFilter">
+            <select class="stock-filter" value="@_statusFilter" @onchange="StatusFilterChanged">
                 <option value="all">All stock</option>
                 <option value="healthy">Healthy stock</option>
                 <option value="low">Low stock</option>
@@ -175,13 +198,21 @@
                 <div class="stock-panel-header">
                     <div>
                         <h2>Current Stock</h2>
-                        <p>@_products.Count stock-tracked item@(_products.Count == 1 ? "" : "s") showing.</p>
+                        <p>Showing @StockPageStart - @StockPageEnd of @TotalStockProducts stock @StockItemWord.</p>
                     </div>
+
+                    <span class="stock-status-note">
+                        <i class="bi bi-shield-check"></i>
+                        Tenant scoped
+                    </span>
                 </div>
 
                 @if (_loadingStock)
                 {
                     <div class="stock-empty">
+                        <div class="stock-empty-icon">
+                            <i class="bi bi-hourglass-split"></i>
+                        </div>
                         <strong>Loading stock...</strong>
                         <span>Please wait while we fetch inventory records.</span>
                     </div>
@@ -189,6 +220,9 @@
                 else if (_products.Count == 0)
                 {
                     <div class="stock-empty">
+                        <div class="stock-empty-icon">
+                            <i class="bi bi-box"></i>
+                        </div>
                         <strong>No stock-tracked items found</strong>
                         <span>Only items with Track Stock enabled appear here.</span>
                     </div>
@@ -206,12 +240,12 @@
                                     <th>Reorder</th>
                                     <th>Value</th>
                                     <th>Status</th>
-                                    <th class="text-end">Action</th>
+                                    <th class="stock-actions-col">Action</th>
                                 </tr>
                             </thead>
 
                             <tbody>
-                                @foreach (var item in _products)
+                                @foreach (var item in PaginatedStockProducts)
                                 {
                                     <tr>
                                         <td>
@@ -235,10 +269,10 @@
                                             }
                                         </td>
 
-                                        <td>@item.CategoryName</td>
+                                        <td>@(string.IsNullOrWhiteSpace(item.CategoryName) ? "Uncategorised" : item.CategoryName)</td>
                                         <td>@item.QuantityInStock.ToString("0.##") @GetUnitLabel(item.UnitOfMeasure)</td>
                                         <td>@item.ReorderLevel.ToString("0.##") @GetUnitLabel(item.UnitOfMeasure)</td>
-                                        <td>@Money(item.StockValue)</td>
+                                        <td class="stock-money">@Money(item.StockValue)</td>
 
                                         <td>
                                             @if (item.IsOutOfStock)
@@ -255,8 +289,9 @@
                                             }
                                         </td>
 
-                                        <td class="text-end">
+                                        <td class="stock-actions-cell">
                                             <button type="button" class="stock-mini-btn" @onclick="() => OpenAdjustment(item.ProductId)">
+                                                <i class="bi bi-pencil-square"></i>
                                                 Adjust
                                             </button>
                                         </td>
@@ -265,14 +300,45 @@
                             </tbody>
                         </table>
                     </div>
+
+                    <div class="stock-pagination">
+                        <div class="stock-page-info">
+                            Showing
+                            <strong>@StockPageStart</strong>
+                            -
+                            <strong>@StockPageEnd</strong>
+                            of
+                            <strong>@TotalStockProducts</strong>
+                        </div>
+
+                        <div class="stock-page-controls">
+                            <button type="button"
+                                    class="@PreviousStockPageClass"
+                                    @onclick="PreviousStockPage">
+                                <i class="bi bi-chevron-left"></i>
+                                Previous
+                            </button>
+
+                            <span class="stock-page-count">
+                                Page @_stockPage of @StockTotalPages
+                            </span>
+
+                            <button type="button"
+                                    class="@NextStockPageClass"
+                                    @onclick="NextStockPage">
+                                Next
+                                <i class="bi bi-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
                 }
             </div>
 
-            <div class="stock-panel">
+            <div class="stock-panel stock-adjustment-panel">
                 <div class="stock-panel-header">
                     <div>
                         <h2>Manual Adjustment</h2>
-                        <p>Only stock-tracked items available to your branch can be adjusted here.</p>
+                        <p>Adjust stock quantities for the selected branch and item.</p>
                     </div>
                 </div>
 
@@ -326,7 +392,7 @@
 
                         <ValidationSummary class="stock-validation" />
 
-                        <button type="submit" class="stock-primary-btn" disabled="@_savingAdjustment">
+                        <button type="submit" class="stock-primary-btn">
                             <i class="bi bi-check2-circle"></i>
                             @(_savingAdjustment ? "Saving..." : "Save Adjustment")
                         </button>
@@ -340,7 +406,7 @@
         <div class="stock-panel-header stock-history-header">
             <div>
                 <h2>Stock Movement History</h2>
-                <p>Sales deductions, purchases and manual stock adjustments.</p>
+                <p>Showing @MovementPageStart - @MovementPageEnd of @TotalMovements movement@MovementPlural.</p>
             </div>
 
             <div class="stock-date-filters">
@@ -361,7 +427,8 @@
                     }
                 </select>
 
-                <button type="button" class="stock-secondary-btn" @onclick="LoadMovementsAsync">
+                <button type="button" class="stock-secondary-btn" @onclick="ApplyMovementFiltersAsync">
+                    <i class="bi bi-filter"></i>
                     Filter
                 </button>
             </div>
@@ -370,6 +437,9 @@
         @if (_loadingMovements)
         {
             <div class="stock-empty">
+                <div class="stock-empty-icon">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
                 <strong>Loading movements...</strong>
                 <span>Please wait.</span>
             </div>
@@ -377,6 +447,9 @@
         else if (_movements.Count == 0)
         {
             <div class="stock-empty">
+                <div class="stock-empty-icon">
+                    <i class="bi bi-clock-history"></i>
+                </div>
                 <strong>No movements found</strong>
                 <span>Stock changes will appear here after sales, purchases or manual adjustments.</span>
             </div>
@@ -384,7 +457,7 @@
         else
         {
             <div class="stock-table-wrap">
-                <table class="stock-table">
+                <table class="stock-table movement-table">
                     <thead>
                         <tr>
                             <th>Date</th>
@@ -400,7 +473,7 @@
                     </thead>
 
                     <tbody>
-                        @foreach (var movement in _movements)
+                        @foreach (var movement in PaginatedMovements)
                         {
                             <tr>
                                 <td>@movement.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
@@ -428,6 +501,37 @@
                     </tbody>
                 </table>
             </div>
+
+            <div class="stock-pagination">
+                <div class="stock-page-info">
+                    Showing
+                    <strong>@MovementPageStart</strong>
+                    -
+                    <strong>@MovementPageEnd</strong>
+                    of
+                    <strong>@TotalMovements</strong>
+                </div>
+
+                <div class="stock-page-controls">
+                    <button type="button"
+                            class="@PreviousMovementPageClass"
+                            @onclick="PreviousMovementPage">
+                        <i class="bi bi-chevron-left"></i>
+                        Previous
+                    </button>
+
+                    <span class="stock-page-count">
+                        Page @_movementPage of @MovementTotalPages
+                    </span>
+
+                    <button type="button"
+                            class="@NextMovementPageClass"
+                            @onclick="NextMovementPage">
+                        Next
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
         }
     </div>
 </section>
@@ -437,81 +541,99 @@
         animation: stockIn .22s ease both;
     }
 
-    .stock-header {
+    .stock-top {
         display: flex;
         justify-content: space-between;
         align-items: flex-end;
         gap: 18px;
-        margin-bottom: 18px;
+        margin-bottom: 16px;
     }
 
     .stock-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
 
-    .stock-header h1 {
+    .stock-top h1 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.45rem;
-        font-weight: 680;
-        letter-spacing: -.03em;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
-    .stock-header p {
+    .stock-top p {
         margin: 6px 0 0;
-        color: #64748b;
+        color: #667085;
         font-size: .88rem;
     }
 
     .stock-primary-btn,
     .stock-secondary-btn,
     .stock-ghost-btn,
-    .stock-mini-btn {
+    .stock-mini-btn,
+    .stock-page-btn {
         min-height: 38px;
-        border-radius: 11px;
+        border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
         padding: 0 14px;
         font-size: .8rem;
-        font-weight: 650;
+        font-weight: 680;
         border: 0;
-        transition: all .18s ease;
+        transition: transform .18s ease;
         white-space: nowrap;
     }
 
     .stock-primary-btn {
         color: #ffffff;
-        background: #111827;
-        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+        background: #252525;
+        box-shadow: 0 12px 24px rgba(17, 24, 39, .12);
     }
 
     .stock-secondary-btn {
-        color: #2563eb;
-        background: #eef5ff;
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
     }
 
-    .stock-ghost-btn {
+    .stock-ghost-btn,
+    .stock-page-btn {
         color: #475569;
         background: #ffffff;
         border: 1px solid #e5e7eb;
     }
 
     .stock-mini-btn {
-        min-height: 30px;
-        color: #2563eb;
-        background: #eff6ff;
-        border: 1px solid #bfdbfe;
+        min-height: 32px;
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
         padding: 0 10px;
+        font-size: .74rem;
+    }
+
+        .stock-primary-btn:hover,
+        .stock-secondary-btn:hover,
+        .stock-ghost-btn:hover,
+        .stock-mini-btn:hover,
+        .stock-page-btn:hover {
+            transform: translateY(-1px);
+        }
+
+    .stock-page-btn.is-disabled {
+        opacity: .45;
+        cursor: not-allowed;
+        transform: none;
     }
 
     .stock-alert {
@@ -559,8 +681,8 @@
             padding: 13px;
             border-radius: 16px;
             background: #ffffff;
-            border: 1px solid #e7edf5;
-            box-shadow: 0 12px 28px rgba(15,23,42,.04);
+            border: 1px solid #e8eaef;
+            box-shadow: 0 10px 24px rgba(17, 24, 39, .035);
         }
 
         .stock-settings-strip span,
@@ -569,14 +691,16 @@
         }
 
         .stock-settings-strip span {
-            color: #64748b;
-            font-size: .72rem;
-            font-weight: 650;
+            color: #98a2b3;
+            font-size: .7rem;
+            font-weight: 700;
+            letter-spacing: .03em;
+            text-transform: uppercase;
         }
 
         .stock-settings-strip strong {
             margin-top: 4px;
-            color: #0f172a;
+            color: #111827;
             font-size: .84rem;
             font-weight: 720;
         }
@@ -617,7 +741,7 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        background: #111827;
+        background: #252525;
         color: #ffffff;
         font-size: .78rem;
         font-weight: 700;
@@ -633,42 +757,116 @@
     }
 
     .stock-summary-card {
-        padding: 16px;
-        border-radius: 18px;
+        padding: 15px;
+        border-radius: 20px;
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
     }
 
-        .stock-summary-card span {
+        .stock-summary-card.hero {
+            background: #252525;
+            border-color: #252525;
+        }
+
+        .stock-summary-card span,
+        .stock-summary-card strong,
+        .stock-summary-card small {
             display: block;
-            color: #64748b;
-            font-size: .74rem;
-            font-weight: 650;
+        }
+
+        .stock-summary-card span {
+            margin-top: 11px;
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
         }
 
         .stock-summary-card strong {
-            display: block;
             margin-top: 6px;
-            color: #0f172a;
-            font-size: 1.1rem;
-            font-weight: 720;
+            color: #111827;
+            font-size: 1.05rem;
+            font-weight: 760;
+            letter-spacing: -.02em;
         }
 
-        .stock-summary-card.blue strong {
+        .stock-summary-card small {
+            margin-top: 4px;
+            color: #98a2b3;
+            font-size: .72rem;
+            line-height: 1.35;
+        }
+
+        .stock-summary-card.hero span,
+        .stock-summary-card.hero strong,
+        .stock-summary-card.hero small {
+            color: #ffffff;
+        }
+
+    .stock-summary-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #252525;
+        box-shadow: 0 10px 22px rgba(17, 24, 39, .08);
+    }
+
+        .stock-summary-icon.blue {
             color: #2563eb;
+            background: #eff6ff;
         }
 
-        .stock-summary-card.green strong {
-            color: #16a34a;
+        .stock-summary-icon.green {
+            color: #8FA6A1;
+            background: #f2f6f5;
         }
 
-        .stock-summary-card.amber strong {
-            color: #d97706;
+        .stock-summary-icon.amber {
+            color: #b7791f;
+            background: #fffbeb;
         }
 
-        .stock-summary-card.red strong {
-            color: #dc2626;
+        .stock-summary-icon.red {
+            color: #d92d20;
+            background: #fef3f2;
+        }
+
+    .stock-barcode-row {
+        display: grid;
+        grid-template-columns: minmax(240px, 1fr) auto;
+        gap: 10px;
+        padding: 14px;
+        margin-bottom: 16px;
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 10px 24px rgba(17, 24, 39, .035);
+    }
+
+    .stock-barcode-box {
+        min-height: 46px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 13px;
+        border-radius: 15px;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
+        color: #8FA6A1;
+    }
+
+        .stock-barcode-box input {
+            width: 100%;
+            border: 0;
+            outline: none;
+            background: transparent;
+            color: #111827;
+            font-size: 16px;
+            font-weight: 650;
         }
 
     .stock-control-panel {
@@ -679,20 +877,20 @@
         margin-bottom: 16px;
         border-radius: 18px;
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 10px 24px rgba(17, 24, 39, .035);
     }
 
     .stock-search {
-        min-height: 40px;
+        min-height: 42px;
         display: flex;
         align-items: center;
         gap: 10px;
         padding: 0 13px;
-        border-radius: 12px;
-        background: #f8fafc;
+        border-radius: 14px;
+        background: #fafafa;
         border: 1px solid #e5e7eb;
-        color: #94a3b8;
+        color: #98a2b3;
     }
 
         .stock-search input,
@@ -705,9 +903,9 @@
             border-radius: 12px;
             border: 1px solid #e5e7eb;
             background: #ffffff;
-            color: #0f172a;
+            color: #111827;
             padding: 0 12px;
-            font-size: .84rem;
+            font-size: 16px;
             outline: none;
         }
 
@@ -726,10 +924,15 @@
 
     .stock-panel {
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        border-radius: 20px;
-        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        border: 1px solid #e8eaef;
+        border-radius: 22px;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
         overflow: hidden;
+    }
+
+    .stock-adjustment-panel {
+        position: sticky;
+        top: 88px;
     }
 
     .stock-panel-header {
@@ -737,22 +940,35 @@
         justify-content: space-between;
         align-items: center;
         gap: 12px;
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
     }
 
         .stock-panel-header h2 {
             margin: 0;
-            color: #0f172a;
-            font-size: .92rem;
+            color: #111827;
+            font-size: .94rem;
             font-weight: 720;
         }
 
         .stock-panel-header p {
             margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .76rem;
+            color: #98a2b3;
+            font-size: .75rem;
         }
+
+    .stock-status-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        color: #8FA6A1;
+        background: #f2f6f5;
+        font-size: .74rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
 
     .stock-table-wrap {
         overflow-x: auto;
@@ -764,25 +980,29 @@
         border-collapse: collapse;
     }
 
-        .stock-table th {
-            padding: 12px 16px;
-            background: #f8fafc;
-            color: #64748b;
-            font-size: .7rem;
-            font-weight: 750;
-            text-transform: uppercase;
-            letter-spacing: .05em;
-            border-bottom: 1px solid #e7edf5;
-            white-space: nowrap;
-        }
+    .movement-table {
+        min-width: 1050px;
+    }
 
-        .stock-table td {
-            padding: 14px 16px;
-            color: #334155;
-            font-size: .82rem;
-            border-bottom: 1px solid #f1f5f9;
-            vertical-align: middle;
-        }
+    .stock-table th {
+        padding: 12px 16px;
+        background: #fafafa;
+        color: #667085;
+        font-size: .7rem;
+        font-weight: 750;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        border-bottom: 1px solid #e8eaef;
+        white-space: nowrap;
+    }
+
+    .stock-table td {
+        padding: 14px 16px;
+        color: #334155;
+        font-size: .82rem;
+        border-bottom: 1px solid #f1f2f5;
+        vertical-align: middle;
+    }
 
     .stock-product-cell {
         display: flex;
@@ -794,8 +1014,8 @@
         width: 38px;
         height: 38px;
         border-radius: 14px;
-        background: #eef5ff;
-        color: #2563eb;
+        background: #f2f6f5;
+        color: #8FA6A1;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -805,7 +1025,7 @@
 
     .stock-product-cell strong {
         display: block;
-        color: #0f172a;
+        color: #111827;
         font-size: .85rem;
         font-weight: 720;
     }
@@ -814,7 +1034,7 @@
     .stock-muted {
         display: block;
         margin-top: 2px;
-        color: #94a3b8;
+        color: #98a2b3;
         font-size: .72rem;
     }
 
@@ -828,6 +1048,7 @@
         border-radius: 999px;
         font-size: .72rem;
         font-weight: 750;
+        white-space: nowrap;
     }
 
         .stock-type-pill.physical {
@@ -841,7 +1062,7 @@
         }
 
         .stock-type-pill.voucher {
-            color: #d97706;
+            color: #b7791f;
             background: #fffbeb;
         }
 
@@ -872,8 +1093,8 @@
     }
 
     .stock-pill.danger {
-        color: #dc2626;
-        background: #fef2f2;
+        color: #d92d20;
+        background: #fef3f2;
     }
 
     .stock-pill.blue {
@@ -882,8 +1103,18 @@
     }
 
     .stock-pill.gray {
-        color: #64748b;
-        background: #f1f5f9;
+        color: #667085;
+        background: #f3f4f6;
+    }
+
+    .stock-money {
+        color: #111827 !important;
+        font-weight: 750;
+    }
+
+    .stock-actions-col,
+    .stock-actions-cell {
+        text-align: right;
     }
 
     .stock-adjustment-form {
@@ -927,32 +1158,86 @@
         gap: 8px;
         align-items: center;
         flex-wrap: wrap;
+        justify-content: flex-end;
     }
 
     .stock-empty {
         margin: 18px;
         padding: 34px 20px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px dashed #dbe3ef;
+        border-radius: 18px;
+        background: #fafafa;
+        border: 1px dashed #d0d5dd;
         text-align: center;
     }
 
-        .stock-empty strong,
-        .stock-empty span {
-            display: block;
+    .stock-empty-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 10px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .stock-empty strong,
+    .stock-empty span {
+        display: block;
+    }
+
+    .stock-empty strong {
+        color: #111827;
+        font-size: .9rem;
+        font-weight: 720;
+    }
+
+    .stock-empty span {
+        margin-top: 4px;
+        color: #667085;
+        font-size: .78rem;
+    }
+
+    .stock-pagination {
+        padding: 14px 18px;
+        border-top: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        background: #ffffff;
+    }
+
+    .stock-page-info {
+        color: #667085;
+        font-size: .78rem;
+        font-weight: 600;
+    }
+
+        .stock-page-info strong {
+            color: #111827;
         }
 
-        .stock-empty strong {
-            color: #0f172a;
-            font-size: .9rem;
-        }
+    .stock-page-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
 
-        .stock-empty span {
-            margin-top: 4px;
-            color: #64748b;
-            font-size: .78rem;
-        }
+    .stock-page-count {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 11px;
+        border-radius: 11px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+        color: #667085;
+        font-size: .76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
 
     @@keyframes stockIn {
         from {
@@ -976,16 +1261,20 @@
         .stock-settings-strip {
             grid-template-columns: 1fr;
         }
+
+        .stock-adjustment-panel {
+            position: static;
+        }
     }
 
     @@media (max-width: 768px) {
-        .stock-header,
+        .stock-top,
         .stock-history-header {
             flex-direction: column;
             align-items: flex-start;
         }
 
-            .stock-header .stock-primary-btn,
+            .stock-top .stock-primary-btn,
             .stock-settings-link {
                 width: 100%;
             }
@@ -1013,46 +1302,27 @@
             flex-direction: column;
             align-items: flex-start;
         }
-    }
 
-    .stock-barcode-row {
-        display: grid;
-        grid-template-columns: minmax(240px, 1fr) auto;
-        gap: 10px;
-        padding: 14px;
-        margin-bottom: 16px;
-        border-radius: 18px;
-        background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.045);
-    }
-
-    .stock-barcode-box {
-        min-height: 44px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 0 13px;
-        border-radius: 14px;
-        background: #ecfdf5;
-        border: 1px solid #bbf7d0;
-        color: #15803d;
-    }
-
-        .stock-barcode-box input {
-            width: 100%;
-            border: 0;
-            outline: none;
-            background: transparent;
-            color: #0f172a;
-            font-size: .9rem;
-            font-weight: 650;
+        .stock-pagination {
+            flex-direction: column;
+            align-items: flex-start;
         }
 
-            .stock-barcode-box input::placeholder {
-                color: #64748b;
-                font-weight: 500;
-            }
+        .stock-page-controls,
+        .stock-page-btn {
+            width: 100%;
+        }
+
+        .stock-page-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .stock-page-count {
+            justify-content: center;
+            width: 100%;
+        }
+    }
 </style>
 
 @code {
@@ -1085,7 +1355,86 @@
     private string? _message;
     private bool _isSuccess;
 
+    private int _stockPage = 1;
+    private int _stockPageSize = 10;
+
+    private int _movementPage = 1;
+    private int _movementPageSize = 10;
+
     private bool StockEnabled => _settings.StockTrackingEnabled;
+
+    private int TotalStockProducts => _products.Count;
+
+    private string StockItemWord => TotalStockProducts == 1 ? "item" : "items";
+
+    private int StockTotalPages =>
+        TotalStockProducts == 0
+            ? 1
+            : (int)Math.Ceiling(TotalStockProducts / (double)_stockPageSize);
+
+    private int SafeStockPage =>
+        Math.Min(Math.Max(_stockPage, 1), StockTotalPages);
+
+    private int StockPageStart =>
+        TotalStockProducts == 0
+            ? 0
+            : ((SafeStockPage - 1) * _stockPageSize) + 1;
+
+    private int StockPageEnd =>
+        TotalStockProducts == 0
+            ? 0
+            : Math.Min(SafeStockPage * _stockPageSize, TotalStockProducts);
+
+    private List<StockProductRowViewModel> PaginatedStockProducts =>
+        _products
+            .Skip((SafeStockPage - 1) * _stockPageSize)
+            .Take(_stockPageSize)
+            .ToList();
+
+    private string PreviousStockPageClass =>
+        _stockPage <= 1 ? "stock-page-btn is-disabled" : "stock-page-btn";
+
+    private string NextStockPageClass =>
+        _stockPage >= StockTotalPages ? "stock-page-btn is-disabled" : "stock-page-btn";
+
+    private List<StockMovementRowViewModel> OrderedMovements =>
+        _movements
+            .OrderByDescending(x => x.CreatedAt)
+            .ToList();
+
+    private int TotalMovements => OrderedMovements.Count;
+
+    private string MovementPlural => TotalMovements == 1 ? "" : "s";
+
+    private int MovementTotalPages =>
+        TotalMovements == 0
+            ? 1
+            : (int)Math.Ceiling(TotalMovements / (double)_movementPageSize);
+
+    private int SafeMovementPage =>
+        Math.Min(Math.Max(_movementPage, 1), MovementTotalPages);
+
+    private int MovementPageStart =>
+        TotalMovements == 0
+            ? 0
+            : ((SafeMovementPage - 1) * _movementPageSize) + 1;
+
+    private int MovementPageEnd =>
+        TotalMovements == 0
+            ? 0
+            : Math.Min(SafeMovementPage * _movementPageSize, TotalMovements);
+
+    private List<StockMovementRowViewModel> PaginatedMovements =>
+        OrderedMovements
+            .Skip((SafeMovementPage - 1) * _movementPageSize)
+            .Take(_movementPageSize)
+            .ToList();
+
+    private string PreviousMovementPageClass =>
+        _movementPage <= 1 ? "stock-page-btn is-disabled" : "stock-page-btn";
+
+    private string NextMovementPageClass =>
+        _movementPage >= MovementTotalPages ? "stock-page-btn is-disabled" : "stock-page-btn";
 
     protected override async Task OnInitializedAsync()
     {
@@ -1124,6 +1473,11 @@
         _products = await StockService.GetStockProductsAsync(_searchTerm, _statusFilter, _branchFilter);
         _summary = await StockService.GetStockSummaryAsync(_branchFilter);
 
+        if (_stockPage > StockTotalPages)
+        {
+            _stockPage = StockTotalPages;
+        }
+
         _loadingStock = false;
     }
 
@@ -1133,13 +1487,73 @@
 
         _movements = await StockService.GetMovementsAsync(_fromDate, _toDate, _searchTerm, _branchFilter);
 
+        if (_movementPage > MovementTotalPages)
+        {
+            _movementPage = MovementTotalPages;
+        }
+
         _loadingMovements = false;
     }
 
     private async Task ApplyStockFiltersAsync()
     {
+        _stockPage = 1;
+        _movementPage = 1;
+
         await LoadStockAsync();
         await LoadMovementsAsync();
+    }
+
+    private async Task ApplyMovementFiltersAsync()
+    {
+        _movementPage = 1;
+        await LoadMovementsAsync();
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyStockFiltersAsync();
+        }
+    }
+
+    private void StatusFilterChanged(ChangeEventArgs e)
+    {
+        _statusFilter = e.Value?.ToString() ?? "all";
+        _stockPage = 1;
+    }
+
+    private void NextStockPage()
+    {
+        if (_stockPage < StockTotalPages)
+        {
+            _stockPage++;
+        }
+    }
+
+    private void PreviousStockPage()
+    {
+        if (_stockPage > 1)
+        {
+            _stockPage--;
+        }
+    }
+
+    private void NextMovementPage()
+    {
+        if (_movementPage < MovementTotalPages)
+        {
+            _movementPage++;
+        }
+    }
+
+    private void PreviousMovementPage()
+    {
+        if (_movementPage > 1)
+        {
+            _movementPage--;
+        }
     }
 
     private async Task HandleBarcodeKeyDown(KeyboardEventArgs e)
@@ -1152,6 +1566,11 @@
 
     private async Task ScanBarcodeAsync()
     {
+        if (_barcodeScanning)
+        {
+            return;
+        }
+
         var code = _barcodeValue?.Trim();
 
         if (string.IsNullOrWhiteSpace(code))
@@ -1164,6 +1583,8 @@
 
         _searchTerm = code;
         _statusFilter = "all";
+        _stockPage = 1;
+        _movementPage = 1;
 
         await LoadStockAsync();
         await LoadMovementsAsync();
@@ -1201,6 +1622,11 @@
 
     private async Task SaveAdjustmentAsync()
     {
+        if (_savingAdjustment)
+        {
+            return;
+        }
+
         _savingAdjustment = true;
 
         var result = await StockService.AdjustStockAsync(_adjustment);
@@ -1216,6 +1642,9 @@
                 Quantity = 1
             };
 
+            _stockPage = 1;
+            _movementPage = 1;
+
             await LoadAllAsync();
         }
     }
@@ -1226,6 +1655,8 @@
         _barcodeValue = null;
         _statusFilter = "all";
         _branchFilter = null;
+        _stockPage = 1;
+        _movementPage = 1;
 
         await LoadAllAsync();
     }

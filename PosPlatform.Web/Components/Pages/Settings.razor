@@ -13,17 +13,18 @@
 <PageTitle>Settings</PageTitle>
 
 <section class="settings-page">
-    <div class="settings-header">
+    <div class="settings-top">
         <div>
             <div class="settings-kicker">
                 <i class="bi bi-gear"></i>
                 Business setup
             </div>
+
             <h1>Settings</h1>
             <p>Review the setup captured at registration and update your business configuration.</p>
         </div>
 
-        <button type="button" class="settings-primary-btn" @onclick="SaveSettingsAsync" disabled="@_saving">
+        <button type="button" class="@SaveButtonClass" @onclick="SaveSettingsAsync">
             <i class="bi bi-check2-circle"></i>
             @(_saving ? "Saving..." : "Save Settings")
         </button>
@@ -43,93 +44,109 @@
     @if (_loading)
     {
         <div class="settings-empty">
+            <div class="settings-empty-icon">
+                <i class="bi bi-hourglass-split"></i>
+            </div>
             <strong>Loading settings...</strong>
             <span>Please wait while we prepare your business configuration.</span>
         </div>
     }
     else
     {
-        <div class="settings-snapshot">
-            <div class="settings-snapshot-main">
+        <div class="settings-hero">
+            <div class="settings-hero-main">
                 <div>
-                    <span class="settings-snapshot-kicker">Registered setup</span>
+                    <span>Registered setup</span>
                     <h2>@_form.BusinessName</h2>
-                    <p>@_form.BusinessType</p>
+                    <p>@_form.BusinessType · @_form.CurrencyCode · @_form.CurrencySymbol</p>
                 </div>
 
-                <div class="settings-snapshot-badge">
-                    @_form.CurrencyCode · @_form.CurrencySymbol
+                <div class="settings-score-card">
+                    <span>Setup Score</span>
+                    <strong>@SetupScore%</strong>
+                    <small>@SetupStatus</small>
                 </div>
             </div>
 
-            <div class="settings-snapshot-grid">
-                <div class="settings-snapshot-card">
+            <div class="settings-progress">
+                <div style="@GetProgressStyle(SetupScore)"></div>
+            </div>
+
+            <div class="settings-status-grid">
+                <div>
                     <span>Tax / VAT</span>
                     <strong>@GetTaxLabel()</strong>
                 </div>
 
-                <div class="settings-snapshot-card">
+                <div>
+                    <span>Products</span>
+                    <strong>@YesNo(_form.ProductsEnabled)</strong>
+                </div>
+
+                <div>
                     <span>Stock Tracking</span>
                     <strong>@YesNo(_form.StockTrackingEnabled)</strong>
                 </div>
 
-                <div class="settings-snapshot-card">
+                <div>
                     <span>Services</span>
                     <strong>@YesNo(_form.ServicesEnabled)</strong>
                 </div>
 
-                <div class="settings-snapshot-card">
-                    <span>Appointments</span>
-                    <strong>@YesNo(_form.AppointmentsEnabled)</strong>
-                </div>
-
-                <div class="settings-snapshot-card">
+                <div>
                     <span>Customers</span>
                     <strong>@YesNo(_form.CustomersEnabled)</strong>
                 </div>
 
-                <div class="settings-snapshot-card">
-                    <span>Age Restricted</span>
-                    <strong>@YesNo(_form.AgeRestrictedProductsEnabled)</strong>
+                <div>
+                    <span>Appointments</span>
+                    <strong>@YesNo(_form.AppointmentsEnabled)</strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-rule-grid">
+            <div class="settings-rule-card">
+                <div class="settings-rule-icon">
+                    <i class="bi bi-receipt"></i>
+                </div>
+
+                <div>
+                    <span>Receipt title</span>
+                    <strong>@DisplayValue(_form.ReceiptTitle, "Sales Receipt")</strong>
                 </div>
             </div>
 
-            <div class="settings-preview-row">
-                <div class="settings-preview-card">
-                    <h3>POS Rules</h3>
-
-                    <div class="settings-preview-tags">
-                        <span class="@GetTagClass(_form.AllowDiscounts)">
-                            Discounts: @YesNo(_form.AllowDiscounts)
-                        </span>
-
-                        <span class="@GetTagClass(_form.AllowNegativeStock)">
-                            Negative Stock: @YesNo(_form.AllowNegativeStock)
-                        </span>
-
-                        <span class="@GetTagClass(_form.RequireCustomerForSale)">
-                            Customer Required: @YesNo(_form.RequireCustomerForSale)
-                        </span>
-                    </div>
+            <div class="settings-rule-card">
+                <div class="settings-rule-icon green">
+                    <i class="bi bi-percent"></i>
                 </div>
 
-                <div class="settings-preview-card">
-                    <h3>Receipt Preview</h3>
+                <div>
+                    <span>Discounts</span>
+                    <strong>@YesNo(_form.AllowDiscounts)</strong>
+                </div>
+            </div>
 
-                    <div class="settings-receipt-mini">
-                        <strong>@_form.BusinessName</strong>
-                        <span>@_form.ReceiptTitle</span>
+            <div class="settings-rule-card">
+                <div class="settings-rule-icon amber">
+                    <i class="bi bi-box-seam"></i>
+                </div>
 
-                        @if (!string.IsNullOrWhiteSpace(_form.ReceiptFooterMessage))
-                        {
-                            <small>@_form.ReceiptFooterMessage</small>
-                        }
+                <div>
+                    <span>Negative Stock</span>
+                    <strong>@YesNo(_form.AllowNegativeStock)</strong>
+                </div>
+            </div>
 
-                        @if (!string.IsNullOrWhiteSpace(_form.ReturnPolicyText))
-                        {
-                            <em>@_form.ReturnPolicyText</em>
-                        }
-                    </div>
+            <div class="settings-rule-card">
+                <div class="settings-rule-icon blue">
+                    <i class="bi bi-person-check"></i>
+                </div>
+
+                <div>
+                    <span>Customer Required</span>
+                    <strong>@YesNo(_form.RequireCustomerForSale)</strong>
                 </div>
             </div>
         </div>
@@ -137,11 +154,15 @@
         <EditForm Model="_form" OnValidSubmit="SaveSettingsAsync">
             <DataAnnotationsValidator />
 
-            <div class="settings-grid">
+            <div class="settings-layout">
                 <div class="settings-panel">
                     <div class="settings-panel-header">
-                        <h2>Business Profile</h2>
-                        <p>This information appears across the system and on receipts.</p>
+                        <div>
+                            <h2>Business Profile</h2>
+                            <p>This information appears across the system and on receipts.</p>
+                        </div>
+
+                        <i class="bi bi-building"></i>
                     </div>
 
                     <div class="settings-form">
@@ -186,8 +207,12 @@
 
                 <div class="settings-panel">
                     <div class="settings-panel-header">
-                        <h2>Currency & Tax</h2>
-                        <p>Control how prices, tax and receipts display.</p>
+                        <div>
+                            <h2>Currency & Tax</h2>
+                            <p>Control how prices, tax and receipts display.</p>
+                        </div>
+
+                        <i class="bi bi-cash-coin"></i>
                     </div>
 
                     <div class="settings-form">
@@ -207,7 +232,7 @@
                             <InputCheckbox @bind-Value="_form.TaxEnabled" />
                             <span>
                                 <strong>Enable Tax / VAT</strong>
-                                <small>Apply tax calculation rules to sales later.</small>
+                                <small>Apply tax calculation rules to sales and receipts.</small>
                             </span>
                         </label>
 
@@ -222,13 +247,22 @@
                                 <InputNumber class="settings-input" @bind-Value="_form.TaxRate" />
                             </div>
                         </div>
+
+                        <div class="settings-tax-preview">
+                            <span>Current tax display</span>
+                            <strong>@GetTaxLabel()</strong>
+                        </div>
                     </div>
                 </div>
 
                 <div class="settings-panel">
                     <div class="settings-panel-header">
-                        <h2>Modules</h2>
-                        <p>Choose which parts of the platform this business uses.</p>
+                        <div>
+                            <h2>Modules</h2>
+                            <p>Choose which parts of the platform this business uses.</p>
+                        </div>
+
+                        <i class="bi bi-grid"></i>
                     </div>
 
                     <div class="settings-switch-list">
@@ -268,7 +302,7 @@
                             <InputCheckbox @bind-Value="_form.CustomersEnabled" />
                             <span>
                                 <strong>Customers</strong>
-                                <small>Enable customer profiles and purchase history later.</small>
+                                <small>Enable customer profiles and purchase history.</small>
                             </span>
                         </label>
 
@@ -276,7 +310,7 @@
                             <InputCheckbox @bind-Value="_form.AgeRestrictedProductsEnabled" />
                             <span>
                                 <strong>Age-Restricted Products</strong>
-                                <small>Useful for liquor stores and regulated products.</small>
+                                <small>Useful for regulated products that need extra control.</small>
                             </span>
                         </label>
                     </div>
@@ -284,8 +318,12 @@
 
                 <div class="settings-panel">
                     <div class="settings-panel-header">
-                        <h2>POS Rules</h2>
-                        <p>Set controls for checkout and stock handling.</p>
+                        <div>
+                            <h2>POS Rules</h2>
+                            <p>Set controls for checkout and stock handling.</p>
+                        </div>
+
+                        <i class="bi bi-sliders"></i>
                     </div>
 
                     <div class="settings-switch-list">
@@ -313,28 +351,76 @@
                             </span>
                         </label>
                     </div>
+
+                    <div class="settings-rule-preview">
+                        <h3>Current checkout behavior</h3>
+
+                        <div>
+                            <span class="@GetTagClass(_form.AllowDiscounts)">Discounts: @YesNo(_form.AllowDiscounts)</span>
+                            <span class="@GetTagClass(_form.AllowNegativeStock)">Negative Stock: @YesNo(_form.AllowNegativeStock)</span>
+                            <span class="@GetTagClass(_form.RequireCustomerForSale)">Customer Required: @YesNo(_form.RequireCustomerForSale)</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="settings-panel settings-panel-wide">
                     <div class="settings-panel-header">
-                        <h2>Receipt Settings</h2>
-                        <p>Control the wording shown on printed sales slips.</p>
+                        <div>
+                            <h2>Receipt Settings</h2>
+                            <p>Control the wording shown on printed sales slips.</p>
+                        </div>
+
+                        <i class="bi bi-printer"></i>
                     </div>
 
-                    <div class="settings-form">
-                        <div>
-                            <label>Receipt Title</label>
-                            <InputText class="settings-input" @bind-Value="_form.ReceiptTitle" />
+                    <div class="settings-receipt-layout">
+                        <div class="settings-form">
+                            <div>
+                                <label>Receipt Title</label>
+                                <InputText class="settings-input" @bind-Value="_form.ReceiptTitle" />
+                            </div>
+
+                            <div>
+                                <label>Footer Message</label>
+                                <InputTextArea class="settings-input settings-textarea" @bind-Value="_form.ReceiptFooterMessage" />
+                            </div>
+
+                            <div>
+                                <label>Return Policy Text</label>
+                                <InputTextArea class="settings-input settings-textarea" @bind-Value="_form.ReturnPolicyText" />
+                            </div>
                         </div>
 
-                        <div>
-                            <label>Footer Message</label>
-                            <InputTextArea class="settings-input settings-textarea" @bind-Value="_form.ReceiptFooterMessage" />
-                        </div>
+                        <div class="settings-receipt-preview">
+                            <div class="settings-receipt-paper">
+                                <strong>@DisplayValue(_form.BusinessName, "Business Name")</strong>
+                                <span>@DisplayValue(_form.ReceiptTitle, "Sales Receipt")</span>
 
-                        <div>
-                            <label>Return Policy Text</label>
-                            <InputTextArea class="settings-input settings-textarea" @bind-Value="_form.ReturnPolicyText" />
+                                <hr />
+
+                                <div class="receipt-line">
+                                    <span>Item total</span>
+                                    <strong>@_form.CurrencySymbol 100.00</strong>
+                                </div>
+
+                                @if (_form.TaxEnabled)
+                                {
+                                    <div class="receipt-line">
+                                        <span>@DisplayValue(_form.TaxName, "Tax")</span>
+                                        <strong>@_form.TaxRate.ToString("0.##")%</strong>
+                                    </div>
+                                }
+
+                                <div class="receipt-line total">
+                                    <span>Total</span>
+                                    <strong>@_form.CurrencySymbol 100.00</strong>
+                                </div>
+
+                                <hr />
+
+                                <small>@DisplayValue(_form.ReceiptFooterMessage, "Thank you for your support.")</small>
+                                <em>@DisplayValue(_form.ReturnPolicyText, "Return policy will show here.")</em>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -348,7 +434,7 @@
                     Reset Changes
                 </button>
 
-                <button type="submit" class="settings-primary-btn" disabled="@_saving">
+                <button type="submit" class="@SaveButtonClass">
                     <i class="bi bi-check2-circle"></i>
                     @(_saving ? "Saving..." : "Save Settings")
                 </button>
@@ -362,66 +448,77 @@
         animation: settingsIn .22s ease both;
     }
 
-    .settings-header {
+    .settings-top {
         display: flex;
         justify-content: space-between;
         align-items: flex-end;
         gap: 18px;
-        margin-bottom: 18px;
+        margin-bottom: 16px;
     }
 
     .settings-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
 
-    .settings-header h1 {
+    .settings-top h1 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.45rem;
-        font-weight: 680;
-        letter-spacing: -.03em;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
-    .settings-header p {
+    .settings-top p {
         margin: 6px 0 0;
-        color: #64748b;
+        color: #667085;
         font-size: .88rem;
     }
 
     .settings-primary-btn,
     .settings-ghost-btn {
         min-height: 38px;
-        border-radius: 11px;
+        border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
         padding: 0 14px;
         font-size: .8rem;
-        font-weight: 650;
+        font-weight: 680;
         border: 0;
-        transition: all .18s ease;
+        transition: transform .18s ease;
         white-space: nowrap;
     }
 
     .settings-primary-btn {
         color: #ffffff;
-        background: #111827;
-        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+        background: #252525;
+        box-shadow: 0 12px 24px rgba(17,24,39,.12);
     }
 
     .settings-ghost-btn {
         color: #475569;
         background: #ffffff;
         border: 1px solid #e5e7eb;
+    }
+
+        .settings-primary-btn:hover,
+        .settings-ghost-btn:hover {
+            transform: translateY(-1px);
+        }
+
+    .settings-primary-btn.is-disabled {
+        opacity: .45;
+        cursor: not-allowed;
+        transform: none;
     }
 
     .settings-alert {
@@ -458,173 +555,191 @@
             color: inherit;
         }
 
-    .settings-snapshot {
+    .settings-hero,
+    .settings-panel,
+    .settings-rule-card {
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17,24,39,.045);
+    }
+
+    .settings-hero {
+        border-radius: 24px;
+        overflow: hidden;
         margin-bottom: 16px;
-        border-radius: 22px;
-        background: radial-gradient(circle at top right, rgba(37, 99, 235, .12), transparent 34%), linear-gradient(135deg, #ffffff, #f8fbff);
-        border: 1px solid #e7edf5;
-        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+    }
+
+    .settings-hero-main {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 18px;
+        padding: 20px;
+        background: radial-gradient(circle at top right, rgba(143, 166, 161, .22), transparent 34%), linear-gradient(135deg, #ffffff, #f8fafc);
+    }
+
+        .settings-hero-main span {
+            display: block;
+            color: #8FA6A1;
+            font-size: .72rem;
+            font-weight: 760;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+
+        .settings-hero-main h2 {
+            margin: 6px 0 0;
+            color: #111827;
+            font-size: 1.22rem;
+            font-weight: 780;
+            letter-spacing: -.03em;
+        }
+
+        .settings-hero-main p {
+            margin: 5px 0 0;
+            color: #667085;
+            font-size: .84rem;
+        }
+
+    .settings-score-card {
+        min-width: 140px;
+        padding: 13px;
+        border-radius: 18px;
+        background: #252525;
+        color: #ffffff;
+    }
+
+        .settings-score-card span,
+        .settings-score-card strong,
+        .settings-score-card small {
+            display: block;
+            color: #ffffff;
+        }
+
+        .settings-score-card strong {
+            margin-top: 5px;
+            font-size: 1.2rem;
+            font-weight: 800;
+        }
+
+        .settings-score-card small {
+            margin-top: 3px;
+            opacity: .75;
+            font-size: .72rem;
+        }
+
+    .settings-progress {
+        height: 8px;
+        background: #f3f4f6;
         overflow: hidden;
     }
 
-    .settings-snapshot-main {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 18px;
-        padding: 20px;
-        border-bottom: 1px solid #edf2f7;
-    }
+        .settings-progress div {
+            height: 100%;
+            background: #8FA6A1;
+            border-radius: 999px;
+        }
 
-    .settings-snapshot-kicker {
-        display: inline-flex;
-        margin-bottom: 7px;
-        color: #2563eb;
-        font-size: .7rem;
-        font-weight: 750;
-        letter-spacing: .06em;
-        text-transform: uppercase;
-    }
-
-    .settings-snapshot-main h2 {
-        margin: 0;
-        color: #0f172a;
-        font-size: 1.18rem;
-        font-weight: 720;
-        letter-spacing: -.02em;
-    }
-
-    .settings-snapshot-main p {
-        margin: 5px 0 0;
-        color: #64748b;
-        font-size: .84rem;
-    }
-
-    .settings-snapshot-badge {
-        padding: 8px 11px;
-        border-radius: 999px;
-        background: #eef5ff;
-        color: #2563eb;
-        font-size: .76rem;
-        font-weight: 750;
-        white-space: nowrap;
-    }
-
-    .settings-snapshot-grid {
+    .settings-status-grid {
         display: grid;
         grid-template-columns: repeat(6, minmax(0, 1fr));
         gap: 10px;
-        padding: 14px 18px;
-        border-bottom: 1px solid #edf2f7;
+        padding: 14px 18px 18px;
     }
 
-    .settings-snapshot-card {
-        padding: 13px;
-        border-radius: 16px;
-        background: #ffffff;
-        border: 1px solid #e7edf5;
-    }
+        .settings-status-grid div {
+            padding: 13px;
+            border-radius: 16px;
+            background: #fafafa;
+            border: 1px solid #e8eaef;
+        }
 
-        .settings-snapshot-card span {
+        .settings-status-grid span,
+        .settings-status-grid strong {
             display: block;
-            color: #64748b;
+        }
+
+        .settings-status-grid span {
+            color: #667085;
             font-size: .72rem;
-            font-weight: 650;
+            font-weight: 700;
         }
 
-        .settings-snapshot-card strong {
-            display: block;
+        .settings-status-grid strong {
             margin-top: 4px;
-            color: #0f172a;
-            font-size: .86rem;
-            font-weight: 720;
+            color: #111827;
+            font-size: .84rem;
+            font-weight: 740;
         }
 
-    .settings-preview-row {
+    .settings-rule-grid {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 12px;
-        padding: 18px;
+        margin-bottom: 16px;
     }
 
-    .settings-preview-card {
-        padding: 15px;
-        border-radius: 18px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
-    }
-
-        .settings-preview-card h3 {
-            margin: 0 0 10px;
-            color: #0f172a;
-            font-size: .9rem;
-            font-weight: 720;
-        }
-
-    .settings-preview-tags {
+    .settings-rule-card {
         display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
+        align-items: center;
+        gap: 12px;
+        padding: 15px;
+        border-radius: 20px;
     }
 
-        .settings-preview-tags span {
-            display: inline-flex;
-            min-height: 28px;
-            align-items: center;
-            padding: 0 10px;
-            border-radius: 999px;
-            font-size: .74rem;
-            font-weight: 700;
-        }
-
-    .settings-tag-on {
-        color: #15803d;
-        background: #ecfdf5;
-    }
-
-    .settings-tag-off {
-        color: #64748b;
-        background: #f1f5f9;
-    }
-
-    .settings-receipt-mini {
-        display: grid;
-        gap: 5px;
-        padding: 13px;
+    .settings-rule-icon {
+        width: 38px;
+        height: 38px;
+        min-width: 38px;
         border-radius: 14px;
-        background: #ffffff;
-        border: 1px dashed #cbd5e1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #252525;
+        background: #f3f4f6;
     }
 
-        .settings-receipt-mini strong {
-            color: #0f172a;
-            font-size: .9rem;
+        .settings-rule-icon.green {
+            color: #8FA6A1;
+            background: #f2f6f5;
         }
 
-        .settings-receipt-mini span {
-            color: #334155;
-            font-size: .78rem;
-            font-weight: 700;
+        .settings-rule-icon.amber {
+            color: #b7791f;
+            background: #fffbeb;
         }
 
-        .settings-receipt-mini small,
-        .settings-receipt-mini em {
-            color: #64748b;
-            font-size: .73rem;
-            line-height: 1.4;
+        .settings-rule-icon.blue {
+            color: #2563eb;
+            background: #eff6ff;
         }
 
-    .settings-grid {
+    .settings-rule-card span,
+    .settings-rule-card strong {
+        display: block;
+    }
+
+    .settings-rule-card span {
+        color: #667085;
+        font-size: .72rem;
+        font-weight: 700;
+    }
+
+    .settings-rule-card strong {
+        margin-top: 4px;
+        color: #111827;
+        font-size: .88rem;
+        font-weight: 750;
+    }
+
+    .settings-layout {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 16px;
     }
 
     .settings-panel {
-        background: #ffffff;
-        border: 1px solid #e7edf5;
-        border-radius: 20px;
-        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        border-radius: 22px;
         overflow: hidden;
     }
 
@@ -633,21 +748,30 @@
     }
 
     .settings-panel-header {
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
     }
 
         .settings-panel-header h2 {
             margin: 0;
-            color: #0f172a;
-            font-size: .92rem;
+            color: #111827;
+            font-size: .94rem;
             font-weight: 720;
         }
 
         .settings-panel-header p {
             margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .76rem;
+            color: #98a2b3;
+            font-size: .75rem;
+        }
+
+        .settings-panel-header i {
+            color: #8FA6A1;
+            font-size: 1.05rem;
         }
 
     .settings-form,
@@ -677,9 +801,9 @@
         border-radius: 12px;
         border: 1px solid #e5e7eb;
         background: #ffffff;
-        color: #0f172a;
+        color: #111827;
         padding: 0 12px;
-        font-size: .84rem;
+        font-size: 16px;
         outline: none;
     }
 
@@ -690,26 +814,33 @@
     }
 
     .settings-business-hint,
-    .settings-switch-row {
+    .settings-switch-row,
+    .settings-tax-preview,
+    .settings-rule-preview {
         padding: 13px;
         border-radius: 16px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
     }
 
         .settings-business-hint strong,
-        .settings-business-hint span {
+        .settings-business-hint span,
+        .settings-tax-preview span,
+        .settings-tax-preview strong {
             display: block;
         }
 
-        .settings-business-hint strong {
-            color: #0f172a;
+        .settings-business-hint strong,
+        .settings-tax-preview strong {
+            color: #111827;
             font-size: .86rem;
+            font-weight: 740;
         }
 
-        .settings-business-hint span {
+        .settings-business-hint span,
+        .settings-tax-preview span {
             margin-top: 3px;
-            color: #64748b;
+            color: #667085;
             font-size: .76rem;
         }
 
@@ -730,17 +861,133 @@
         }
 
         .settings-switch-row strong {
-            color: #0f172a;
+            color: #111827;
             font-size: .84rem;
             font-weight: 720;
         }
 
         .settings-switch-row small {
             margin-top: 2px;
-            color: #64748b;
+            color: #667085;
             font-size: .74rem;
             line-height: 1.35;
         }
+
+    .settings-rule-preview {
+        margin: 0 18px 18px;
+    }
+
+        .settings-rule-preview h3 {
+            margin: 0 0 10px;
+            color: #111827;
+            font-size: .86rem;
+            font-weight: 720;
+        }
+
+        .settings-rule-preview div {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .settings-rule-preview span {
+            display: inline-flex;
+            min-height: 28px;
+            align-items: center;
+            padding: 0 10px;
+            border-radius: 999px;
+            font-size: .74rem;
+            font-weight: 740;
+        }
+
+    .settings-tag-on {
+        color: #15803d;
+        background: #ecfdf5;
+    }
+
+    .settings-tag-off {
+        color: #667085;
+        background: #f3f4f6;
+    }
+
+    .settings-receipt-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 16px;
+        padding: 0;
+    }
+
+    .settings-receipt-preview {
+        padding: 18px 18px 18px 0;
+    }
+
+    .settings-receipt-paper {
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px dashed #cbd5e1;
+        box-shadow: 0 12px 26px rgba(17,24,39,.06);
+        padding: 18px;
+        text-align: center;
+    }
+
+        .settings-receipt-paper strong,
+        .settings-receipt-paper span,
+        .settings-receipt-paper small,
+        .settings-receipt-paper em {
+            display: block;
+        }
+
+        .settings-receipt-paper > strong {
+            color: #111827;
+            font-size: 1rem;
+            font-weight: 800;
+        }
+
+        .settings-receipt-paper > span {
+            margin-top: 4px;
+            color: #667085;
+            font-size: .8rem;
+            font-weight: 740;
+        }
+
+        .settings-receipt-paper hr {
+            border: 0;
+            border-top: 1px dashed #d0d5dd;
+            margin: 13px 0;
+        }
+
+    .receipt-line {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        color: #475569;
+        font-size: .8rem;
+        margin-bottom: 7px;
+    }
+
+        .receipt-line strong {
+            color: #111827;
+        }
+
+        .receipt-line.total {
+            padding-top: 8px;
+            border-top: 1px solid #f1f2f5;
+            font-weight: 800;
+        }
+
+    .settings-receipt-paper small {
+        color: #667085;
+        font-size: .74rem;
+        line-height: 1.4;
+    }
+
+    .settings-receipt-paper em {
+        margin-top: 6px;
+        color: #98a2b3;
+        font-size: .72rem;
+        line-height: 1.4;
+        font-style: normal;
+    }
 
     .settings-validation {
         margin-top: 16px;
@@ -760,27 +1007,40 @@
 
     .settings-empty {
         padding: 34px 20px;
-        border-radius: 16px;
+        border-radius: 18px;
         background: #ffffff;
-        border: 1px dashed #dbe3ef;
+        border: 1px dashed #d0d5dd;
         text-align: center;
     }
 
-        .settings-empty strong,
-        .settings-empty span {
-            display: block;
-        }
+    .settings-empty-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 10px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
 
-        .settings-empty strong {
-            color: #0f172a;
-            font-size: .9rem;
-        }
+    .settings-empty strong,
+    .settings-empty span {
+        display: block;
+    }
 
-        .settings-empty span {
-            margin-top: 4px;
-            color: #64748b;
-            font-size: .78rem;
-        }
+    .settings-empty strong {
+        color: #111827;
+        font-size: .9rem;
+        font-weight: 720;
+    }
+
+    .settings-empty span {
+        margin-top: 4px;
+        color: #667085;
+        font-size: .78rem;
+    }
 
     @@keyframes settingsIn {
         from {
@@ -795,35 +1055,47 @@
     }
 
     @@media (max-width: 1199px) {
-        .settings-snapshot-grid {
+        .settings-status-grid {
             grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .settings-rule-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .settings-receipt-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .settings-receipt-preview {
+            padding: 0 18px 18px;
         }
     }
 
     @@media (max-width: 991px) {
-        .settings-grid,
-        .settings-two-col,
-        .settings-preview-row {
+        .settings-layout,
+        .settings-two-col {
             grid-template-columns: 1fr;
         }
 
-        .settings-header,
-        .settings-snapshot-main {
+        .settings-top,
+        .settings-hero-main {
             flex-direction: column;
             align-items: flex-start;
         }
 
-            .settings-header .settings-primary-btn {
+            .settings-top .settings-primary-btn {
                 width: 100%;
             }
 
-        .settings-snapshot-badge {
-            width: fit-content;
+        .settings-score-card {
+            width: 100%;
         }
     }
 
     @@media (max-width: 640px) {
-        .settings-snapshot-grid {
+        .settings-status-grid,
+        .settings-rule-grid {
             grid-template-columns: 1fr;
         }
 
@@ -847,6 +1119,40 @@
     private string? _message;
     private bool _isSuccess;
 
+    private string SaveButtonClass =>
+        _saving || _loading
+            ? "settings-primary-btn is-disabled"
+            : "settings-primary-btn";
+
+    private int SetupScore
+    {
+        get
+        {
+            var completed = 0;
+            var total = 10;
+
+            if (!string.IsNullOrWhiteSpace(_form.BusinessName)) completed++;
+            if (!string.IsNullOrWhiteSpace(_form.BusinessType)) completed++;
+            if (!string.IsNullOrWhiteSpace(_form.CurrencyCode)) completed++;
+            if (!string.IsNullOrWhiteSpace(_form.CurrencySymbol)) completed++;
+            if (!string.IsNullOrWhiteSpace(_form.Phone)) completed++;
+            if (!string.IsNullOrWhiteSpace(_form.Email)) completed++;
+            if (!string.IsNullOrWhiteSpace(_form.Address)) completed++;
+            if (!string.IsNullOrWhiteSpace(_form.ReceiptTitle)) completed++;
+            if (!string.IsNullOrWhiteSpace(_form.ReceiptFooterMessage)) completed++;
+            if (!string.IsNullOrWhiteSpace(_form.ReturnPolicyText)) completed++;
+
+            return (int)Math.Round(completed / (double)total * 100);
+        }
+    }
+
+    private string SetupStatus =>
+        SetupScore >= 90
+            ? "Excellent"
+            : SetupScore >= 70
+                ? "Good"
+                : "Needs attention";
+
     protected override async Task OnInitializedAsync()
     {
         if (!await UserAccessService.CanAccessAsync("settings"))
@@ -862,12 +1168,18 @@
     private async Task ReloadSettingsAsync()
     {
         _loading = true;
+        _message = null;
         _form = await BusinessSettingsService.GetSettingsAsync();
         _loading = false;
     }
 
     private async Task SaveSettingsAsync()
     {
+        if (_saving || _loading)
+        {
+            return;
+        }
+
         _saving = true;
 
         var result = await BusinessSettingsService.SaveSettingsAsync(_form);
@@ -907,5 +1219,16 @@
 
         var taxName = string.IsNullOrWhiteSpace(_form.TaxName) ? "Tax" : _form.TaxName;
         return $"{taxName} {_form.TaxRate:0.##}%";
+    }
+
+    private string DisplayValue(string? value, string fallback)
+    {
+        return string.IsNullOrWhiteSpace(value) ? fallback : value;
+    }
+
+    private string GetProgressStyle(int value)
+    {
+        var safeValue = Math.Clamp(value, 0, 100);
+        return $"width:{safeValue}%;";
     }
 }

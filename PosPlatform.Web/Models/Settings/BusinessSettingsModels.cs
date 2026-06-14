@@ -42,14 +42,21 @@ namespace PosPlatform.Web.Models.Settings
         public decimal TaxRate { get; set; }
 
         public bool ProductsEnabled { get; set; } = true;
+
         public bool StockTrackingEnabled { get; set; } = true;
+
         public bool ServicesEnabled { get; set; }
+
         public bool AppointmentsEnabled { get; set; }
+
         public bool CustomersEnabled { get; set; } = true;
+
         public bool AgeRestrictedProductsEnabled { get; set; }
 
         public bool AllowNegativeStock { get; set; }
+
         public bool RequireCustomerForSale { get; set; }
+
         public bool AllowDiscounts { get; set; } = true;
 
         [Required]
@@ -61,11 +68,19 @@ namespace PosPlatform.Web.Models.Settings
 
         [StringLength(500)]
         public string? ReturnPolicyText { get; set; }
+
+        /*
+         * This controls the new onboarding flow:
+         * false = business has registered but must still complete setup
+         * true  = business has completed VAT, modules, POS rules and receipt settings
+         */
+        public bool SetupCompleted { get; set; }
     }
 
     public class BusinessTypeOptionViewModel
     {
         public string Name { get; set; } = string.Empty;
+
         public string Description { get; set; } = string.Empty;
     }
 }

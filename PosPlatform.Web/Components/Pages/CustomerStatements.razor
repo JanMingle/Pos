@@ -4,6 +4,7 @@
 @layout MainLayout
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Web
 @using PosPlatform.Web.Components.Layout
 @using PosPlatform.Web.Models.CustomerStatements
 @using PosPlatform.Web.Models.Settings
@@ -16,12 +17,13 @@
 <PageTitle>Customer Statements</PageTitle>
 
 <section class="statement-page">
-    <div class="statement-header">
+    <div class="statement-top">
         <div>
             <div class="statement-kicker">
                 <i class="bi bi-journal-text"></i>
                 Customer account history
             </div>
+
             <h1>Customer Statements</h1>
             <p>View invoices, payments, balances and sales history per customer.</p>
         </div>
@@ -45,6 +47,7 @@
                 <input class="statement-input"
                        @bind="_customerSearch"
                        @bind:event="oninput"
+                       @onkeydown="HandleCustomerSearchKeyDown"
                        placeholder="Search by name, phone or email" />
             </div>
 
@@ -86,13 +89,19 @@
     @if (_loading)
     {
         <div class="statement-empty">
+            <div class="statement-empty-icon">
+                <i class="bi bi-hourglass-split"></i>
+            </div>
             <strong>Loading statement...</strong>
-            <span>Please wait.</span>
+            <span>Please wait while we load the customer account history.</span>
         </div>
     }
     else if (_statement == null)
     {
         <div class="statement-empty">
+            <div class="statement-empty-icon">
+                <i class="bi bi-person-lines-fill"></i>
+            </div>
             <strong>No customer selected</strong>
             <span>Search and select a customer to view their statement.</span>
         </div>
@@ -120,28 +129,40 @@
         </div>
 
         <div class="statement-summary-grid">
-            <div>
+            <div class="statement-summary-card hero">
+                <div class="statement-summary-icon">
+                    <i class="bi bi-receipt"></i>
+                </div>
                 <span>Total Invoices</span>
                 <strong>@Money(_statement.TotalInvoices)</strong>
-                <p>@_statement.InvoiceCount invoice(s)</p>
+                <small>@_statement.InvoiceCount invoice(s)</small>
             </div>
 
-            <div>
+            <div class="statement-summary-card">
+                <div class="statement-summary-icon green">
+                    <i class="bi bi-cash-coin"></i>
+                </div>
                 <span>Total Payments</span>
                 <strong>@Money(_statement.TotalPayments)</strong>
-                <p>@_statement.PaymentCount payment(s)</p>
+                <small>@_statement.PaymentCount payment(s)</small>
             </div>
 
-            <div>
+            <div class="statement-summary-card">
+                <div class="statement-summary-icon red">
+                    <i class="bi bi-exclamation-circle"></i>
+                </div>
                 <span>Balance Due</span>
                 <strong>@Money(_statement.BalanceDue)</strong>
-                <p>Outstanding account balance</p>
+                <small>Outstanding account balance</small>
             </div>
 
-            <div>
+            <div class="statement-summary-card">
+                <div class="statement-summary-icon blue">
+                    <i class="bi bi-cart-check"></i>
+                </div>
                 <span>Sales History</span>
                 <strong>@Money(_statement.TotalSales)</strong>
-                <p>@_statement.SalesCount sale(s)</p>
+                <small>@_statement.SalesCount sale(s)</small>
             </div>
         </div>
 
@@ -149,7 +170,17 @@
             <div class="statement-card-header">
                 <div>
                     <h2>Account Statement</h2>
-                    <p>Invoices and payments for the selected period.</p>
+                    <p>Showing @StatementPageStart - @StatementPageEnd of @TotalStatementLines account entr@(TotalStatementLines == 1 ? "y" : "ies").</p>
+                </div>
+
+                <div class="statement-card-tools">
+                    <label>Rows</label>
+                    <select value="@_statementRowsMode" @onchange="StatementRowsChanged">
+                        <option value="10">10 rows</option>
+                        <option value="25">25 rows</option>
+                        <option value="50">50 rows</option>
+                        <option value="all">Show all</option>
+                    </select>
                 </div>
             </div>
 
@@ -177,7 +208,7 @@
                         </thead>
 
                         <tbody>
-                            @foreach (var line in _statement.Lines)
+                            @foreach (var line in (ShowAllStatementRows ? _statement.Lines : _statement.Lines.Skip((SafeStatementPage - 1) * StatementPageSize).Take(StatementPageSize)))
                             {
                                 <tr>
                                     <td>@line.Date.ToString("yyyy-MM-dd")</td>
@@ -196,6 +227,33 @@
                         </tbody>
                     </table>
                 </div>
+
+                <div class="statement-pagination">
+                    <div class="statement-page-info">
+                        Showing
+                        <strong>@StatementPageStart</strong>
+                        -
+                        <strong>@StatementPageEnd</strong>
+                        of
+                        <strong>@TotalStatementLines</strong>
+                    </div>
+
+                    <div class="statement-page-controls">
+                        <button type="button" class="@PreviousStatementPageClass" @onclick="PreviousStatementPage">
+                            <i class="bi bi-chevron-left"></i>
+                            Previous
+                        </button>
+
+                        <span class="statement-page-count">
+                            @(ShowAllStatementRows ? "Showing all" : $"Page {_statementPage} of {StatementTotalPages}")
+                        </span>
+
+                        <button type="button" class="@NextStatementPageClass" @onclick="NextStatementPage">
+                            Next
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
             }
         </div>
 
@@ -203,7 +261,17 @@
             <div class="statement-card-header">
                 <div>
                     <h2>Sales History</h2>
-                    <p>Completed sales linked to this customer.</p>
+                    <p>Showing @SalesPageStart - @SalesPageEnd of @TotalSalesRows sale@(TotalSalesRows == 1 ? "" : "s").</p>
+                </div>
+
+                <div class="statement-card-tools">
+                    <label>Rows</label>
+                    <select value="@_salesRowsMode" @onchange="SalesRowsChanged">
+                        <option value="10">10 rows</option>
+                        <option value="25">25 rows</option>
+                        <option value="50">50 rows</option>
+                        <option value="all">Show all</option>
+                    </select>
                 </div>
             </div>
 
@@ -231,7 +299,7 @@
                         </thead>
 
                         <tbody>
-                            @foreach (var sale in _statement.SalesHistory)
+                            @foreach (var sale in (ShowAllSalesRows ? _statement.SalesHistory : _statement.SalesHistory.Skip((SafeSalesPage - 1) * SalesPageSize).Take(SalesPageSize)))
                             {
                                 <tr>
                                     <td>@sale.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
@@ -246,6 +314,33 @@
                         </tbody>
                     </table>
                 </div>
+
+                <div class="statement-pagination">
+                    <div class="statement-page-info">
+                        Showing
+                        <strong>@SalesPageStart</strong>
+                        -
+                        <strong>@SalesPageEnd</strong>
+                        of
+                        <strong>@TotalSalesRows</strong>
+                    </div>
+
+                    <div class="statement-page-controls">
+                        <button type="button" class="@PreviousSalesPageClass" @onclick="PreviousSalesPage">
+                            <i class="bi bi-chevron-left"></i>
+                            Previous
+                        </button>
+
+                        <span class="statement-page-count">
+                            @(ShowAllSalesRows ? "Showing all" : $"Page {_salesPage} of {SalesTotalPages}")
+                        </span>
+
+                        <button type="button" class="@NextSalesPageClass" @onclick="NextSalesPage">
+                            Next
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
             }
         </div>
     }
@@ -256,33 +351,33 @@
         animation: statementIn .22s ease both;
     }
 
-    .statement-header {
-        margin-bottom: 18px;
+    .statement-top {
+        margin-bottom: 16px;
     }
 
     .statement-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
 
-    .statement-header h1 {
+    .statement-top h1 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.45rem;
-        font-weight: 680;
-        letter-spacing: -.03em;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
-    .statement-header p {
+    .statement-top p {
         margin: 6px 0 0;
-        color: #64748b;
+        color: #667085;
         font-size: .88rem;
     }
 
@@ -317,10 +412,10 @@
     .statement-search-card,
     .statement-profile-card,
     .statement-card {
-        border-radius: 20px;
+        border-radius: 22px;
         background: #fff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17,24,39,.045);
         margin-bottom: 16px;
     }
 
@@ -337,20 +432,21 @@
         .statement-form-grid label {
             display: block;
             margin-bottom: 5px;
-            color: #64748b;
+            color: #667085;
             font-size: .72rem;
             font-weight: 700;
         }
 
-    .statement-input {
+    .statement-input,
+    .statement-card-tools select {
         width: 100%;
         min-height: 40px;
         border-radius: 12px;
         border: 1px solid #e5e7eb;
         background: #fff;
-        color: #0f172a;
+        color: #111827;
         padding: 0 12px;
-        font-size: .84rem;
+        font-size: 16px;
         outline: none;
     }
 
@@ -362,21 +458,52 @@
         width: 100%;
     }
 
-    .statement-secondary-btn {
+    .statement-primary-btn,
+    .statement-secondary-btn,
+    .statement-page-btn {
         min-height: 40px;
-        border-radius: 11px;
+        border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
         padding: 0 14px;
         font-size: .8rem;
-        font-weight: 650;
+        font-weight: 680;
         border: 0;
-        color: #2563eb;
-        background: #eef5ff;
         white-space: nowrap;
+        transition: transform .18s ease;
     }
+
+    .statement-primary-btn {
+        color: #fff;
+        background: #252525;
+        box-shadow: 0 12px 24px rgba(17,24,39,.12);
+    }
+
+    .statement-secondary-btn {
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
+    }
+
+    .statement-page-btn {
+        color: #475569;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+    }
+
+        .statement-primary-btn:hover,
+        .statement-secondary-btn:hover,
+        .statement-page-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .statement-page-btn.is-disabled {
+            opacity: .45;
+            cursor: not-allowed;
+            transform: none;
+        }
 
     .statement-customer-list {
         display: grid;
@@ -391,11 +518,11 @@
             justify-content: space-between;
             text-align: left;
             gap: 12px;
-            border: 1px solid #e7edf5;
-            background: #f8fafc;
+            border: 1px solid #e8eaef;
+            background: #fafafa;
             border-radius: 14px;
             padding: 12px;
-            color: #0f172a;
+            color: #111827;
         }
 
         .statement-customer-list strong,
@@ -405,16 +532,16 @@
 
         .statement-customer-list span {
             margin-top: 3px;
-            color: #64748b;
+            color: #667085;
             font-size: .76rem;
         }
 
     .statement-empty {
         margin-bottom: 16px;
         padding: 34px 20px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px dashed #dbe3ef;
+        border-radius: 18px;
+        background: #fafafa;
+        border: 1px dashed #d0d5dd;
         text-align: center;
     }
 
@@ -422,21 +549,34 @@
             margin: 18px;
         }
 
-        .statement-empty strong,
-        .statement-empty span {
-            display: block;
-        }
+    .statement-empty-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 10px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
 
-        .statement-empty strong {
-            color: #0f172a;
-            font-size: .9rem;
-        }
+    .statement-empty strong,
+    .statement-empty span {
+        display: block;
+    }
 
-        .statement-empty span {
-            margin-top: 4px;
-            color: #64748b;
-            font-size: .78rem;
-        }
+    .statement-empty strong {
+        color: #111827;
+        font-size: .9rem;
+        font-weight: 720;
+    }
+
+    .statement-empty span {
+        margin-top: 4px;
+        color: #667085;
+        font-size: .78rem;
+    }
 
     .statement-profile-card {
         display: flex;
@@ -447,7 +587,7 @@
     }
 
         .statement-profile-card span {
-            color: #64748b;
+            color: #667085;
             font-size: .72rem;
             font-weight: 700;
             text-transform: uppercase;
@@ -456,51 +596,102 @@
         .statement-profile-card strong {
             display: block;
             margin-top: 4px;
-            color: #0f172a;
+            color: #111827;
             font-size: 1rem;
             font-weight: 740;
         }
 
         .statement-profile-card p {
             margin: 4px 0 0;
-            color: #64748b;
+            color: #667085;
             font-size: .82rem;
         }
+
+    .statement-profile-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
 
     .statement-summary-grid {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 10px;
+        gap: 12px;
         margin-bottom: 16px;
     }
 
-        .statement-summary-grid div {
-            padding: 14px;
-            border-radius: 18px;
-            background: #fff;
-            border: 1px solid #e7edf5;
-            box-shadow: 0 12px 28px rgba(15,23,42,.04);
+    .statement-summary-card {
+        padding: 15px;
+        border-radius: 20px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
+    }
+
+        .statement-summary-card.hero {
+            background: #252525;
+            border-color: #252525;
         }
 
-        .statement-summary-grid span {
+        .statement-summary-card span,
+        .statement-summary-card strong,
+        .statement-summary-card small {
             display: block;
-            color: #64748b;
+        }
+
+        .statement-summary-card span {
+            margin-top: 11px;
+            color: #667085;
             font-size: .72rem;
-            font-weight: 650;
+            font-weight: 700;
         }
 
-        .statement-summary-grid strong {
-            display: block;
-            margin-top: 5px;
-            color: #0f172a;
-            font-size: 1rem;
+        .statement-summary-card strong {
+            margin-top: 6px;
+            color: #111827;
+            font-size: 1.05rem;
             font-weight: 760;
+            letter-spacing: -.02em;
         }
 
-        .statement-summary-grid p {
-            margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .74rem;
+        .statement-summary-card small {
+            margin-top: 4px;
+            color: #98a2b3;
+            font-size: .72rem;
+            line-height: 1.35;
+        }
+
+        .statement-summary-card.hero span,
+        .statement-summary-card.hero strong,
+        .statement-summary-card.hero small {
+            color: #ffffff;
+        }
+
+    .statement-summary-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #252525;
+        box-shadow: 0 10px 22px rgba(17, 24, 39, .08);
+    }
+
+        .statement-summary-icon.green {
+            color: #8FA6A1;
+            background: #f2f6f5;
+        }
+
+        .statement-summary-icon.red {
+            color: #d92d20;
+            background: #fef3f2;
+        }
+
+        .statement-summary-icon.blue {
+            color: #2563eb;
+            background: #eff6ff;
         }
 
     .statement-card {
@@ -508,21 +699,39 @@
     }
 
     .statement-card-header {
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
     }
 
         .statement-card-header h2 {
             margin: 0;
-            color: #0f172a;
-            font-size: .92rem;
+            color: #111827;
+            font-size: .94rem;
             font-weight: 720;
         }
 
         .statement-card-header p {
             margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .76rem;
+            color: #98a2b3;
+            font-size: .75rem;
+        }
+
+    .statement-card-tools {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 170px;
+    }
+
+        .statement-card-tools label {
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+            text-transform: uppercase;
         }
 
     .statement-table-wrap {
@@ -537,12 +746,12 @@
 
         .statement-table th {
             padding: 12px 16px;
-            background: #f8fafc;
-            color: #64748b;
+            background: #fafafa;
+            color: #667085;
             font-size: .7rem;
             font-weight: 750;
             text-transform: uppercase;
-            border-bottom: 1px solid #e7edf5;
+            border-bottom: 1px solid #e8eaef;
             white-space: nowrap;
         }
 
@@ -550,7 +759,7 @@
             padding: 14px 16px;
             color: #334155;
             font-size: .82rem;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f2f5;
             vertical-align: middle;
         }
 
@@ -559,7 +768,7 @@
     }
 
     .statement-money {
-        color: #0f172a;
+        color: #111827;
         font-weight: 750;
     }
 
@@ -583,6 +792,46 @@
             background: #ecfdf5;
         }
 
+    .statement-pagination {
+        padding: 14px 18px;
+        border-top: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        background: #ffffff;
+    }
+
+    .statement-page-info {
+        color: #667085;
+        font-size: .78rem;
+        font-weight: 600;
+    }
+
+        .statement-page-info strong {
+            color: #111827;
+        }
+
+    .statement-page-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .statement-page-count {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 11px;
+        border-radius: 11px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+        color: #667085;
+        font-size: .76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
     @@keyframes statementIn {
         from {
             opacity: 0;
@@ -595,41 +844,16 @@
         }
     }
 
-    .statement-profile-actions {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-    }
-
-    .statement-primary-btn {
-        min-height: 40px;
-        border-radius: 11px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        padding: 0 14px;
-        font-size: .8rem;
-        font-weight: 650;
-        border: 0;
-        color: #fff;
-        background: #111827;
-        white-space: nowrap;
-    }
-
     @@media (max-width: 1199px) {
         .statement-form-grid,
         .statement-summary-grid {
             grid-template-columns: 1fr;
         }
 
-        .statement-profile-card {
+        .statement-profile-card,
+        .statement-card-header {
             flex-direction: column;
             align-items: flex-start;
-        }
-
-        .statement-secondary-btn {
-            width: 100%;
         }
 
         .statement-profile-actions {
@@ -637,7 +861,32 @@
             flex-direction: column;
         }
 
-        .statement-primary-btn {
+        .statement-primary-btn,
+        .statement-secondary-btn {
+            width: 100%;
+        }
+
+        .statement-card-tools {
+            width: 100%;
+        }
+
+        .statement-pagination {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .statement-page-controls,
+        .statement-page-btn {
+            width: 100%;
+        }
+
+        .statement-page-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .statement-page-count {
+            justify-content: center;
             width: 100%;
         }
     }
@@ -658,10 +907,92 @@
     private bool _loading;
     private string? _message;
 
+    private int _statementPage = 1;
+    private int _salesPage = 1;
+
+    private string _statementRowsMode = "10";
+    private string _salesRowsMode = "10";
+
     private string CurrencyLabel =>
         string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
             ? "R"
             : _settings.CurrencySymbol;
+
+    private bool ShowAllStatementRows =>
+        _statementRowsMode.Equals("all", StringComparison.OrdinalIgnoreCase);
+
+    private bool ShowAllSalesRows =>
+        _salesRowsMode.Equals("all", StringComparison.OrdinalIgnoreCase);
+
+    private int StatementPageSize => ParseRows(_statementRowsMode);
+    private int SalesPageSize => ParseRows(_salesRowsMode);
+
+    private int TotalStatementLines => _statement?.Lines.Count ?? 0;
+    private int TotalSalesRows => _statement?.SalesHistory.Count ?? 0;
+
+    private int StatementTotalPages =>
+        TotalStatementLines == 0 || ShowAllStatementRows
+            ? 1
+            : (int)Math.Ceiling(TotalStatementLines / (double)StatementPageSize);
+
+    private int SalesTotalPages =>
+        TotalSalesRows == 0 || ShowAllSalesRows
+            ? 1
+            : (int)Math.Ceiling(TotalSalesRows / (double)SalesPageSize);
+
+    private int SafeStatementPage =>
+        Math.Min(Math.Max(_statementPage, 1), StatementTotalPages);
+
+    private int SafeSalesPage =>
+        Math.Min(Math.Max(_salesPage, 1), SalesTotalPages);
+
+    private int StatementPageStart =>
+        TotalStatementLines == 0
+            ? 0
+            : ShowAllStatementRows
+                ? 1
+                : ((SafeStatementPage - 1) * StatementPageSize) + 1;
+
+    private int StatementPageEnd =>
+        TotalStatementLines == 0
+            ? 0
+            : ShowAllStatementRows
+                ? TotalStatementLines
+                : Math.Min(SafeStatementPage * StatementPageSize, TotalStatementLines);
+
+    private int SalesPageStart =>
+        TotalSalesRows == 0
+            ? 0
+            : ShowAllSalesRows
+                ? 1
+                : ((SafeSalesPage - 1) * SalesPageSize) + 1;
+
+    private int SalesPageEnd =>
+        TotalSalesRows == 0
+            ? 0
+            : ShowAllSalesRows
+                ? TotalSalesRows
+                : Math.Min(SafeSalesPage * SalesPageSize, TotalSalesRows);
+
+    private string PreviousStatementPageClass =>
+        _statementPage <= 1 || ShowAllStatementRows
+            ? "statement-page-btn is-disabled"
+            : "statement-page-btn";
+
+    private string NextStatementPageClass =>
+        _statementPage >= StatementTotalPages || ShowAllStatementRows
+            ? "statement-page-btn is-disabled"
+            : "statement-page-btn";
+
+    private string PreviousSalesPageClass =>
+        _salesPage <= 1 || ShowAllSalesRows
+            ? "statement-page-btn is-disabled"
+            : "statement-page-btn";
+
+    private string NextSalesPageClass =>
+        _salesPage >= SalesTotalPages || ShowAllSalesRows
+            ? "statement-page-btn is-disabled"
+            : "statement-page-btn";
 
     protected override async Task OnInitializedAsync()
     {
@@ -672,6 +1003,14 @@
         }
 
         _settings = await BusinessSettingsService.GetSettingsAsync();
+    }
+
+    private async Task HandleCustomerSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchCustomersAsync();
+        }
     }
 
     private async Task SearchCustomersAsync()
@@ -690,6 +1029,9 @@
         _selectedCustomerId = customer.Id;
         _customerSearch = customer.DisplayName;
         _customers.Clear();
+
+        _statementPage = 1;
+        _salesPage = 1;
 
         await ReloadStatementAsync();
     }
@@ -710,12 +1052,66 @@
             _fromDate,
             _toDate);
 
+        _statementPage = 1;
+        _salesPage = 1;
+
         _loading = false;
 
         if (_statement == null)
         {
             _message = "Customer statement could not be loaded.";
         }
+    }
+
+    private void StatementRowsChanged(ChangeEventArgs e)
+    {
+        _statementRowsMode = e.Value?.ToString() ?? "10";
+        _statementPage = 1;
+    }
+
+    private void SalesRowsChanged(ChangeEventArgs e)
+    {
+        _salesRowsMode = e.Value?.ToString() ?? "10";
+        _salesPage = 1;
+    }
+
+    private void NextStatementPage()
+    {
+        if (!ShowAllStatementRows && _statementPage < StatementTotalPages)
+        {
+            _statementPage++;
+        }
+    }
+
+    private void PreviousStatementPage()
+    {
+        if (!ShowAllStatementRows && _statementPage > 1)
+        {
+            _statementPage--;
+        }
+    }
+
+    private void NextSalesPage()
+    {
+        if (!ShowAllSalesRows && _salesPage < SalesTotalPages)
+        {
+            _salesPage++;
+        }
+    }
+
+    private void PreviousSalesPage()
+    {
+        if (!ShowAllSalesRows && _salesPage > 1)
+        {
+            _salesPage--;
+        }
+    }
+
+    private int ParseRows(string value)
+    {
+        return int.TryParse(value, out var rows) && rows > 0
+            ? rows
+            : 10;
     }
 
     private string Money(decimal value)
@@ -737,6 +1133,7 @@
     {
         _message = null;
     }
+
     private void PrintStatement()
     {
         if (!_selectedCustomerId.HasValue)

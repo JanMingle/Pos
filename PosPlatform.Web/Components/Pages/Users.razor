@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @layout MainLayout
 @attribute [Authorize]
+@using Microsoft.AspNetCore.Components.Web
 @using PosPlatform.Web.Components.Layout
 @using PosPlatform.Web.Models.Users
 @using PosPlatform.Web.Services
@@ -13,12 +14,13 @@
 <PageTitle>Users</PageTitle>
 
 <section class="users-page">
-    <div class="users-header">
+    <div class="users-top">
         <div>
             <div class="users-kicker">
                 <i class="bi bi-people"></i>
                 Access control
             </div>
+
             <h1>User Management</h1>
             <p>Create users, assign roles, control access and keep your POS operations secure.</p>
         </div>
@@ -61,10 +63,11 @@
             <i class="bi bi-search"></i>
             <input @bind="_searchTerm"
                    @bind:event="oninput"
+                   @onkeydown="HandleSearchKeyDown"
                    placeholder="Search email or phone number" />
         </div>
 
-        <select class="users-filter" @bind="_roleFilter">
+        <select class="users-filter" value="@_roleFilter" @onchange="RoleFilterChanged">
             <option value="all">All roles</option>
             @foreach (var role in _roles)
             {
@@ -72,7 +75,9 @@
             }
         </select>
 
-        <select class="users-filter" @bind="_branchFilter">
+        <select class="users-filter"
+                value="@(_branchFilter?.ToString() ?? "")"
+                @onchange="BranchFilterChanged">
             <option value="">All branches</option>
             @foreach (var branch in _branches)
             {
@@ -86,7 +91,7 @@
             }
         </select>
 
-        <button type="button" class="users-secondary-btn" @onclick="LoadUsersAsync">
+        <button type="button" class="users-secondary-btn" @onclick="ApplyFiltersAsync">
             <i class="bi bi-filter"></i>
             Apply
         </button>
@@ -101,13 +106,26 @@
         <div class="users-panel-header">
             <div>
                 <h2>System Users</h2>
-                <p>@_users.Count user@(_users.Count == 1 ? "" : "s") showing.</p>
+                <p>Showing @PageStart - @PageEnd of @TotalUserRows user@(TotalUserRows == 1 ? "" : "s").</p>
+            </div>
+
+            <div class="users-rows-tool">
+                <label>Rows</label>
+                <select value="@_rowsMode" @onchange="RowsChanged">
+                    <option value="10">10 rows</option>
+                    <option value="25">25 rows</option>
+                    <option value="50">50 rows</option>
+                    <option value="all">Show all</option>
+                </select>
             </div>
         </div>
 
         @if (_loading)
         {
             <div class="users-empty">
+                <div class="users-empty-icon">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
                 <strong>Loading users...</strong>
                 <span>Please wait while we fetch user records.</span>
             </div>
@@ -115,6 +133,9 @@
         else if (_users.Count == 0)
         {
             <div class="users-empty">
+                <div class="users-empty-icon">
+                    <i class="bi bi-people"></i>
+                </div>
                 <strong>No users found</strong>
                 <span>Create your first user or adjust the filters.</span>
             </div>
@@ -130,12 +151,12 @@
                             <th>Role</th>
                             <th>Branch</th>
                             <th>Status</th>
-                            <th class="text-end">Actions</th>
+                            <th class="users-actions-col">Actions</th>
                         </tr>
                     </thead>
 
                     <tbody>
-                        @foreach (var user in _users)
+                        @foreach (var user in PaginatedUsers)
                         {
                             <tr>
                                 <td>
@@ -164,25 +185,62 @@
                                     </span>
                                 </td>
 
-                                <td class="text-end">
-                                    <div class="users-actions">
-                                        <button type="button" class="users-mini-btn edit" @onclick="() => OpenEditModal(user.Id)">
-                                            <i class="bi bi-pencil"></i>
-                                            Edit
+                                <td class="users-actions-cell">
+                                    <div class="users-action-menu">
+                                        <button type="button"
+                                                class="users-action-toggle"
+                                                @onclick="() => ToggleActionMenu(user.Id)">
+                                            <span>Actions</span>
+                                            <i class="bi bi-chevron-down"></i>
                                         </button>
 
-                                        <button type="button"
-                                                class="users-mini-btn @(user.IsDisabled ? "activate" : "disable")"
-                                                @onclick="() => ToggleUserStatusAsync(user.Id)">
-                                            <i class="bi @(user.IsDisabled ? "bi-unlock" : "bi-lock")"></i>
-                                            @(user.IsDisabled ? "Activate" : "Disable")
-                                        </button>
+                                        @if (_openActionUserId == user.Id)
+                                        {
+                                            <div class="users-action-dropdown">
+                                                <button type="button" @onclick="() => OpenEditModal(user.Id)">
+                                                    <i class="bi bi-pencil"></i>
+                                                    <span>Edit user</span>
+                                                </button>
+
+                                                <button type="button" @onclick="() => ToggleUserStatusAsync(user.Id)">
+                                                    <i class="bi @(user.IsDisabled ? "bi-unlock" : "bi-lock")"></i>
+                                                    <span>@(user.IsDisabled ? "Activate user" : "Disable user")</span>
+                                                </button>
+                                            </div>
+                                        }
                                     </div>
                                 </td>
                             </tr>
                         }
                     </tbody>
                 </table>
+            </div>
+
+            <div class="users-pagination">
+                <div class="users-page-info">
+                    Showing
+                    <strong>@PageStart</strong>
+                    -
+                    <strong>@PageEnd</strong>
+                    of
+                    <strong>@TotalUserRows</strong>
+                </div>
+
+                <div class="users-page-controls">
+                    <button type="button" class="@PreviousPageClass" @onclick="PreviousPage">
+                        <i class="bi bi-chevron-left"></i>
+                        Previous
+                    </button>
+
+                    <span class="users-page-count">
+                        @(ShowAllRows ? "Showing all" : $"Page {_currentPage} of {TotalPages}")
+                    </span>
+
+                    <button type="button" class="@NextPageClass" @onclick="NextPage">
+                        Next
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
             </div>
         }
     </div>
@@ -260,7 +318,8 @@
 
                 <div class="users-modal-actions">
                     <button type="button" class="users-ghost-btn" @onclick="CloseModal">Cancel</button>
-                    <button type="submit" class="users-primary-btn" disabled="@_saving">
+
+                    <button type="submit" class="@SaveButtonClass">
                         <i class="bi bi-check2-circle"></i>
                         @(_saving ? "Saving..." : "Save User")
                     </button>
@@ -275,80 +334,90 @@
         animation: usersIn .22s ease both;
     }
 
-    .users-header {
+    .users-top {
         display: flex;
         justify-content: space-between;
         align-items: flex-end;
         gap: 18px;
-        margin-bottom: 18px;
+        margin-bottom: 16px;
     }
 
     .users-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
 
-    .users-header h1 {
+    .users-top h1 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.45rem;
-        font-weight: 680;
-        letter-spacing: -.03em;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
-    .users-header p {
+    .users-top p {
         margin: 6px 0 0;
-        color: #64748b;
+        color: #667085;
         font-size: .88rem;
     }
 
     .users-primary-btn,
     .users-secondary-btn,
     .users-ghost-btn,
-    .users-mini-btn {
+    .users-page-btn {
         min-height: 38px;
-        border-radius: 11px;
+        border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
         padding: 0 14px;
         font-size: .8rem;
-        font-weight: 650;
+        font-weight: 680;
         border: 0;
-        transition: all .18s ease;
+        transition: transform .18s ease;
         white-space: nowrap;
     }
 
     .users-primary-btn {
         color: #ffffff;
-        background: #111827;
-        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+        background: #252525;
+        box-shadow: 0 12px 24px rgba(17,24,39,.12);
     }
 
     .users-secondary-btn {
-        color: #2563eb;
-        background: #eef5ff;
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
     }
 
-    .users-ghost-btn {
+    .users-ghost-btn,
+    .users-page-btn {
         color: #475569;
         background: #ffffff;
         border: 1px solid #e5e7eb;
     }
 
-    .users-role-pill.owner,
-    .users-role-icon.owner {
-        color: #be123c;
-        background: #fff1f2;
-    }
+        .users-primary-btn:hover,
+        .users-secondary-btn:hover,
+        .users-ghost-btn:hover,
+        .users-page-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .users-primary-btn.is-disabled,
+        .users-page-btn.is-disabled {
+            opacity: .45;
+            cursor: not-allowed;
+            transform: none;
+        }
 
     .users-alert {
         display: flex;
@@ -386,7 +455,7 @@
 
     .users-role-grid {
         display: grid;
-        grid-template-columns: minmax(260px, 1fr) 180px 180px auto auto;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 12px;
         margin-bottom: 16px;
     }
@@ -395,10 +464,10 @@
         display: flex;
         gap: 12px;
         padding: 15px;
-        border-radius: 18px;
+        border-radius: 20px;
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17,24,39,.045);
     }
 
     .users-role-icon {
@@ -413,7 +482,7 @@
 
     .users-role-card strong {
         display: block;
-        color: #0f172a;
+        color: #111827;
         font-size: .86rem;
         font-weight: 720;
     }
@@ -421,46 +490,47 @@
     .users-role-card span {
         display: block;
         margin-top: 3px;
-        color: #64748b;
+        color: #667085;
         font-size: .74rem;
         line-height: 1.35;
     }
 
     .users-control-panel {
         display: grid;
-        grid-template-columns: minmax(260px, 1fr) 180px auto auto;
+        grid-template-columns: minmax(260px, 1fr) 180px 180px auto auto;
         gap: 10px;
         padding: 14px;
         margin-bottom: 16px;
         border-radius: 18px;
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 10px 24px rgba(17,24,39,.035);
     }
 
     .users-search {
-        min-height: 40px;
+        min-height: 42px;
         display: flex;
         align-items: center;
         gap: 10px;
         padding: 0 13px;
-        border-radius: 12px;
-        background: #f8fafc;
+        border-radius: 14px;
+        background: #fafafa;
         border: 1px solid #e5e7eb;
-        color: #94a3b8;
+        color: #98a2b3;
     }
 
         .users-search input,
         .users-filter,
-        .users-input {
+        .users-input,
+        .users-rows-tool select {
             width: 100%;
             min-height: 40px;
             border-radius: 12px;
             border: 1px solid #e5e7eb;
             background: #ffffff;
-            color: #0f172a;
+            color: #111827;
             padding: 0 12px;
-            font-size: .84rem;
+            font-size: 16px;
             outline: none;
         }
 
@@ -472,32 +542,51 @@
 
     .users-panel {
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        border-radius: 20px;
-        box-shadow: 0 16px 34px rgba(15,23,42,.055);
-        overflow: hidden;
+        border: 1px solid #e8eaef;
+        border-radius: 22px;
+        box-shadow: 0 14px 32px rgba(17,24,39,.045);
+        overflow: visible;
     }
 
     .users-panel-header {
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
     }
 
         .users-panel-header h2 {
             margin: 0;
-            color: #0f172a;
-            font-size: .92rem;
+            color: #111827;
+            font-size: .94rem;
             font-weight: 720;
         }
 
         .users-panel-header p {
             margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .76rem;
+            color: #98a2b3;
+            font-size: .75rem;
+        }
+
+    .users-rows-tool {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 170px;
+    }
+
+        .users-rows-tool label {
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+            text-transform: uppercase;
         }
 
     .users-table-wrap {
         overflow-x: auto;
+        padding-bottom: 100px;
     }
 
     .users-table {
@@ -508,13 +597,13 @@
 
         .users-table th {
             padding: 12px 16px;
-            background: #f8fafc;
-            color: #64748b;
+            background: #fafafa;
+            color: #667085;
             font-size: .7rem;
             font-weight: 750;
             text-transform: uppercase;
             letter-spacing: .05em;
-            border-bottom: 1px solid #e7edf5;
+            border-bottom: 1px solid #e8eaef;
             white-space: nowrap;
         }
 
@@ -522,7 +611,7 @@
             padding: 14px 16px;
             color: #334155;
             font-size: .82rem;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f2f5;
             vertical-align: middle;
         }
 
@@ -536,8 +625,8 @@
         width: 38px;
         height: 38px;
         border-radius: 14px;
-        background: #eef5ff;
-        color: #2563eb;
+        background: #f2f6f5;
+        color: #8FA6A1;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -547,7 +636,7 @@
 
     .users-user-cell strong {
         display: block;
-        color: #0f172a;
+        color: #111827;
         font-size: .85rem;
         font-weight: 720;
     }
@@ -555,7 +644,7 @@
     .users-user-cell span {
         display: block;
         margin-top: 2px;
-        color: #94a3b8;
+        color: #98a2b3;
         font-size: .72rem;
     }
 
@@ -568,7 +657,14 @@
         border-radius: 999px;
         font-size: .72rem;
         font-weight: 750;
+        white-space: nowrap;
     }
+
+        .users-role-pill.owner,
+        .users-role-icon.owner {
+            color: #be123c;
+            background: #fff1f2;
+        }
 
         .users-role-pill.admin,
         .users-role-icon.admin {
@@ -596,13 +692,13 @@
 
         .users-role-pill.manager,
         .users-role-icon.manager {
-            color: #0f172a;
-            background: #f1f5f9;
+            color: #111827;
+            background: #f3f4f6;
         }
 
         .users-role-pill.viewer,
         .users-role-icon.viewer {
-            color: #64748b;
+            color: #667085;
             background: #f8fafc;
         }
 
@@ -612,66 +708,162 @@
         }
 
         .users-status-pill.disabled {
-            color: #dc2626;
-            background: #fef2f2;
+            color: #d92d20;
+            background: #fef3f2;
         }
 
-    .users-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: 6px;
-        flex-wrap: wrap;
+    .users-actions-col,
+    .users-actions-cell {
+        text-align: right;
     }
 
-    .users-mini-btn {
-        min-height: 30px;
-        padding: 0 10px;
-        border: 1px solid;
+    .users-actions-cell {
+        position: relative;
+        min-width: 150px;
+    }
+
+    .users-action-menu {
+        position: relative;
+        display: inline-block;
+    }
+
+    .users-action-toggle {
+        min-height: 34px;
+        border-radius: 11px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        color: #252525;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 11px;
         font-size: .74rem;
+        font-weight: 750;
+        cursor: pointer;
+        box-shadow: 0 8px 18px rgba(17, 24, 39, .04);
     }
 
-        .users-mini-btn.edit {
-            color: #2563eb;
-            background: #eff6ff;
-            border-color: #bfdbfe;
+    .users-action-dropdown {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        width: 195px;
+        padding: 7px;
+        border-radius: 15px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 18px 38px rgba(17, 24, 39, .14);
+        z-index: 100;
+        display: grid;
+        gap: 4px;
+        text-align: left;
+    }
+
+        .users-action-dropdown button {
+            width: 100%;
+            min-height: 36px;
+            border: 0;
+            border-radius: 11px;
+            background: transparent;
+            color: #344054;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 10px;
+            font-size: .78rem;
+            font-weight: 650;
+            text-align: left;
         }
 
-        .users-mini-btn.disable {
-            color: #dc2626;
-            background: #fef2f2;
-            border-color: #fecaca;
-        }
+            .users-action-dropdown button:hover {
+                background: #fafafa;
+                color: #252525;
+            }
 
-        .users-mini-btn.activate {
-            color: #16a34a;
-            background: #ecfdf5;
-            border-color: #bbf7d0;
-        }
+            .users-action-dropdown button i {
+                width: 18px;
+                color: #8FA6A1;
+            }
 
     .users-empty {
         margin: 18px;
         padding: 34px 20px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px dashed #dbe3ef;
+        border-radius: 18px;
+        background: #fafafa;
+        border: 1px dashed #d0d5dd;
         text-align: center;
     }
 
-        .users-empty strong,
-        .users-empty span {
-            display: block;
+    .users-empty-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 10px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .users-empty strong,
+    .users-empty span {
+        display: block;
+    }
+
+    .users-empty strong {
+        color: #111827;
+        font-size: .9rem;
+        font-weight: 720;
+    }
+
+    .users-empty span {
+        margin-top: 4px;
+        color: #667085;
+        font-size: .78rem;
+    }
+
+    .users-pagination {
+        padding: 14px 18px;
+        border-top: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        background: #ffffff;
+        border-radius: 0 0 22px 22px;
+    }
+
+    .users-page-info {
+        color: #667085;
+        font-size: .78rem;
+        font-weight: 600;
+    }
+
+        .users-page-info strong {
+            color: #111827;
         }
 
-        .users-empty strong {
-            color: #0f172a;
-            font-size: .9rem;
-        }
+    .users-page-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
 
-        .users-empty span {
-            margin-top: 4px;
-            color: #64748b;
-            font-size: .78rem;
-        }
+    .users-page-count {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 11px;
+        border-radius: 11px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+        color: #667085;
+        font-size: .76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
 
     .users-modal-backdrop {
         position: fixed;
@@ -680,15 +872,18 @@
         padding: 20px;
         background: rgba(15, 23, 42, .45);
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: center;
+        overflow-y: auto;
     }
 
     .users-modal {
         width: 100%;
         max-width: 760px;
-        max-height: calc(100vh - 40px);
-        overflow-y: auto;
+        max-height: none;
+        margin-top: 10px;
+        margin-bottom: 20px;
+        overflow-y: visible;
         background: #ffffff;
         border-radius: 22px;
         padding: 22px;
@@ -705,7 +900,7 @@
     }
 
         .users-modal-header span {
-            color: #2563eb;
+            color: #8FA6A1;
             font-size: .72rem;
             font-weight: 750;
             letter-spacing: .06em;
@@ -714,14 +909,14 @@
 
         .users-modal-header h4 {
             margin: 3px 0 0;
-            color: #0f172a;
+            color: #111827;
             font-size: 1.08rem;
             font-weight: 720;
         }
 
         .users-modal-header p {
             margin: 5px 0 0;
-            color: #64748b;
+            color: #667085;
             font-size: .84rem;
         }
 
@@ -731,7 +926,7 @@
         border-radius: 10px;
         border: 1px solid #e5e7eb;
         background: #ffffff;
-        color: #64748b;
+        color: #667085;
     }
 
     .users-label {
@@ -755,8 +950,8 @@
         margin-top: 16px;
         padding: 13px;
         border-radius: 16px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
     }
 
         .users-role-help strong,
@@ -765,13 +960,13 @@
         }
 
         .users-role-help strong {
-            color: #0f172a;
+            color: #111827;
             font-size: .86rem;
         }
 
         .users-role-help span {
             margin-top: 3px;
-            color: #64748b;
+            color: #667085;
             font-size: .76rem;
         }
 
@@ -807,18 +1002,44 @@
     }
 
     @@media (max-width: 768px) {
-        .users-header {
+        .users-top,
+        .users-panel-header,
+        .users-modal-header {
             flex-direction: column;
             align-items: flex-start;
         }
 
-            .users-header .users-primary-btn {
+            .users-top .users-primary-btn,
+            .users-role-grid,
+            .users-control-panel,
+            .users-rows-tool,
+            .users-rows-tool select {
                 width: 100%;
             }
 
         .users-role-grid,
         .users-control-panel {
             grid-template-columns: 1fr;
+        }
+
+        .users-pagination {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .users-page-controls,
+        .users-page-btn {
+            width: 100%;
+        }
+
+        .users-page-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .users-page-count {
+            justify-content: center;
+            width: 100%;
         }
 
         .users-modal-actions {
@@ -852,6 +1073,69 @@
     private string? _message;
     private bool _isSuccess;
 
+    private int _currentPage = 1;
+    private string _rowsMode = "10";
+    private int? _openActionUserId;
+
+    private bool ShowAllRows =>
+        _rowsMode.Equals("all", StringComparison.OrdinalIgnoreCase);
+
+    private int PageSize => ParseRows(_rowsMode);
+
+    private List<UserListItemViewModel> OrderedUsers =>
+        _users
+            .OrderBy(x => x.IsDisabled)
+            .ThenBy(x => x.RoleName)
+            .ThenBy(x => x.Email)
+            .ToList();
+
+    private int TotalUserRows => OrderedUsers.Count;
+
+    private int TotalPages =>
+        TotalUserRows == 0 || ShowAllRows
+            ? 1
+            : (int)Math.Ceiling(TotalUserRows / (double)PageSize);
+
+    private int SafeCurrentPage =>
+        Math.Min(Math.Max(_currentPage, 1), TotalPages);
+
+    private int PageStart =>
+        TotalUserRows == 0
+            ? 0
+            : ShowAllRows
+                ? 1
+                : ((SafeCurrentPage - 1) * PageSize) + 1;
+
+    private int PageEnd =>
+        TotalUserRows == 0
+            ? 0
+            : ShowAllRows
+                ? TotalUserRows
+                : Math.Min(SafeCurrentPage * PageSize, TotalUserRows);
+
+    private List<UserListItemViewModel> PaginatedUsers =>
+        ShowAllRows
+            ? OrderedUsers
+            : OrderedUsers
+                .Skip((SafeCurrentPage - 1) * PageSize)
+                .Take(PageSize)
+                .ToList();
+
+    private string PreviousPageClass =>
+        _currentPage <= 1 || ShowAllRows
+            ? "users-page-btn is-disabled"
+            : "users-page-btn";
+
+    private string NextPageClass =>
+        _currentPage >= TotalPages || ShowAllRows
+            ? "users-page-btn is-disabled"
+            : "users-page-btn";
+
+    private string SaveButtonClass =>
+        _saving
+            ? "users-primary-btn is-disabled"
+            : "users-primary-btn";
+
     protected override async Task OnInitializedAsync()
     {
         if (!await UserAccessService.CanAccessAsync("users"))
@@ -869,8 +1153,76 @@
     private async Task LoadUsersAsync()
     {
         _loading = true;
+        _openActionUserId = null;
+
         _users = await UserManagementService.GetUsersAsync(_searchTerm, _roleFilter, _branchFilter);
+
+        if (_currentPage > TotalPages)
+        {
+            _currentPage = TotalPages;
+        }
+
         _loading = false;
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _currentPage = 1;
+        await LoadUsersAsync();
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyFiltersAsync();
+        }
+    }
+
+    private void RoleFilterChanged(ChangeEventArgs e)
+    {
+        _roleFilter = e.Value?.ToString() ?? "all";
+        _currentPage = 1;
+    }
+
+    private void BranchFilterChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+
+        _branchFilter = int.TryParse(value, out var branchId)
+            ? branchId
+            : null;
+
+        _currentPage = 1;
+    }
+
+    private void RowsChanged(ChangeEventArgs e)
+    {
+        _rowsMode = e.Value?.ToString() ?? "10";
+        _currentPage = 1;
+    }
+
+    private void NextPage()
+    {
+        if (!ShowAllRows && _currentPage < TotalPages)
+        {
+            _currentPage++;
+            _openActionUserId = null;
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (!ShowAllRows && _currentPage > 1)
+        {
+            _currentPage--;
+            _openActionUserId = null;
+        }
+    }
+
+    private void ToggleActionMenu(int userId)
+    {
+        _openActionUserId = _openActionUserId == userId ? null : userId;
     }
 
     private async Task ResetFiltersAsync()
@@ -878,11 +1230,15 @@
         _searchTerm = null;
         _roleFilter = "all";
         _branchFilter = null;
+        _currentPage = 1;
+
         await LoadUsersAsync();
     }
 
     private void OpenAddModal()
     {
+        _openActionUserId = null;
+
         _form = new UserFormModel
         {
             RoleName = "Sales User",
@@ -895,6 +1251,8 @@
 
     private async Task OpenEditModal(int id)
     {
+        _openActionUserId = null;
+
         var model = await UserManagementService.GetUserFormAsync(id);
 
         if (model == null)
@@ -918,6 +1276,11 @@
 
     private async Task SaveUserAsync()
     {
+        if (_saving)
+        {
+            return;
+        }
+
         _saving = true;
 
         var result = await UserManagementService.SaveUserAsync(_form);
@@ -928,12 +1291,15 @@
         if (result.Success)
         {
             CloseModal();
+            _currentPage = 1;
             await LoadUsersAsync();
         }
     }
 
     private async Task ToggleUserStatusAsync(int userId)
     {
+        _openActionUserId = null;
+
         var result = await UserManagementService.ToggleUserStatusAsync(userId);
 
         ShowMessage(result.Message, result.Success);
@@ -942,6 +1308,13 @@
         {
             await LoadUsersAsync();
         }
+    }
+
+    private int ParseRows(string value)
+    {
+        return int.TryParse(value, out var rows) && rows > 0
+            ? rows
+            : 10;
     }
 
     private void ShowMessage(string message, bool success)

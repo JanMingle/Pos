@@ -18,19 +18,20 @@
 <PageTitle>Barcode Labels</PageTitle>
 
 <section class="labels-page">
-    <div class="labels-header">
+    <div class="labels-top">
         <div>
             <div class="labels-kicker">
                 <i class="bi bi-upc-scan"></i>
                 Barcode printing
             </div>
+
             <h1>Barcode Labels</h1>
-            <p>Search products, add them to a print queue, choose quantity and print barcode labels.</p>
+            <p>Search products, scan barcodes, prepare a print queue and print labels quickly.</p>
         </div>
 
         <button type="button"
                 class="labels-primary-btn"
-                disabled="@(_queue.Count == 0)"
+                disabled="@(_queue.Count == 0 ? "disabled" : null)"
                 @onclick="PrintLabelsAsync">
             <i class="bi bi-printer"></i>
             Print Labels
@@ -48,25 +49,41 @@
         </div>
     }
 
-    <div class="labels-settings-strip">
-        <div>
-            <span>Business</span>
-            <strong>@_settings.BusinessName</strong>
+    <div class="labels-summary-grid">
+        <div class="labels-summary-card hero">
+            <div class="labels-summary-icon">
+                <i class="bi bi-printer"></i>
+            </div>
+            <span>Total Labels</span>
+            <strong>@TotalLabels</strong>
+            <small>Ready to print</small>
         </div>
 
-        <div>
+        <div class="labels-summary-card">
+            <div class="labels-summary-icon green">
+                <i class="bi bi-box-seam"></i>
+            </div>
+            <span>Products Loaded</span>
+            <strong>@_products.Count</strong>
+            <small>Current search result</small>
+        </div>
+
+        <div class="labels-summary-card">
+            <div class="labels-summary-icon blue">
+                <i class="bi bi-list-check"></i>
+            </div>
+            <span>Queue Items</span>
+            <strong>@_queue.Count</strong>
+            <small>Products selected</small>
+        </div>
+
+        <div class="labels-summary-card">
+            <div class="labels-summary-icon amber">
+                <i class="bi bi-currency-exchange"></i>
+            </div>
             <span>Currency</span>
-            <strong>@_settings.CurrencyCode · @CurrencyLabel</strong>
-        </div>
-
-        <div>
-            <span>Products</span>
-            <strong>@_products.Count loaded</strong>
-        </div>
-
-        <div>
-            <span>Queue</span>
-            <strong>@TotalLabels label@((TotalLabels == 1) ? "" : "s")</strong>
+            <strong>@CurrencyLabel</strong>
+            <small>@_settings.CurrencyCode</small>
         </div>
     </div>
 
@@ -81,7 +98,7 @@
 
         <button type="button"
                 class="labels-primary-btn"
-                disabled="@_barcodeScanning"
+                disabled="@(_barcodeScanning ? "disabled" : null)"
                 @onclick="ScanBarcodeAsync">
             <i class="bi bi-upc"></i>
             @(_barcodeScanning ? "Checking..." : "Find Item")
@@ -93,6 +110,7 @@
             <i class="bi bi-search"></i>
             <input @bind="_searchTerm"
                    @bind:event="oninput"
+                   @onkeydown="HandleSearchKeyDown"
                    placeholder="Search by product name, SKU, barcode or type" />
         </div>
 
@@ -112,13 +130,21 @@
             <div class="labels-panel-header">
                 <div>
                     <h2>Products</h2>
-                    <p>Select products to add to the label queue.</p>
+                    <p>Showing @PageStart - @PageEnd of @TotalProducts product@(@TotalProducts == 1 ? "" : "s").</p>
                 </div>
+
+                <span class="labels-status-note">
+                    <i class="bi bi-shield-check"></i>
+                    Tenant scoped
+                </span>
             </div>
 
             @if (_loading)
             {
                 <div class="labels-empty">
+                    <div class="labels-empty-icon">
+                        <i class="bi bi-hourglass-split"></i>
+                    </div>
                     <strong>Loading products...</strong>
                     <span>Please wait while we fetch catalogue items.</span>
                 </div>
@@ -126,6 +152,9 @@
             else if (_products.Count == 0)
             {
                 <div class="labels-empty">
+                    <div class="labels-empty-icon">
+                        <i class="bi bi-box"></i>
+                    </div>
                     <strong>No products found</strong>
                     <span>Search by product name, SKU or barcode.</span>
                 </div>
@@ -141,12 +170,12 @@
                                 <th>Barcode</th>
                                 <th>Price</th>
                                 <th>Status</th>
-                                <th class="text-end">Action</th>
+                                <th class="labels-actions-col">Action</th>
                             </tr>
                         </thead>
 
                         <tbody>
-                            @foreach (var item in _products)
+                            @foreach (var item in PaginatedProducts)
                             {
                                 <tr>
                                     <td>
@@ -177,11 +206,12 @@
                                         </span>
                                     </td>
 
-                                    <td class="text-end">
+                                    <td class="labels-actions-cell">
                                         <button type="button"
                                                 class="labels-mini-btn"
-                                                disabled="@string.IsNullOrWhiteSpace(GetPrintableCode(item))"
+                                                disabled="@(string.IsNullOrWhiteSpace(GetPrintableCode(item)) ? "disabled" : null)"
                                                 @onclick="() => AddToQueue(item)">
+                                            <i class="bi bi-plus-lg"></i>
                                             Add Label
                                         </button>
                                     </td>
@@ -190,10 +220,43 @@
                         </tbody>
                     </table>
                 </div>
+
+                <div class="labels-pagination">
+                    <div class="labels-page-info">
+                        Showing
+                        <strong>@PageStart</strong>
+                        -
+                        <strong>@PageEnd</strong>
+                        of
+                        <strong>@TotalProducts</strong>
+                    </div>
+
+                    <div class="labels-page-controls">
+                        <button type="button"
+                                class="labels-page-btn"
+                                disabled="@(_currentPage <= 1 ? "disabled" : null)"
+                                @onclick="PreviousPage">
+                            <i class="bi bi-chevron-left"></i>
+                            Previous
+                        </button>
+
+                        <span class="labels-page-count">
+                            Page @_currentPage of @TotalPages
+                        </span>
+
+                        <button type="button"
+                                class="labels-page-btn"
+                                disabled="@(_currentPage >= TotalPages ? "disabled" : null)"
+                                @onclick="NextPage">
+                            Next
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
             }
         </div>
 
-        <div class="labels-panel">
+        <div class="labels-panel labels-queue-panel">
             <div class="labels-panel-header">
                 <div>
                     <h2>Print Queue</h2>
@@ -211,6 +274,9 @@
             @if (_queue.Count == 0)
             {
                 <div class="labels-empty">
+                    <div class="labels-empty-icon">
+                        <i class="bi bi-printer"></i>
+                    </div>
                     <strong>No labels selected</strong>
                     <span>Add products from the list to prepare labels for printing.</span>
                 </div>
@@ -221,7 +287,7 @@
                     @foreach (var item in _queue)
                     {
                         <div class="labels-queue-item">
-                            <div>
+                            <div class="labels-queue-main">
                                 <strong>@item.ProductName</strong>
                                 <span>@item.Code</span>
                                 <small>@Money(item.SellingPrice)</small>
@@ -245,7 +311,10 @@
                         <strong>@TotalLabels</strong>
                     </div>
 
-                    <button type="button" class="labels-primary-btn" @onclick="PrintLabelsAsync">
+                    <button type="button"
+                            class="labels-primary-btn"
+                            disabled="@(_queue.Count == 0 ? "disabled" : null)"
+                            @onclick="PrintLabelsAsync">
                         <i class="bi bi-printer"></i>
                         Print Labels
                     </button>
@@ -260,76 +329,74 @@
         animation: labelsIn .22s ease both;
     }
 
-    .labels-header {
+    .labels-top {
         display: flex;
         justify-content: space-between;
         align-items: flex-end;
         gap: 18px;
-        margin-bottom: 18px;
+        margin-bottom: 16px;
     }
 
     .labels-kicker {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: #2563eb;
-        font-size: .74rem;
-        font-weight: 750;
-        letter-spacing: .06em;
+        color: #8FA6A1;
+        font-size: .72rem;
+        font-weight: 760;
+        letter-spacing: .08em;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
 
-    .labels-header h1 {
+    .labels-top h1 {
         margin: 0;
-        color: #0f172a;
+        color: #111827;
         font-size: 1.45rem;
-        font-weight: 680;
-        letter-spacing: -.03em;
+        font-weight: 720;
+        letter-spacing: -.035em;
     }
 
-    .labels-header p {
+    .labels-top p {
         margin: 6px 0 0;
-        color: #64748b;
+        color: #667085;
         font-size: .88rem;
     }
 
     .labels-primary-btn,
     .labels-secondary-btn,
     .labels-ghost-btn,
-    .labels-mini-btn {
+    .labels-mini-btn,
+    .labels-page-btn {
         min-height: 38px;
-        border-radius: 11px;
+        border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
         padding: 0 14px;
         font-size: .8rem;
-        font-weight: 650;
+        font-weight: 680;
         border: 0;
         white-space: nowrap;
         text-decoration: none;
+        transition: transform .18s ease;
     }
 
     .labels-primary-btn {
         color: #ffffff;
-        background: #111827;
-        box-shadow: 0 12px 24px rgba(15,23,42,.14);
+        background: #252525;
+        box-shadow: 0 12px 24px rgba(17, 24, 39, .12);
     }
-
-        .labels-primary-btn:disabled,
-        .labels-mini-btn:disabled {
-            opacity: .55;
-            cursor: not-allowed;
-        }
 
     .labels-secondary-btn {
-        color: #2563eb;
-        background: #eef5ff;
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
     }
 
-    .labels-ghost-btn {
+    .labels-ghost-btn,
+    .labels-page-btn {
         color: #475569;
         background: #ffffff;
         border: 1px solid #e5e7eb;
@@ -342,12 +409,29 @@
         }
 
     .labels-mini-btn {
-        min-height: 30px;
-        color: #2563eb;
-        background: #eff6ff;
-        border: 1px solid #bfdbfe;
+        min-height: 32px;
+        color: #8FA6A1;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
         padding: 0 10px;
+        font-size: .74rem;
     }
+
+        .labels-primary-btn:hover,
+        .labels-secondary-btn:hover,
+        .labels-ghost-btn:hover,
+        .labels-mini-btn:hover,
+        .labels-page-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .labels-primary-btn:disabled,
+        .labels-mini-btn:disabled,
+        .labels-page-btn:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+            transform: none;
+        }
 
     .labels-alert {
         display: flex;
@@ -383,78 +467,129 @@
             color: inherit;
         }
 
-    .labels-settings-strip {
+    .labels-summary-grid {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 10px;
+        gap: 12px;
         margin-bottom: 16px;
     }
 
-        .labels-settings-strip div {
-            padding: 13px;
-            border-radius: 16px;
-            background: #ffffff;
-            border: 1px solid #e7edf5;
-            box-shadow: 0 12px 28px rgba(15,23,42,.04);
+    .labels-summary-card {
+        padding: 15px;
+        border-radius: 20px;
+        background: #ffffff;
+        border: 1px solid #e8eaef;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
+    }
+
+        .labels-summary-card.hero {
+            background: #252525;
+            border-color: #252525;
         }
 
-        .labels-settings-strip span,
-        .labels-settings-strip strong {
+        .labels-summary-card span,
+        .labels-summary-card strong,
+        .labels-summary-card small {
             display: block;
         }
 
-        .labels-settings-strip span {
-            color: #64748b;
+        .labels-summary-card span {
+            margin-top: 11px;
+            color: #667085;
             font-size: .72rem;
-            font-weight: 650;
+            font-weight: 700;
         }
 
-        .labels-settings-strip strong {
+        .labels-summary-card strong {
+            margin-top: 6px;
+            color: #111827;
+            font-size: 1.05rem;
+            font-weight: 760;
+            letter-spacing: -.02em;
+        }
+
+        .labels-summary-card small {
             margin-top: 4px;
-            color: #0f172a;
-            font-size: .84rem;
-            font-weight: 720;
+            color: #98a2b3;
+            font-size: .72rem;
+            line-height: 1.35;
+        }
+
+        .labels-summary-card.hero span,
+        .labels-summary-card.hero strong,
+        .labels-summary-card.hero small {
+            color: #ffffff;
+        }
+
+    .labels-summary-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #252525;
+        box-shadow: 0 10px 22px rgba(17, 24, 39, .08);
+    }
+
+        .labels-summary-icon.green {
+            color: #8FA6A1;
+            background: #f2f6f5;
+        }
+
+        .labels-summary-icon.blue {
+            color: #2563eb;
+            background: #eff6ff;
+        }
+
+        .labels-summary-icon.amber {
+            color: #b7791f;
+            background: #fffbeb;
         }
 
     .labels-barcode-row,
     .labels-control-panel {
         display: grid;
-        grid-template-columns: minmax(240px, 1fr) auto auto;
         gap: 10px;
         padding: 14px;
         margin-bottom: 16px;
         border-radius: 18px;
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        box-shadow: 0 12px 28px rgba(15,23,42,.045);
+        border: 1px solid #e8eaef;
+        box-shadow: 0 10px 24px rgba(17, 24, 39, .035);
     }
 
     .labels-barcode-row {
         grid-template-columns: minmax(240px, 1fr) auto;
     }
 
+    .labels-control-panel {
+        grid-template-columns: minmax(240px, 1fr) auto auto;
+    }
+
     .labels-barcode-box {
-        min-height: 44px;
+        min-height: 46px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 13px;
+        border-radius: 15px;
+        background: #f2f6f5;
+        border: 1px solid #dce7e4;
+        color: #8FA6A1;
+    }
+
+    .labels-search {
+        min-height: 42px;
         display: flex;
         align-items: center;
         gap: 10px;
         padding: 0 13px;
         border-radius: 14px;
-        background: #ecfdf5;
-        border: 1px solid #bbf7d0;
-        color: #15803d;
-    }
-
-    .labels-search {
-        min-height: 40px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 0 13px;
-        border-radius: 12px;
-        background: #f8fafc;
+        background: #fafafa;
         border: 1px solid #e5e7eb;
-        color: #94a3b8;
+        color: #98a2b3;
     }
 
         .labels-barcode-box input,
@@ -463,8 +598,8 @@
             border: 0;
             outline: none;
             background: transparent;
-            color: #0f172a;
-            font-size: .9rem;
+            color: #111827;
+            font-size: 16px;
         }
 
     .labels-barcode-box input {
@@ -480,15 +615,20 @@
 
     .labels-panel {
         background: #ffffff;
-        border: 1px solid #e7edf5;
-        border-radius: 20px;
-        box-shadow: 0 16px 34px rgba(15,23,42,.055);
+        border: 1px solid #e8eaef;
+        border-radius: 22px;
+        box-shadow: 0 14px 32px rgba(17, 24, 39, .045);
         overflow: hidden;
     }
 
+    .labels-queue-panel {
+        position: sticky;
+        top: 88px;
+    }
+
     .labels-panel-header {
-        padding: 17px 18px;
-        border-bottom: 1px solid #edf2f7;
+        padding: 16px 18px;
+        border-bottom: 1px solid #f1f2f5;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -497,16 +637,29 @@
 
         .labels-panel-header h2 {
             margin: 0;
-            color: #0f172a;
-            font-size: .92rem;
+            color: #111827;
+            font-size: .94rem;
             font-weight: 720;
         }
 
         .labels-panel-header p {
             margin: 4px 0 0;
-            color: #94a3b8;
-            font-size: .76rem;
+            color: #98a2b3;
+            font-size: .75rem;
         }
+
+    .labels-status-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        color: #8FA6A1;
+        background: #f2f6f5;
+        font-size: .74rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
 
     .labels-table-wrap {
         overflow-x: auto;
@@ -520,13 +673,13 @@
 
         .labels-table th {
             padding: 12px 16px;
-            background: #f8fafc;
-            color: #64748b;
+            background: #fafafa;
+            color: #667085;
             font-size: .7rem;
             font-weight: 750;
             text-transform: uppercase;
             letter-spacing: .05em;
-            border-bottom: 1px solid #e7edf5;
+            border-bottom: 1px solid #e8eaef;
             white-space: nowrap;
         }
 
@@ -534,7 +687,7 @@
             padding: 14px 16px;
             color: #334155;
             font-size: .82rem;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f2f5;
             vertical-align: middle;
         }
 
@@ -548,8 +701,8 @@
         width: 38px;
         height: 38px;
         border-radius: 14px;
-        background: #eef5ff;
-        color: #2563eb;
+        background: #f2f6f5;
+        color: #8FA6A1;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -563,14 +716,14 @@
     }
 
     .labels-product-cell strong {
-        color: #0f172a;
+        color: #111827;
         font-size: .85rem;
         font-weight: 720;
     }
 
     .labels-product-cell span {
         margin-top: 2px;
-        color: #94a3b8;
+        color: #98a2b3;
         font-size: .72rem;
     }
 
@@ -581,14 +734,14 @@
         padding: 0 9px;
         border-radius: 999px;
         color: #475569;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
         font-size: .72rem;
         font-weight: 650;
     }
 
     .labels-price {
-        color: #0f172a;
+        color: #111827;
         font-weight: 750;
     }
 
@@ -608,14 +761,21 @@
         }
 
         .labels-pill.inactive {
-            color: #64748b;
-            background: #f1f5f9;
+            color: #667085;
+            background: #f3f4f6;
         }
+
+    .labels-actions-col,
+    .labels-actions-cell {
+        text-align: right;
+    }
 
     .labels-queue {
         padding: 14px 18px;
         display: grid;
         gap: 10px;
+        max-height: 520px;
+        overflow-y: auto;
     }
 
     .labels-queue-item {
@@ -625,39 +785,39 @@
         align-items: center;
         padding: 13px;
         border-radius: 16px;
-        background: #f8fafc;
-        border: 1px solid #e7edf5;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
     }
 
-        .labels-queue-item strong,
-        .labels-queue-item span,
-        .labels-queue-item small {
-            display: block;
-        }
+    .labels-queue-main strong,
+    .labels-queue-main span,
+    .labels-queue-main small {
+        display: block;
+    }
 
-        .labels-queue-item strong {
-            color: #0f172a;
-            font-size: .84rem;
-            font-weight: 720;
-        }
+    .labels-queue-main strong {
+        color: #111827;
+        font-size: .84rem;
+        font-weight: 720;
+    }
 
-        .labels-queue-item span {
-            margin-top: 3px;
-            color: #64748b;
-            font-size: .72rem;
-        }
+    .labels-queue-main span {
+        margin-top: 3px;
+        color: #667085;
+        font-size: .72rem;
+    }
 
-        .labels-queue-item small {
-            margin-top: 4px;
-            color: #111827;
-            font-size: .78rem;
-            font-weight: 750;
-        }
+    .labels-queue-main small {
+        margin-top: 4px;
+        color: #111827;
+        font-size: .78rem;
+        font-weight: 750;
+    }
 
     .labels-qty-box label {
         display: block;
         margin-bottom: 4px;
-        color: #64748b;
+        color: #667085;
         font-size: .68rem;
         font-weight: 700;
     }
@@ -668,7 +828,7 @@
         border-radius: 10px;
         border: 1px solid #e5e7eb;
         padding: 0 9px;
-        font-size: .84rem;
+        font-size: 16px;
         outline: none;
     }
 
@@ -677,13 +837,13 @@
         height: 36px;
         border-radius: 11px;
         border: 1px solid #fecaca;
-        background: #fef2f2;
-        color: #dc2626;
+        background: #fef3f2;
+        color: #d92d20;
     }
 
     .labels-print-footer {
         padding: 14px 18px 18px;
-        border-top: 1px solid #edf2f7;
+        border-top: 1px solid #f1f2f5;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -696,14 +856,14 @@
         }
 
         .labels-print-footer span {
-            color: #64748b;
+            color: #667085;
             font-size: .72rem;
-            font-weight: 650;
+            font-weight: 700;
         }
 
         .labels-print-footer strong {
             margin-top: 3px;
-            color: #0f172a;
+            color: #111827;
             font-size: .96rem;
             font-weight: 750;
         }
@@ -711,27 +871,80 @@
     .labels-empty {
         margin: 18px;
         padding: 34px 20px;
-        border-radius: 16px;
-        background: #f8fafc;
-        border: 1px dashed #dbe3ef;
+        border-radius: 18px;
+        background: #fafafa;
+        border: 1px dashed #d0d5dd;
         text-align: center;
     }
 
-        .labels-empty strong,
-        .labels-empty span {
-            display: block;
+    .labels-empty-icon {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 10px;
+        border-radius: 16px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .labels-empty strong,
+    .labels-empty span {
+        display: block;
+    }
+
+    .labels-empty strong {
+        color: #111827;
+        font-size: .9rem;
+        font-weight: 720;
+    }
+
+    .labels-empty span {
+        margin-top: 4px;
+        color: #667085;
+        font-size: .78rem;
+    }
+
+    .labels-pagination {
+        padding: 14px 18px;
+        border-top: 1px solid #f1f2f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        background: #ffffff;
+    }
+
+    .labels-page-info {
+        color: #667085;
+        font-size: .78rem;
+        font-weight: 600;
+    }
+
+        .labels-page-info strong {
+            color: #111827;
         }
 
-        .labels-empty strong {
-            color: #0f172a;
-            font-size: .9rem;
-        }
+    .labels-page-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
 
-        .labels-empty span {
-            margin-top: 4px;
-            color: #64748b;
-            font-size: .78rem;
-        }
+    .labels-page-count {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 11px;
+        border-radius: 11px;
+        background: #fafafa;
+        border: 1px solid #e8eaef;
+        color: #667085;
+        font-size: .76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
 
     @@keyframes labelsIn {
         from {
@@ -746,25 +959,33 @@
     }
 
     @@media (max-width: 1199px) {
-        .labels-grid,
-        .labels-settings-strip {
+        .labels-grid {
             grid-template-columns: 1fr;
+        }
+
+        .labels-queue-panel {
+            position: static;
+        }
+
+        .labels-summary-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
         }
     }
 
     @@media (max-width: 768px) {
-        .labels-header,
+        .labels-top,
         .labels-panel-header,
         .labels-print-footer {
             flex-direction: column;
             align-items: flex-start;
         }
 
-            .labels-header .labels-primary-btn,
+            .labels-top .labels-primary-btn,
             .labels-print-footer .labels-primary-btn {
                 width: 100%;
             }
 
+        .labels-summary-grid,
         .labels-barcode-row,
         .labels-control-panel {
             grid-template-columns: 1fr;
@@ -780,6 +1001,26 @@
         }
 
         .labels-remove-btn {
+            width: 100%;
+        }
+
+        .labels-pagination {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .labels-page-controls,
+        .labels-page-btn {
+            width: 100%;
+        }
+
+        .labels-page-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .labels-page-count {
+            justify-content: center;
             width: 100%;
         }
     }
@@ -799,6 +1040,9 @@
     private string? _message;
     private bool _isSuccess;
 
+    private int _currentPage = 1;
+    private int _pageSize = 10;
+
     private string CurrencyLabel =>
         string.IsNullOrWhiteSpace(_settings.CurrencySymbol)
             ? "R"
@@ -806,6 +1050,32 @@
 
     private int TotalLabels =>
         _queue.Sum(x => x.Quantity < 1 ? 0 : x.Quantity);
+
+    private int TotalProducts => _products.Count;
+
+    private int TotalPages =>
+        TotalProducts == 0
+            ? 1
+            : (int)Math.Ceiling(TotalProducts / (double)_pageSize);
+
+    private int SafeCurrentPage =>
+        Math.Min(Math.Max(_currentPage, 1), TotalPages);
+
+    private int PageStart =>
+        TotalProducts == 0
+            ? 0
+            : ((SafeCurrentPage - 1) * _pageSize) + 1;
+
+    private int PageEnd =>
+        TotalProducts == 0
+            ? 0
+            : Math.Min(SafeCurrentPage * _pageSize, TotalProducts);
+
+    private List<ProductListItemViewModel> PaginatedProducts =>
+        _products
+            .Skip((SafeCurrentPage - 1) * _pageSize)
+            .Take(_pageSize)
+            .ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -822,8 +1092,19 @@
     private async Task LoadProductsAsync()
     {
         _loading = true;
+        _currentPage = 1;
+
         _products = await ProductService.GetProductsAsync(_searchTerm);
+
         _loading = false;
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await LoadProductsAsync();
+        }
     }
 
     private async Task HandleBarcodeKeyDown(KeyboardEventArgs e)
@@ -873,7 +1154,24 @@
     {
         _searchTerm = null;
         _barcodeValue = null;
+        _currentPage = 1;
         await LoadProductsAsync();
+    }
+
+    private void NextPage()
+    {
+        if (_currentPage < TotalPages)
+        {
+            _currentPage++;
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (_currentPage > 1)
+        {
+            _currentPage--;
+        }
     }
 
     private void AddToQueue(ProductListItemViewModel product)
