@@ -122,7 +122,7 @@
 
                     @if (_openShift == null)
                     {
-                        <EditForm Model="_openModel" OnValidSubmit="OpenShiftAsync">
+                        <EditForm Model="_openModel" OnValidSubmit="ShowOpenShiftConfirmModal">
                             <DataAnnotationsValidator />
 
                             <div class="shift-form">
@@ -229,7 +229,7 @@
                             </div>
                         </div>
 
-                        <EditForm Model="_movementModel" OnValidSubmit="RecordCashMovementAsync">
+                        <EditForm Model="_movementModel" OnValidSubmit="ShowMovementConfirmModal">
                             <DataAnnotationsValidator />
 
                             <div class="shift-form">
@@ -312,7 +312,7 @@
                             </div>
                         </div>
 
-                        <EditForm Model="_closeModel" OnValidSubmit="CloseShiftAsync">
+                        <EditForm Model="_closeModel" OnValidSubmit="ShowCloseShiftConfirmModal">
                             <DataAnnotationsValidator />
 
                             <div class="shift-form">
@@ -521,6 +521,162 @@
         </div>
     }
 </section>
+
+@if (_showOpenShiftConfirmModal)
+{
+    <div class="shift-modal-backdrop">
+        <div class="shift-confirm-card">
+            <div class="shift-confirm-icon">
+                <i class="bi bi-play-circle"></i>
+            </div>
+
+            <h3>Open Cashier Shift?</h3>
+
+            <p>
+                Please confirm that you want to open this cashier shift with the opening cash entered below.
+            </p>
+
+            <div class="shift-confirm-summary">
+                <div>
+                    <span>Opening Cash</span>
+                    <strong>@Money(_openModel.OpeningCash)</strong>
+                </div>
+
+                <div>
+                    <span>Opening Notes</span>
+                    <strong>@(string.IsNullOrWhiteSpace(_openModel.OpeningNotes) ? "No notes" : _openModel.OpeningNotes)</strong>
+                </div>
+            </div>
+
+            <div class="shift-modal-actions">
+                <button type="button" class="shift-ghost-btn" @onclick="CloseOpenShiftConfirmModal">
+                    Cancel
+                </button>
+
+                <button type="button"
+                        class="shift-primary-btn"
+                        disabled="@(_saving ? "disabled" : null)"
+                        @onclick="ConfirmOpenShiftAsync">
+                    <i class="bi bi-play-circle"></i>
+                    Yes, Open Shift
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showMovementConfirmModal)
+{
+    <div class="shift-modal-backdrop">
+        <div class="shift-confirm-card">
+            <div class="shift-confirm-icon movement">
+                <i class="bi bi-plus-circle"></i>
+            </div>
+
+            <h3>Record Cash Movement?</h3>
+
+            <p>
+                Confirm that you want to record this cash movement on the current open shift.
+            </p>
+
+            <div class="shift-confirm-summary">
+                <div>
+                    <span>Type</span>
+                    <strong>@_movementModel.MovementType</strong>
+                </div>
+
+                <div>
+                    <span>Amount</span>
+                    <strong>@Money(_movementModel.Amount)</strong>
+                </div>
+
+                <div>
+                    <span>Reason</span>
+                    <strong>@(string.IsNullOrWhiteSpace(_movementModel.Reason) ? "No reason" : _movementModel.Reason)</strong>
+                </div>
+
+                <div>
+                    <span>Notes</span>
+                    <strong>@(string.IsNullOrWhiteSpace(_movementModel.Notes) ? "No notes" : _movementModel.Notes)</strong>
+                </div>
+            </div>
+
+            <div class="shift-modal-actions">
+                <button type="button" class="shift-ghost-btn" @onclick="CloseMovementConfirmModal">
+                    Cancel
+                </button>
+
+                <button type="button"
+                        class="shift-secondary-btn"
+                        disabled="@(_savingMovement ? "disabled" : null)"
+                        @onclick="ConfirmCashMovementAsync">
+                    <i class="bi bi-plus-circle"></i>
+                    Yes, Record
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showCloseShiftConfirmModal)
+{
+    <div class="shift-modal-backdrop">
+        <div class="shift-confirm-card">
+            <div class="shift-confirm-icon danger">
+                <i class="bi bi-stop-circle"></i>
+            </div>
+
+            <h3>Close Cashier Shift?</h3>
+
+            <p>
+                This will close the current till session. Please confirm your counted cash before closing.
+            </p>
+
+            <div class="shift-confirm-summary">
+                <div>
+                    <span>Expected Cash</span>
+                    <strong>@Money(_openShift?.ExpectedCash ?? 0)</strong>
+                </div>
+
+                <div>
+                    <span>Closing Cash</span>
+                    <strong>@Money(_closeModel.ClosingCash)</strong>
+                </div>
+
+                <div>
+                    <span>Difference</span>
+                    <strong class="@GetDifferenceClass(_closeModel.ClosingCash - (_openShift?.ExpectedCash ?? 0))">
+                        @Money(_closeModel.ClosingCash - (_openShift?.ExpectedCash ?? 0))
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Closing Notes</span>
+                    <strong>@(string.IsNullOrWhiteSpace(_closeModel.ClosingNotes) ? "No notes" : _closeModel.ClosingNotes)</strong>
+                </div>
+            </div>
+
+            <div class="shift-modal-warning">
+                <i class="bi bi-exclamation-triangle"></i>
+                <span>Once closed, this shift cannot continue processing sales under the same session.</span>
+            </div>
+
+            <div class="shift-modal-actions">
+                <button type="button" class="shift-ghost-btn" @onclick="CloseCloseShiftConfirmModal">
+                    Cancel
+                </button>
+
+                <button type="button"
+                        class="shift-danger-btn"
+                        disabled="@(_saving ? "disabled" : null)"
+                        @onclick="ConfirmCloseShiftAsync">
+                    <i class="bi bi-stop-circle"></i>
+                    Yes, Close Shift
+                </button>
+            </div>
+        </div>
+    </div>
+}
 
 <style>
     .shift-page {
@@ -1251,6 +1407,135 @@
         font-weight: 700;
     }
 
+    .shift-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1100;
+        background: rgba(15, 23, 42, .45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        backdrop-filter: blur(3px);
+    }
+
+    .shift-confirm-card {
+        width: 100%;
+        max-width: 470px;
+        padding: 24px;
+        border-radius: 24px;
+        background: #ffffff;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, .24);
+        text-align: center;
+    }
+
+    .shift-confirm-icon {
+        width: 56px;
+        height: 56px;
+        margin: 0 auto 14px;
+        border-radius: 19px;
+        background: #f2f6f5;
+        color: #8FA6A1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+    }
+
+        .shift-confirm-icon.movement {
+            background: #eff6ff;
+            color: #2563eb;
+        }
+
+        .shift-confirm-icon.danger {
+            background: #fef2f2;
+            color: #d92d20;
+        }
+
+    .shift-confirm-card h3 {
+        margin: 0;
+        color: #111827;
+        font-size: 1.05rem;
+        font-weight: 780;
+    }
+
+    .shift-confirm-card p {
+        margin: 8px 0 18px;
+        color: #667085;
+        font-size: .84rem;
+        line-height: 1.55;
+    }
+
+    .shift-confirm-summary {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+        text-align: left;
+    }
+
+        .shift-confirm-summary div {
+            padding: 12px;
+            border-radius: 15px;
+            background: #fafafa;
+            border: 1px solid #e8eaef;
+        }
+
+        .shift-confirm-summary span,
+        .shift-confirm-summary strong {
+            display: block;
+        }
+
+        .shift-confirm-summary span {
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .shift-confirm-summary strong {
+            margin-top: 4px;
+            color: #111827;
+            font-size: .84rem;
+            font-weight: 760;
+            word-break: break-word;
+        }
+
+    .shift-modal-warning {
+        display: flex;
+        gap: 9px;
+        align-items: flex-start;
+        padding: 11px 12px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        color: #c2410c;
+        text-align: left;
+        font-size: .76rem;
+        font-weight: 700;
+        line-height: 1.4;
+    }
+
+    .shift-modal-actions {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+    }
+
+    @@media (max-width: 640px) {
+        .shift-confirm-summary {
+            grid-template-columns: 1fr;
+        }
+
+        .shift-modal-actions {
+            flex-direction: column-reverse;
+        }
+
+            .shift-modal-actions button {
+                width: 100%;
+            }
+    }
+
     @@keyframes shiftIn {
         from {
             opacity: 0;
@@ -1335,6 +1620,10 @@
     private bool _saving;
     private bool _savingMovement;
 
+    private bool _showOpenShiftConfirmModal;
+    private bool _showMovementConfirmModal;
+    private bool _showCloseShiftConfirmModal;
+
     private string? _message;
     private bool _isSuccess;
 
@@ -1405,6 +1694,10 @@
         }
 
         _loading = false;
+
+        _showOpenShiftConfirmModal = false;
+        _showMovementConfirmModal = false;
+        _showCloseShiftConfirmModal = false;
     }
 
     private async Task ApplyHistoryFilterAsync()
@@ -1427,6 +1720,54 @@
         {
             _historyPage--;
         }
+    }
+
+    private void ShowOpenShiftConfirmModal()
+    {
+        _showOpenShiftConfirmModal = true;
+    }
+
+    private void CloseOpenShiftConfirmModal()
+    {
+        _showOpenShiftConfirmModal = false;
+    }
+
+    private async Task ConfirmOpenShiftAsync()
+    {
+        _showOpenShiftConfirmModal = false;
+        await OpenShiftAsync();
+    }
+
+    private void ShowMovementConfirmModal()
+    {
+        _showMovementConfirmModal = true;
+    }
+
+    private void CloseMovementConfirmModal()
+    {
+        _showMovementConfirmModal = false;
+    }
+
+    private async Task ConfirmCashMovementAsync()
+    {
+        _showMovementConfirmModal = false;
+        await RecordCashMovementAsync();
+    }
+
+    private void ShowCloseShiftConfirmModal()
+    {
+        _showCloseShiftConfirmModal = true;
+    }
+
+    private void CloseCloseShiftConfirmModal()
+    {
+        _showCloseShiftConfirmModal = false;
+    }
+
+    private async Task ConfirmCloseShiftAsync()
+    {
+        _showCloseShiftConfirmModal = false;
+        await CloseShiftAsync();
     }
 
     private async Task OpenShiftAsync()

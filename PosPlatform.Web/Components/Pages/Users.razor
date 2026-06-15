@@ -202,7 +202,7 @@
                                                     <span>Edit user</span>
                                                 </button>
 
-                                                <button type="button" @onclick="() => ToggleUserStatusAsync(user.Id)">
+                                                <button type="button" @onclick="() => ConfirmToggleUserStatus(user.Id, user.Email, user.IsDisabled)">
                                                     <i class="bi @(user.IsDisabled ? "bi-unlock" : "bi-lock")"></i>
                                                     <span>@(user.IsDisabled ? "Activate user" : "Disable user")</span>
                                                 </button>
@@ -325,6 +325,64 @@
                     </button>
                 </div>
             </EditForm>
+        </div>
+    </div>
+}
+
+@if (_showStatusConfirm)
+{
+    <div class="users-modal-backdrop">
+        <div class="users-modal users-status-modal">
+            <div class="users-status-confirm-icon @(_statusUserIsDisabled ? "activate" : "disable")">
+                <i class="bi @(_statusUserIsDisabled ? "bi-unlock" : "bi-lock")"></i>
+            </div>
+
+            <h4>@(_statusUserIsDisabled ? "Activate User?" : "Disable User?")</h4>
+
+            <p>
+                Are you sure you want to
+                <strong>@(_statusUserIsDisabled ? "activate" : "disable") @_statusUserEmail</strong>?
+            </p>
+
+            <div class="users-confirm-summary">
+                <div>
+                    <span>User</span>
+                    <strong>@_statusUserEmail</strong>
+                </div>
+
+                <div>
+                    <span>New Status</span>
+                    <strong>@(_statusUserIsDisabled ? "Active" : "Disabled")</strong>
+                </div>
+            </div>
+
+            <div class="users-modal-note @(_statusUserIsDisabled ? "activate" : "disable")">
+                <i class="bi bi-info-circle"></i>
+                <span>
+                    @if (_statusUserIsDisabled)
+                    {
+                        @("This user will regain access based on their assigned role and branch.")
+                    }
+                    else
+                    {
+                        @("This user will no longer be able to access the system until activated again.")
+                    }
+                </span>
+            </div>
+
+            <div class="users-modal-actions">
+                <button type="button" class="users-ghost-btn" @onclick="CancelToggleUserStatus">
+                    Cancel
+                </button>
+
+                <button type="button"
+                        class="@(_statusUserIsDisabled ? "users-primary-btn" : "users-danger-btn")"
+                        disabled="@_savingStatus"
+                        @onclick="ToggleUserStatusConfirmedAsync">
+                    <i class="bi @(_statusUserIsDisabled ? "bi-unlock" : "bi-lock")"></i>
+                    @(_savingStatus ? "Updating..." : (_statusUserIsDisabled ? "Yes, Activate" : "Yes, Disable"))
+                </button>
+            </div>
         </div>
     </div>
 }
@@ -979,6 +1037,139 @@
         border-top: 1px solid #edf2f7;
     }
 
+    .users-danger-btn {
+        min-height: 38px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        font-size: .8rem;
+        font-weight: 680;
+        border: 0;
+        transition: transform .18s ease;
+        white-space: nowrap;
+        color: #ffffff;
+        background: #d92d20;
+    }
+
+        .users-danger-btn:hover {
+            transform: translateY(-1px);
+            background: #b91c1c;
+        }
+
+        .users-danger-btn:disabled {
+            opacity: .45;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+    .users-status-modal {
+        max-width: 460px;
+        text-align: center;
+    }
+
+    .users-status-confirm-icon {
+        width: 54px;
+        height: 54px;
+        margin: 0 auto 14px;
+        border-radius: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+    }
+
+        .users-status-confirm-icon.activate {
+            color: #15803d;
+            background: #ecfdf5;
+        }
+
+        .users-status-confirm-icon.disable {
+            color: #d92d20;
+            background: #fef2f2;
+        }
+
+    .users-status-modal h4 {
+        margin: 0;
+        color: #111827;
+        font-size: 1.08rem;
+        font-weight: 760;
+    }
+
+    .users-status-modal p {
+        margin: 8px 0 16px;
+        color: #667085;
+        font-size: .84rem;
+        line-height: 1.5;
+    }
+
+    .users-confirm-summary {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin: 16px 0;
+        text-align: left;
+    }
+
+        .users-confirm-summary div {
+            padding: 12px;
+            border-radius: 14px;
+            background: #fafafa;
+            border: 1px solid #e8eaef;
+        }
+
+        .users-confirm-summary span,
+        .users-confirm-summary strong {
+            display: block;
+        }
+
+        .users-confirm-summary span {
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 700;
+        }
+
+        .users-confirm-summary strong {
+            margin-top: 4px;
+            color: #111827;
+            font-size: .84rem;
+            font-weight: 760;
+            word-break: break-word;
+        }
+
+    .users-modal-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        padding: 11px 12px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        text-align: left;
+        font-size: .76rem;
+        font-weight: 650;
+        line-height: 1.4;
+    }
+
+        .users-modal-note.activate {
+            color: #166534;
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+        }
+
+        .users-modal-note.disable {
+            color: #991b1b;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+        }
+
+    @@media (max-width: 640px) {
+        .users-confirm-summary {
+            grid-template-columns: 1fr;
+        }
+    }
+
     @@keyframes usersIn {
         from {
             opacity: 0;
@@ -1066,6 +1257,9 @@
     private bool _saving;
     private bool _showModal;
 
+    private bool _showStatusConfirm;
+    private bool _savingStatus;
+
     private string? _searchTerm;
     private string _roleFilter = "all";
     private int? _branchFilter;
@@ -1076,6 +1270,10 @@
     private int _currentPage = 1;
     private string _rowsMode = "10";
     private int? _openActionUserId;
+
+    private int _statusUserId;
+    private string _statusUserEmail = string.Empty;
+    private bool _statusUserIsDisabled;
 
     private bool ShowAllRows =>
         _rowsMode.Equals("all", StringComparison.OrdinalIgnoreCase);
@@ -1296,15 +1494,47 @@
         }
     }
 
-    private async Task ToggleUserStatusAsync(int userId)
+    private void ConfirmToggleUserStatus(int userId, string email, bool isDisabled)
     {
         _openActionUserId = null;
 
-        var result = await UserManagementService.ToggleUserStatusAsync(userId);
+        _statusUserId = userId;
+        _statusUserEmail = email;
+        _statusUserIsDisabled = isDisabled;
+        _showStatusConfirm = true;
+    }
+
+    private void CancelToggleUserStatus()
+    {
+        _showStatusConfirm = false;
+        _savingStatus = false;
+
+        _statusUserId = 0;
+        _statusUserEmail = string.Empty;
+        _statusUserIsDisabled = false;
+    }
+
+    private async Task ToggleUserStatusConfirmedAsync()
+    {
+        if (_statusUserId <= 0)
+        {
+            CancelToggleUserStatus();
+            return;
+        }
+
+        _savingStatus = true;
+
+        var result = await UserManagementService.ToggleUserStatusAsync(_statusUserId);
+
+        _savingStatus = false;
 
         ShowMessage(result.Message, result.Success);
 
-        if (result.Success)
+        var shouldReload = result.Success;
+
+        CancelToggleUserStatus();
+
+        if (shouldReload)
         {
             await LoadUsersAsync();
         }

@@ -238,8 +238,9 @@
                                                         <i class="bi bi-pencil"></i>
                                                         <span>Edit expense</span>
                                                     </button>
-
-                                                    <button type="button" class="danger" @onclick="() => DeleteExpenseAsync(expense.Id)">
+                                                    <button type="button"
+                                                            class="danger"
+                                                            @onclick="() => ConfirmDeleteExpense(expense.Id, expense.ExpenseNumber, expense.CategoryName, expense.TotalAmount)">
                                                         <i class="bi bi-trash"></i>
                                                         <span>Delete expense</span>
                                                     </button>
@@ -373,12 +374,15 @@
                                                 <span>Edit category</span>
                                             </button>
 
-                                            <button type="button" @onclick="() => ToggleCategoryAsync(category.Id)">
+                                            <button type="button"
+                                                    @onclick="() => ConfirmToggleCategory(category.Id, category.CategoryName, category.IsActive)">
                                                 <i class="bi @GetCategoryToggleIcon(category.IsActive)"></i>
                                                 <span>@(category.IsActive ? "Pause category" : "Activate category")</span>
                                             </button>
 
-                                            <button type="button" class="danger" @onclick="() => DeleteCategoryAsync(category.Id)">
+                                            <button type="button"
+                                                    class="danger"
+                                                    @onclick="() => ConfirmDeleteCategory(category.Id, category.CategoryName, category.ExpenseCount)">
                                                 <i class="bi bi-trash"></i>
                                                 <span>Delete category</span>
                                             </button>
@@ -566,6 +570,164 @@
                     </button>
                 </div>
             </EditForm>
+        </div>
+    </div>
+}
+
+@if (_showDeleteExpenseConfirm)
+{
+    <div class="expenses-modal-backdrop">
+        <div class="expenses-modal expenses-confirm-modal">
+            <div class="expenses-confirm-icon danger">
+                <i class="bi bi-trash"></i>
+            </div>
+
+            <h4>Delete Expense?</h4>
+
+            <p>
+                Are you sure you want to delete expense
+                <strong>@_deleteExpenseNumber</strong>?
+            </p>
+
+            <div class="expenses-confirm-summary">
+                <div>
+                    <span>Category</span>
+                    <strong>@_deleteExpenseCategory</strong>
+                </div>
+
+                <div>
+                    <span>Total Amount</span>
+                    <strong>@Money(_deleteExpenseAmount)</strong>
+                </div>
+            </div>
+
+            <div class="expenses-modal-note danger">
+                <i class="bi bi-exclamation-triangle"></i>
+                <span>This expense will be removed from reports and dashboard totals.</span>
+            </div>
+
+            <div class="expenses-modal-actions">
+                <button type="button" class="expenses-ghost-btn" @onclick="CancelDeleteExpense">
+                    Cancel
+                </button>
+
+                <button type="button"
+                        class="expenses-danger-btn"
+                        disabled="@_savingDeleteExpense"
+                        @onclick="DeleteExpenseConfirmedAsync">
+                    <i class="bi bi-trash"></i>
+                    @(_savingDeleteExpense ? "Deleting..." : "Yes, Delete")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showCategoryStatusConfirm)
+{
+    <div class="expenses-modal-backdrop">
+        <div class="expenses-modal expenses-confirm-modal">
+            <div class="expenses-confirm-icon @(_categoryIsActive ? "pause" : "activate")">
+                <i class="bi @(_categoryIsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
+            </div>
+
+            <h4>@(_categoryIsActive ? "Pause Category?" : "Activate Category?")</h4>
+
+            <p>
+                Are you sure you want to
+                <strong>@(_categoryIsActive ? "pause" : "activate") @_categoryStatusName</strong>?
+            </p>
+
+            <div class="expenses-confirm-summary">
+                <div>
+                    <span>Category</span>
+                    <strong>@_categoryStatusName</strong>
+                </div>
+
+                <div>
+                    <span>New Status</span>
+                    <strong>@(_categoryIsActive ? "Inactive" : "Active")</strong>
+                </div>
+            </div>
+
+            <div class="expenses-modal-note @(_categoryIsActive ? "pause" : "activate")">
+                <i class="bi bi-info-circle"></i>
+                <span>
+                    @if (_categoryIsActive)
+                    {
+                        @("Paused categories will no longer be available when adding new expenses.")
+                    }
+                    else
+                    {
+                        @("Activated categories will be available again when adding expenses.")
+                    }
+                </span>
+            </div>
+
+            <div class="expenses-modal-actions">
+                <button type="button" class="expenses-ghost-btn" @onclick="CancelToggleCategory">
+                    Cancel
+                </button>
+
+                <button type="button"
+                        class="@(_categoryIsActive ? "expenses-warning-btn" : "expenses-primary-btn")"
+                        disabled="@_savingCategoryStatus"
+                        @onclick="ToggleCategoryConfirmedAsync">
+                    <i class="bi @(_categoryIsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
+                    @(_savingCategoryStatus ? "Updating..." : (_categoryIsActive ? "Yes, Pause" : "Yes, Activate"))
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showDeleteCategoryConfirm)
+{
+    <div class="expenses-modal-backdrop">
+        <div class="expenses-modal expenses-confirm-modal">
+            <div class="expenses-confirm-icon danger">
+                <i class="bi bi-trash"></i>
+            </div>
+
+            <h4>Delete Category?</h4>
+
+            <p>
+                Are you sure you want to delete
+                <strong>@_deleteCategoryName</strong>?
+            </p>
+
+            <div class="expenses-confirm-summary">
+                <div>
+                    <span>Category</span>
+                    <strong>@_deleteCategoryName</strong>
+                </div>
+
+                <div>
+                    <span>Linked Expenses</span>
+                    <strong>@_deleteCategoryExpenseCount</strong>
+                </div>
+            </div>
+
+            <div class="expenses-modal-note danger">
+                <i class="bi bi-exclamation-triangle"></i>
+                <span>
+                    If this category has linked expenses, the system may prevent deletion or keep the records protected.
+                </span>
+            </div>
+
+            <div class="expenses-modal-actions">
+                <button type="button" class="expenses-ghost-btn" @onclick="CancelDeleteCategory">
+                    Cancel
+                </button>
+
+                <button type="button"
+                        class="expenses-danger-btn"
+                        disabled="@_savingDeleteCategory"
+                        @onclick="DeleteCategoryConfirmedAsync">
+                    <i class="bi bi-trash"></i>
+                    @(_savingDeleteCategory ? "Deleting..." : "Yes, Delete")
+                </button>
+            </div>
         </div>
     </div>
 }
@@ -1329,6 +1491,159 @@
             margin-top: 2px;
         }
 
+        .expenses-danger-btn,
+.expenses-warning-btn {
+    min-height: 38px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 14px;
+    font-size: .8rem;
+    font-weight: 680;
+    border: 0;
+    transition: transform .18s ease;
+    white-space: nowrap;
+    color: #ffffff;
+}
+
+.expenses-danger-btn {
+    background: #d92d20;
+}
+
+.expenses-warning-btn {
+    background: #b7791f;
+}
+
+.expenses-danger-btn:hover,
+.expenses-warning-btn:hover {
+    transform: translateY(-1px);
+}
+
+.expenses-danger-btn:disabled,
+.expenses-warning-btn:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.expenses-confirm-modal {
+    max-width: 470px;
+    text-align: center;
+}
+
+.expenses-confirm-icon {
+    width: 54px;
+    height: 54px;
+    margin: 0 auto 14px;
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+}
+
+.expenses-confirm-icon.danger {
+    color: #d92d20;
+    background: #fef2f2;
+}
+
+.expenses-confirm-icon.pause {
+    color: #b45309;
+    background: #fffbeb;
+}
+
+.expenses-confirm-icon.activate {
+    color: #15803d;
+    background: #ecfdf5;
+}
+
+.expenses-confirm-modal h4 {
+    margin: 0;
+    color: #111827;
+    font-size: 1.08rem;
+    font-weight: 760;
+}
+
+.expenses-confirm-modal p {
+    margin: 8px 0 16px;
+    color: #667085;
+    font-size: .84rem;
+    line-height: 1.5;
+}
+
+.expenses-confirm-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 16px 0;
+    text-align: left;
+}
+
+.expenses-confirm-summary div {
+    padding: 12px;
+    border-radius: 14px;
+    background: #fafafa;
+    border: 1px solid #e8eaef;
+}
+
+.expenses-confirm-summary span,
+.expenses-confirm-summary strong {
+    display: block;
+}
+
+.expenses-confirm-summary span {
+    color: #667085;
+    font-size: .72rem;
+    font-weight: 700;
+}
+
+.expenses-confirm-summary strong {
+    margin-top: 4px;
+    color: #111827;
+    font-size: .84rem;
+    font-weight: 760;
+    word-break: break-word;
+}
+
+.expenses-modal-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 11px 12px;
+    margin-bottom: 16px;
+    border-radius: 14px;
+    text-align: left;
+    font-size: .76rem;
+    font-weight: 650;
+    line-height: 1.4;
+}
+
+.expenses-modal-note.danger {
+    color: #991b1b;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+}
+
+.expenses-modal-note.pause {
+    color: #92400e;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+}
+
+.expenses-modal-note.activate {
+    color: #166534;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+}
+
+@@media (max-width: 640px) {
+    .expenses-confirm-summary {
+        grid-template-columns: 1fr;
+    }
+}
+
     @@keyframes expensesIn {
         from {
             opacity: 0;
@@ -1450,6 +1765,14 @@
     private bool _showExpenseModal;
     private bool _showCategoryModal;
 
+    private bool _showDeleteExpenseConfirm;
+    private bool _showCategoryStatusConfirm;
+    private bool _showDeleteCategoryConfirm;
+
+    private bool _savingDeleteExpense;
+    private bool _savingCategoryStatus;
+    private bool _savingDeleteCategory;
+
     private DateTime? _fromDate = DateTime.Today.AddDays(-30);
     private DateTime? _toDate = DateTime.Today;
 
@@ -1468,6 +1791,19 @@
 
     private int? _openExpenseActionId;
     private int? _openCategoryActionId;
+
+    private int _deleteExpenseId;
+    private string _deleteExpenseNumber = string.Empty;
+    private string _deleteExpenseCategory = string.Empty;
+    private decimal _deleteExpenseAmount;
+
+    private int _categoryStatusId;
+    private string _categoryStatusName = string.Empty;
+    private bool _categoryIsActive;
+
+    private int _deleteCategoryId;
+    private string _deleteCategoryName = string.Empty;
+    private int _deleteCategoryExpenseCount;
 
     private decimal TotalExpenses => _expenses.Sum(x => x.TotalAmount);
     private decimal TotalTax => _expenses.Sum(x => x.TaxAmount);
@@ -1803,16 +2139,143 @@
         }
     }
 
-    private async Task DeleteExpenseAsync(int id)
+    private void ConfirmDeleteExpense(int id, string expenseNumber, string categoryName, decimal totalAmount)
     {
         _openExpenseActionId = null;
 
-        var result = await ExpenseService.DeleteExpenseAsync(id);
+        _deleteExpenseId = id;
+        _deleteExpenseNumber = expenseNumber;
+        _deleteExpenseCategory = categoryName;
+        _deleteExpenseAmount = totalAmount;
+        _showDeleteExpenseConfirm = true;
+    }
+
+    private void CancelDeleteExpense()
+    {
+        _showDeleteExpenseConfirm = false;
+        _savingDeleteExpense = false;
+
+        _deleteExpenseId = 0;
+        _deleteExpenseNumber = string.Empty;
+        _deleteExpenseCategory = string.Empty;
+        _deleteExpenseAmount = 0;
+    }
+
+    private async Task DeleteExpenseConfirmedAsync()
+    {
+        if (_deleteExpenseId <= 0)
+        {
+            CancelDeleteExpense();
+            return;
+        }
+
+        _savingDeleteExpense = true;
+
+        var result = await ExpenseService.DeleteExpenseAsync(_deleteExpenseId);
+
+        _savingDeleteExpense = false;
+
         ShowMessage(result.Message, result.Success);
 
-        if (result.Success)
+        var shouldReload = result.Success;
+
+        CancelDeleteExpense();
+
+        if (shouldReload)
         {
             await LoadExpensesAsync();
+            await LoadCategoriesAsync();
+        }
+    }
+
+    private void ConfirmToggleCategory(int id, string name, bool isActive)
+    {
+        _openCategoryActionId = null;
+
+        _categoryStatusId = id;
+        _categoryStatusName = name;
+        _categoryIsActive = isActive;
+        _showCategoryStatusConfirm = true;
+    }
+
+    private void CancelToggleCategory()
+    {
+        _showCategoryStatusConfirm = false;
+        _savingCategoryStatus = false;
+
+        _categoryStatusId = 0;
+        _categoryStatusName = string.Empty;
+        _categoryIsActive = false;
+    }
+
+    private async Task ToggleCategoryConfirmedAsync()
+    {
+        if (_categoryStatusId <= 0)
+        {
+            CancelToggleCategory();
+            return;
+        }
+
+        _savingCategoryStatus = true;
+
+        var result = await ExpenseService.ToggleCategoryStatusAsync(_categoryStatusId);
+
+        _savingCategoryStatus = false;
+
+        ShowMessage(result.Message, result.Success);
+
+        var shouldReload = result.Success;
+
+        CancelToggleCategory();
+
+        if (shouldReload)
+        {
+            await LoadCategoriesAsync();
+        }
+    }
+
+    private void ConfirmDeleteCategory(int id, string name, int expenseCount)
+    {
+        _openCategoryActionId = null;
+
+        _deleteCategoryId = id;
+        _deleteCategoryName = name;
+        _deleteCategoryExpenseCount = expenseCount;
+        _showDeleteCategoryConfirm = true;
+    }
+
+    private void CancelDeleteCategory()
+    {
+        _showDeleteCategoryConfirm = false;
+        _savingDeleteCategory = false;
+
+        _deleteCategoryId = 0;
+        _deleteCategoryName = string.Empty;
+        _deleteCategoryExpenseCount = 0;
+    }
+
+    private async Task DeleteCategoryConfirmedAsync()
+    {
+        if (_deleteCategoryId <= 0)
+        {
+            CancelDeleteCategory();
+            return;
+        }
+
+        _savingDeleteCategory = true;
+
+        var result = await ExpenseService.DeleteCategoryAsync(_deleteCategoryId);
+
+        _savingDeleteCategory = false;
+
+        ShowMessage(result.Message, result.Success);
+
+        var shouldReload = result.Success;
+
+        CancelDeleteCategory();
+
+        if (shouldReload)
+        {
             await LoadCategoriesAsync();
         }
     }
@@ -1873,36 +2336,10 @@
         }
     }
 
-    private async Task ToggleCategoryAsync(int id)
-    {
-        _openCategoryActionId = null;
-
-        var result = await ExpenseService.ToggleCategoryStatusAsync(id);
-        ShowMessage(result.Message, result.Success);
-
-        if (result.Success)
-        {
-            await LoadCategoriesAsync();
-        }
-    }
-
-    private async Task DeleteCategoryAsync(int id)
-    {
-        _openCategoryActionId = null;
-
-        var result = await ExpenseService.DeleteCategoryAsync(id);
-        ShowMessage(result.Message, result.Success);
-
-        if (result.Success)
-        {
-            await LoadCategoriesAsync();
-        }
-    }
-
     private string GetCategoryToggleIcon(bool isActive)
     {
         return isActive ? "bi-pause-circle" : "bi-play-circle";
-    }
+    } 
 
     private int ParseRows(string value)
     {
