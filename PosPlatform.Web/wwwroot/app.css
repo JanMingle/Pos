@@ -1683,3 +1683,133 @@ textarea,
         padding: 14px;
     }
 }
+/* =========================================================
+   FINAL FIX: Mobile sidebar drawer must open above content
+   Put this at the VERY BOTTOM of app.css
+   ========================================================= */
+
+/* Do not use display:none for the checkbox.
+   Some mobile browsers can behave badly when a hidden checkbox is controlled by a label. */
+.pos-sidebar-toggle {
+    position: fixed !important;
+    width: 1px !important;
+    height: 1px !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    left: -9999px !important;
+}
+
+/* Desktop still collapses sidebar */
+@media (min-width: 992px) {
+    .pos-sidebar-toggle:checked ~ .pos-shell .pos-sidebar {
+        width: var(--pos-sidebar-closed) !important;
+    }
+
+    .pos-sidebar-toggle:checked ~ .pos-shell .pos-brand-text,
+    .pos-sidebar-toggle:checked ~ .pos-shell .pos-nav-text,
+    .pos-sidebar-toggle:checked ~ .pos-shell .pos-nav-section,
+    .pos-sidebar-toggle:checked ~ .pos-shell .pos-sidebar-card-text {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+
+    .pos-sidebar-toggle:checked ~ .pos-shell .pos-sidebar-brand,
+    .pos-sidebar-toggle:checked ~ .pos-shell .pos-nav-link,
+    .pos-sidebar-toggle:checked ~ .pos-shell .pos-sidebar-card {
+        justify-content: center !important;
+    }
+}
+
+/* Mobile drawer */
+@media (max-width: 991px) {
+    html,
+    body {
+        height: 100% !important;
+        overflow: hidden !important;
+    }
+
+    .pos-shell {
+        height: 100dvh !important;
+        min-height: 100dvh !important;
+        overflow: hidden !important;
+        display: block !important;
+    }
+
+    .pos-main {
+        height: 100dvh !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        min-width: 0 !important;
+    }
+
+    .pos-sidebar {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        width: var(--pos-sidebar-open) !important;
+        max-width: calc(100vw - 54px) !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        transform: translateX(-110%) !important;
+        z-index: 5000 !important;
+        overflow: hidden !important;
+        transition: transform .22s ease !important;
+    }
+
+    .pos-sidebar-toggle:checked ~ .pos-shell .pos-sidebar {
+        transform: translateX(0) !important;
+        width: var(--pos-sidebar-open) !important;
+    }
+
+    .pos-sidebar-toggle:checked ~ .pos-shell .pos-brand-text,
+    .pos-sidebar-toggle:checked ~ .pos-shell .pos-nav-text,
+    .pos-sidebar-toggle:checked ~ .pos-shell .pos-nav-section,
+    .pos-sidebar-toggle:checked ~ .pos-shell .pos-sidebar-card-text {
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+    }
+
+    .pos-sidebar-toggle:checked ~ .pos-shell .pos-sidebar-brand,
+    .pos-sidebar-toggle:checked ~ .pos-shell .pos-nav-link {
+        justify-content: flex-start !important;
+    }
+
+    .pos-sidebar-nav {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding-bottom: 16px !important;
+    }
+
+    .pos-sidebar-backdrop {
+        display: none !important;
+        position: fixed !important;
+        inset: 0 !important;
+        background: rgba(20, 44, 73, .48) !important;
+        backdrop-filter: blur(2px) !important;
+        z-index: 4990 !important;
+    }
+
+    .pos-sidebar-toggle:checked ~ .pos-shell .pos-sidebar-backdrop {
+        display: block !important;
+    }
+
+    .pos-menu-button {
+        display: inline-flex !important;
+        position: relative !important;
+        z-index: 100 !important;
+        cursor: pointer !important;
+    }
+
+    .pos-topbar {
+        z-index: 3000 !important;
+    }
+
+    .pos-content {
+        padding: 14px !important;
+    }
+}
